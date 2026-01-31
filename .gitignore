@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.env
+.DS_Store
+venv/
+.idea/
+.vscode/
+data/logs/*
+data/artifacts/*
+data/repositories/*
+!data/logs/.gitkeep
+!data/artifacts/.gitkeep
+!data/repositories/.gitkeep

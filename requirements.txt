@@ -1,0 +1,9 @@
+google-adk
+streamlit
+python-dotenv
+pandas
+plotly
+pydantic
+litellm
+backoff
+requests
