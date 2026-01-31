@@ -1,0 +1,23 @@
+2026-01-31 22:18:43 - CodingAgent - ERROR - Error generating code: 'LiteLlm' object has no attribute 'call'
+Traceback (most recent call last):
+  File "/Users/only976/code/AutoResearchLab/backend/agents/coding_agent.py", line 71, in generate_code
+    response = self.model.call(prompt)
+  File "/Users/only976/miniconda3/envs/AutoResearchLab/lib/python3.10/site-packages/pydantic/main.py", line 1026, in __getattr__
+    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+AttributeError: 'LiteLlm' object has no attribute 'call'
+2026-01-31 22:22:10 - CodingAgent - ERROR - Error generating code: 'LiteLlm' object has no attribute 'call'
+Traceback (most recent call last):
+  File "/Users/only976/code/AutoResearchLab/backend/agents/coding_agent.py", line 71, in generate_code
+    response = self.model.call(prompt)
+  File "/Users/only976/miniconda3/envs/AutoResearchLab/lib/python3.10/site-packages/pydantic/main.py", line 1026, in __getattr__
+    raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+AttributeError: 'LiteLlm' object has no attribute 'call'
+2026-01-31 23:11:35 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1
+2026-01-31 23:11:43 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1
+2026-01-31 23:11:50 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1
+2026-01-31 23:12:00 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1
+2026-01-31 23:23:26 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1
+2026-01-31 23:44:55 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1
+2026-01-31 23:45:06 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1
+2026-01-31 23:45:14 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1
+2026-01-31 23:45:24 - DockerSandbox - ERROR - Failed to build custom image: The command '/bin/sh -c pip install --no-cache-dir -r requirements.txt' returned a non-zero code: 1

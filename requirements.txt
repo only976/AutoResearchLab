@@ -7,3 +7,4 @@ pydantic
 litellm
 backoff
 requests
+docker

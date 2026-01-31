@@ -1,4 +1,5 @@
 import os
+import uuid
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk import Runner
@@ -7,6 +8,7 @@ from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
 from backend.tools.scholar_search import OpenAlexSearchTool
 from backend.templates.idea_templates import get_template_descriptions, get_template_schema, RESEARCH_TOPIC_SCHEMA
+from backend.utils.logger import setup_logger
 import json
 
 # Load environment variables
@@ -14,6 +16,7 @@ load_dotenv()
 
 class IdeaAgent:
     def __init__(self):
+        self.logger = setup_logger(self.__class__.__name__)
         # Initialize the LLM model using SiliconFlow configuration
         self.model = LiteLlm(
             model="openai/Pro/deepseek-ai/DeepSeek-V3", 
@@ -108,10 +111,11 @@ class IdeaAgent:
             auto_create_session=True
         )
         
+        self.logger.info(f"Refining topic: {raw_scope}")
         try:
             events = runner.run(
                 user_id="user",
-                session_id="refinement_session",
+                session_id=str(uuid.uuid4()),
                 new_message=Content(role="user", parts=[Part(text=f"Analyze and refine: {raw_scope}")])
             )
             
@@ -132,11 +136,12 @@ class IdeaAgent:
             
             if not final_text:
                 raise ValueError("Empty response from model during refinement.")
-                
+            
+            self.logger.info("Topic refinement successful")
             return final_text
             
         except Exception as e:
-            print(f"Refinement failed: {e}")
+            self.logger.error(f"Refinement failed: {e}", exc_info=True)
             # Fallback: return a structure indicating failure but keeping flow alive
             return json.dumps({
                 "is_broad": False,
@@ -217,6 +222,7 @@ class IdeaAgent:
         REMEMBER: Output ONLY the raw JSON string. No "Here is the output" prefix.
         """
         
+        self.logger.info(f"Generating ideas for scope: {scope}")
         runner = Runner(
             agent=self.agent,
             app_name="auto_research",
@@ -228,7 +234,7 @@ class IdeaAgent:
         try:
             events = runner.run(
                 user_id="user", 
-                session_id="idea_gen_session", 
+                session_id=str(uuid.uuid4()), 
                 new_message=Content(role="user", parts=[Part(text=prompt_text)])
             )
             
@@ -246,9 +252,12 @@ class IdeaAgent:
                             if "<\uff5ctool" in part.text or "<function>" in part.text:
                                 continue
                             final_text += part.text
+            
+            self.logger.info("Idea generation execution finished")
+            
         except Exception as e:
             # Handle potential runtime errors from event loop closure
-            print(f"Runner execution completed with potential warning: {e}")
+            self.logger.error(f"Runner execution completed with potential warning: {e}", exc_info=True)
             if not final_text:
                 raise e
 

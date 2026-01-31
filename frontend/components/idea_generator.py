@@ -2,12 +2,15 @@ import streamlit as st
 import sys
 import os
 import json
+import uuid
+import datetime
 
 # Add project root to sys.path to allow imports from backend
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from backend.agents.idea_agent import IdeaAgent
 from backend.templates.idea_templates import get_template_schema
+from backend.utils.snapshot_manager import save_snapshot, list_snapshots, load_snapshot
 
 def render_idea_card(idea, index, unique_key_prefix, topic=None):
     """Renders a single research idea based on its template type."""
@@ -70,6 +73,25 @@ def render_idea_card(idea, index, unique_key_prefix, topic=None):
                 st.json(value)
             else:
                 st.markdown(f"**{formatted_key}**: {value}")
+        
+        # Action Buttons
+        st.divider()
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("🧪 Start Experiment", key=f"{unique_key_prefix}_start_btn", type="primary"):
+                # Generate Unique Experiment ID
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                short_id = str(uuid.uuid4())[:8]
+                exp_id = f"exp_{timestamp}_{short_id}"
+                
+                st.session_state.current_experiment = {
+                    "id": exp_id,
+                    "idea": idea,
+                    "topic": topic,
+                    "status": "Initialized"
+                }
+                st.session_state.page = "Experiment Lab"
+                st.rerun()
 
 def render_idea_generator():
     st.header("💡 Research Idea Generator")
@@ -81,6 +103,27 @@ def render_idea_generator():
         st.session_state.results = None
     if "refinement_data" not in st.session_state:
         st.session_state.refinement_data = None
+
+    # Snapshot Loader
+    with st.expander("📂 Load Saved Session", expanded=False):
+        snapshots = list_snapshots()
+        if not snapshots:
+            st.info("No saved snapshots found.")
+        else:
+            col_snap, col_load = st.columns([3, 1])
+            with col_snap:
+                selected_snapshot = st.selectbox("Select Snapshot", snapshots, label_visibility="collapsed")
+            with col_load:
+                if st.button("Load", use_container_width=True):
+                    data = load_snapshot(selected_snapshot)
+                    if data:
+                        st.session_state.refinement_data = data.get("refinement_data")
+                        st.session_state.results = data.get("results")
+                        st.session_state.step = "done" # Jump to results
+                        st.toast(f"Loaded snapshot: {selected_snapshot}")
+                        st.rerun()
+                    else:
+                        st.error("Failed to load snapshot.")
 
     # Step 1: Input
     scope = st.text_area("Research Scope / Topic", 
@@ -162,11 +205,18 @@ def render_idea_generator():
             result = st.session_state.results[0]
             render_single_result(result["topic"], result["ideas_data"], "specific_res_0")
             
-        if st.button("🔄 Start Over"):
-            st.session_state.step = "input"
-            st.session_state.results = None
-            st.session_state.refinement_data = None
-            st.rerun()
+        st.divider()
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            if st.button("🔄 Start Over"):
+                st.session_state.step = "input"
+                st.session_state.results = None
+                st.session_state.refinement_data = None
+                st.rerun()
+        with col2:
+            if st.button("💾 Save Snapshot"):
+                filename = save_snapshot(st.session_state.refinement_data, st.session_state.results)
+                st.toast(f"Session saved to {filename}")
 
 def render_single_result(topic, response_data, unique_key_prefix):
     """Helper to render one topic and its ideas."""
