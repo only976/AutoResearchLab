@@ -26,7 +26,7 @@ The core design philosophy of this system revolves around the following four poi
 ```mermaid
 graph TD
     User[User] --> Frontend[Streamlit Frontend]
-    Frontend --> Orchestrator[Experiment Orchestrator (ExperimentRunner)]
+    Frontend --> Orchestrator["Experiment Orchestrator (ExperimentRunner)"]
     
     subgraph "Agent Cluster"
         IdeaAgent[Idea Agent]
@@ -41,7 +41,7 @@ graph TD
     
     subgraph "Execution Environment"
         Docker[Docker Sandbox]
-        Workspace[Experiment Workspace (Data/Experiments)]
+        Workspace["Experiment Workspace (Data/Experiments)"]
         Git[Git Version Control]
     end
     
