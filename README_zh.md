@@ -25,23 +25,29 @@ AutoResearchLab 是一个基于多 Agent 协作的自动化科研系统，旨在
 ### 2.1 系统架构图
 ```mermaid
 graph TD
-    User[用户] --> Frontend[Streamlit 前端]
-    Frontend --> Orchestrator["实验编排器 (ExperimentRunner)"]
+    User[User] --> Frontend[Streamlit Frontend]
+    Frontend --> Orchestrator["Experiment Orchestrator (ExperimentRunner)"]
     
-    subgraph "Agent Cluster (智能体集群)"
-        IdeaAgent[灵感 Agent]
-        DesignAgent[设计 Agent]
+    subgraph "Agent Cluster"
+        IdeaAgent[Idea Agent]
+        DesignAgent[Design Agent]
         CodingAgent[Coding Agent]
         ReviewAgent[Review Agent]
         AnalysisAgent[Analysis Agent]
         WritingAgent[Writing Agent]
     end
     
-    Orchestrator <--> Agent Cluster
+    %% Connect Orchestrator to the nodes inside the cluster
+    Orchestrator <--> IdeaAgent
+    Orchestrator -.-> DesignAgent
+    Orchestrator -.-> CodingAgent
+    Orchestrator -.-> ReviewAgent
+    Orchestrator -.-> AnalysisAgent
+    Orchestrator -.-> WritingAgent
     
-    subgraph "Execution Environment (执行环境)"
+    subgraph "Execution Environment"
         Docker[Docker Sandbox]
-        Workspace["实验工作区 (Data/Experiments)"]
+        Workspace["Experiment Workspace (Data/Experiments)"]
         Git[Git Version Control]
     end
     

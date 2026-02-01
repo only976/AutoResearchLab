@@ -37,7 +37,13 @@ graph TD
         WritingAgent[Writing Agent]
     end
     
-    Orchestrator <--> Agent Cluster
+    %% Connect Orchestrator to the nodes inside the cluster
+    Orchestrator <--> IdeaAgent
+    Orchestrator -.-> DesignAgent
+    Orchestrator -.-> CodingAgent
+    Orchestrator -.-> ReviewAgent
+    Orchestrator -.-> AnalysisAgent
+    Orchestrator -.-> WritingAgent
     
     subgraph "Execution Environment"
         Docker[Docker Sandbox]
