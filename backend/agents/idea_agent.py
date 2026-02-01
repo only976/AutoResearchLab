@@ -9,6 +9,7 @@ from google.adk.models.lite_llm import LiteLlm
 from backend.tools.scholar_search import OpenAlexSearchTool
 from backend.templates.idea_templates import get_template_descriptions, get_template_schema, RESEARCH_TOPIC_SCHEMA
 from backend.utils.logger import setup_logger
+from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
 import json
 
 # Load environment variables
@@ -18,11 +19,14 @@ class IdeaAgent:
     def __init__(self):
         self.logger = setup_logger(self.__class__.__name__)
         # Initialize the LLM model using SiliconFlow configuration
-        self.model = LiteLlm(
-            model="openai/Pro/deepseek-ai/DeepSeek-V3", 
-            api_base="https://api.siliconflow.cn/v1",
-            api_key=os.getenv("SILICON_API_KEY")
-        )
+        if LLM_API_BASE:
+            self.model = LiteLlm(
+                model=LLM_MODEL, 
+                api_base=LLM_API_BASE,
+                api_key=LLM_API_KEY
+            )
+        else:
+            self.model = LLM_MODEL
         
         # Initialize Tools
         self.scholar_tool = OpenAlexSearchTool()

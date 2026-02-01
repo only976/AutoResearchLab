@@ -114,7 +114,7 @@ def render_idea_generator():
             with col_snap:
                 selected_snapshot = st.selectbox("Select Snapshot", snapshots, label_visibility="collapsed")
             with col_load:
-                if st.button("Load", use_container_width=True):
+                if st.button("Load", width="stretch"):
                     data = load_snapshot(selected_snapshot)
                     if data:
                         st.session_state.refinement_data = data.get("refinement_data")

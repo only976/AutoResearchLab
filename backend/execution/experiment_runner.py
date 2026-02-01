@@ -3,10 +3,12 @@ import json
 import os
 import threading
 import subprocess
+import re
 from backend.execution.feedback_manager import FeedbackManager
 from backend.sandbox.docker_sandbox import DockerSandbox
 from backend.agents.coding_agent import CodingAgent
 from backend.agents.data_analysis_agent import DataAnalysisAgent
+from backend.agents.review_agent import ReviewAgent
 from backend.utils.logger import setup_logger
 
 class ExperimentRunner:
@@ -17,9 +19,98 @@ class ExperimentRunner:
         self.fm = FeedbackManager(workspace_path)
         self.coding_agent = CodingAgent()
         self.data_agent = DataAnalysisAgent()
+        self.review_agent = ReviewAgent()
         self.logger = setup_logger(self.__class__.__name__)
         self.image_tag = None # Initialize image tag
         
+        # Iteration Control
+        self.max_iterations = 50
+        self.current_iterations = 0
+        self._load_iteration_state()
+
+    def _load_iteration_state(self):
+        """Loads iteration state from status.json if exists."""
+        status_path = os.path.join(self.workspace_path, "status.json")
+        if os.path.exists(status_path):
+            try:
+                with open(status_path, "r") as f:
+                    data = json.load(f)
+                    self.current_iterations = data.get("current_iterations", 0)
+                    self.max_iterations = data.get("max_iterations", 50)
+            except:
+                pass
+
+    def _save_iteration_state(self):
+        """Saves current iteration state to status.json."""
+        status_path = os.path.join(self.workspace_path, "status.json")
+        data = {}
+        if os.path.exists(status_path):
+            try:
+                with open(status_path, "r") as f:
+                    data = json.load(f)
+            except:
+                pass
+        
+        data["current_iterations"] = self.current_iterations
+        data["max_iterations"] = self.max_iterations
+        
+        with open(status_path, "w") as f:
+            json.dump(data, f, indent=2)
+
+    def _check_and_wait_for_limit(self):
+        """Checks if iteration limit is reached and waits for user approval."""
+        while self.current_iterations >= self.max_iterations:
+            self.log(f"⏸️ Iteration limit reached ({self.current_iterations}/{self.max_iterations}). Waiting for user approval...")
+            
+            # Update status to paused
+            status_path = os.path.join(self.workspace_path, "status.json")
+            if os.path.exists(status_path):
+                with open(status_path, "r") as f:
+                    data = json.load(f)
+                data["status"] = "paused"
+                data["message"] = f"Iteration limit reached ({self.max_iterations}). Please extend to continue."
+                with open(status_path, "w") as f:
+                    json.dump(data, f, indent=2)
+            
+            # Wait loop
+            time.sleep(5)
+            
+            # Check if limit has been increased (by frontend modifying status.json or via reload)
+            self._load_iteration_state()
+            
+            if self.current_iterations < self.max_iterations:
+                self.log(f"▶️ Resuming execution. Limit extended to {self.max_iterations}.")
+                # Restore running status
+                if os.path.exists(status_path):
+                    with open(status_path, "r") as f:
+                        data = json.load(f)
+                    data["status"] = "running"
+                    with open(status_path, "w") as f:
+                        json.dump(data, f, indent=2)
+                break
+
+    def _commit_structured(self, step_id, attempt, plan, scheme, result, decision, output=None):
+        """Creates a git commit with structured metadata."""
+        message = f"Step {step_id}: Attempt {attempt} - {result}\n\n"
+        
+        metadata = {
+            "step": step_id,
+            "attempt": attempt,
+            "plan": plan,
+            "scheme": scheme,
+            "result": result,
+            "decision": decision,
+            "timestamp": time.time()
+        }
+        
+        message += f"METADATA_START\n{json.dumps(metadata, indent=2)}\nMETADATA_END\n"
+        
+        if output:
+            message += f"\nOUTPUT_PREVIEW:\n{output[:500]}..."
+            
+        self._run_git_cmd(["add", "."])
+        self._run_git_cmd(["commit", "--allow-empty", "-m", message])
+
     def log(self, message):
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         entry = f"[{timestamp}] {message}\n"
@@ -32,16 +123,43 @@ class ExperimentRunner:
         # Also log to system-wide logger
         self.logger.info(f"[{os.path.basename(self.workspace_path)}] {message}")
 
+    def _sanitize_filename(self, text):
+        """Converts text to a safe filename."""
+        s = re.sub(r'[^\w\s-]', '', text.lower())
+        return re.sub(r'[-\s]+', '_', s).strip('-_') + ".py"
+
+    def _run_git_cmd(self, args, check=False):
+        """Helper to run git commands in workspace."""
+        try:
+            result = subprocess.run(
+                ["git"] + args, 
+                cwd=self.workspace_path, 
+                check=check, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            return result.returncode == 0
+        except subprocess.CalledProcessError as e:
+            self.log(f"Git command failed: git {' '.join(args)}\n{e.stderr}")
+            return False
+
     def _init_workspace(self):
         """Initializes git and workspace."""
         if not os.path.exists(os.path.join(self.workspace_path, ".git")):
             self.log("Initializing Git repository...")
             try:
                 subprocess.run(["git", "init"], cwd=self.workspace_path, check=False, stdout=subprocess.DEVNULL)
+                # Configure git user for this repo
+                self._run_git_cmd(["config", "user.email", "agent@autoresearchlab.ai"])
+                self._run_git_cmd(["config", "user.name", "AutoResearch Agent"])
+                
                 with open(os.path.join(self.workspace_path, ".gitignore"), "w") as f:
                     f.write("__pycache__/\n*.pyc\nexecution.log\n.DS_Store\n")
-                subprocess.run(["git", "add", "."], cwd=self.workspace_path, check=False, stdout=subprocess.DEVNULL)
-                subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=self.workspace_path, check=False, stdout=subprocess.DEVNULL)
+                
+                self._run_git_cmd(["add", "."])
+                self._run_git_cmd(["commit", "-m", "Initial commit"])
+                self._run_git_cmd(["branch", "-M", "main"]) # Ensure branch is main
                 self.log("Git repository initialized.")
             except Exception as e:
                 self.log(f"Warning: Git init failed: {e}")
@@ -113,10 +231,29 @@ class ExperimentRunner:
         with open(status_file, "w") as f:
             json.dump(data, f)
 
+    def _get_git_graph(self):
+        """Returns the git graph for context."""
+        try:
+            res = subprocess.run(
+                ["git", "log", "--oneline", "--graph", "--all", "-n", "20"], 
+                cwd=self.workspace_path, 
+                capture_output=True, 
+                text=True
+            )
+            return res.stdout
+        except:
+            return "(Git graph unavailable)"
+
     def run_step(self, step, step_idx, total_steps):
         self._update_status(step_idx, total_steps, step['name'], "running", "Initializing step...")
         self.log(f"▶️ Starting Step {step['step_id']}: {step['name']}")
         self.log(f"   Description: {step['description']}")
+        
+        # Ensure we start from a stable main state
+        self._run_git_cmd(["checkout", "main"])
+        
+        step_slug = self._sanitize_filename(step['name']).replace('.py', '')
+        filename = self._sanitize_filename(step['name'])
         
         # 1. Pre-execution Feedback Check
         pending = self.fm.get_pending_feedback()
@@ -124,103 +261,165 @@ class ExperimentRunner:
             self.log(f"🔔 INTERRUPT: Received {len(pending)} user feedback item(s).")
             for item in pending:
                 self.log(f"   👤 User says ({item['type']}): \"{item['message']}\"")
-                # In a real system, we would call LLM here to adjust the plan
                 self.log(f"   🤖 Agent: Acknowledged. Integrating feedback into current context...")
                 self.fm.mark_processed(item['id'])
-                time.sleep(1) # Simulate processing time
+                time.sleep(1) 
         
-        # 2. Code Generation
-        self.log(f"🤖 Generating code for Step {step['step_id']}...")
-        self._update_status(step_idx, total_steps, step['name'], "running", "Generating code...")
-        
-        # Get list of existing files for context (excluding hidden and common junk)
-        existing_files = [f for f in os.listdir(self.workspace_path) 
-                         if not f.startswith('.') and f not in ['execution.log', 'requirements.txt', '__pycache__']]
-        
-        try:
-            code = self.coding_agent.generate_code(step, self.plan, existing_files)
-        except Exception as e:
-            self.log(f"❌ Error generating code: {e}")
-            self._update_status(step_idx, total_steps, step['name'], "failed", f"Error generating code: {e}")
-            raise e
-
-        filename = f"step_{step['step_id']}.py"
-        current_code = code
+        current_code = None
         max_retries = 3
         attempt_history = []
         
-        # 3. Save Code locally (for Git tracking)
-        self.log(f"💾 Saving code to {filename}...")
-        with open(os.path.join(self.workspace_path, filename), "w") as f:
-            f.write(current_code)
-            
-        # 4. Execute in Docker with Retry Loop
+        # DFS-style Retry Loop
         for attempt in range(max_retries + 1):
-            if attempt > 0:
-                 self.log(f"🔄 Attempt {attempt}/{max_retries}: Fixing code...")
-                 self._update_status(step_idx, total_steps, step['name'], "fixing", f"Attempt {attempt}/{max_retries}: Fixing code...")
-                 
-            self.log(f"🚀 Executing {filename} in Docker (Attempt {attempt+1})...")
+            # Check Iteration Limit
+            self._check_and_wait_for_limit()
+            
+            # Increment global iteration
+            self.current_iterations += 1
+            self._save_iteration_state()
+            
+            attempt_label = f"Attempt {attempt+1}"
+            branch_name = f"step-{step['step_id']}-{step_slug}-try-{attempt+1}"
+            
+            self.log(f"🌿 Branching: {branch_name} ({attempt_label}) (Global Iteration: {self.current_iterations})")
+            
+            # Always start from main (Clean State)
+            self._run_git_cmd(["checkout", "main"])
+            self._run_git_cmd(["checkout", "-b", branch_name])
+            
+            # 2. Code Generation / Fixing
+            plan_desc = f"Execute Step {step['step_id']}"
+            scheme_desc = "Initial Code Generation"
+            
+            if attempt == 0:
+                self.log(f"🤖 Generating code for Step {step['step_id']}...")
+                self._update_status(step_idx, total_steps, step['name'], "running", "Generating code...")
+                
+                existing_files = [f for f in os.listdir(self.workspace_path) 
+                                if not f.startswith('.') and f not in ['execution.log', 'requirements.txt', '__pycache__']]
+                try:
+                    current_code = self.coding_agent.generate_code(step, self.plan, existing_files)
+                    scheme_desc = "Generated new code based on plan"
+                except Exception as e:
+                    self.log(f"❌ Error generating code: {e}")
+                    raise e
+            else:
+                self.log(f"🔄 {attempt_label}: Refinining code based on previous failure...")
+                self._update_status(step_idx, total_steps, step['name'], "fixing", f"{attempt_label}: Fixing code...")
+                
+                plan_desc = f"Fix Step {step['step_id']} Failure"
+                scheme_desc = "Refine code based on error log and git history"
+                
+                # We use the code from the PREVIOUS attempt (which failed) as the base to fix
+                # Note: current_code currently holds the *failed* code from the loop bottom
+                last_error = attempt_history[-1]['error']
+                
+                git_graph = self._get_git_graph()
+                context_str = f"Step: {step['name']}\nDescription: {step['description']}\n\nGit Tree Context:\n{git_graph}"
+                
+                try:
+                    current_code = self.coding_agent.fix_code(
+                        current_code, 
+                        last_error, 
+                        context=context_str,
+                        previous_attempts=attempt_history
+                    )
+                except Exception as e:
+                    self.log(f"⚠️ Failed to generate fix: {e}")
+                    break
+            
+            # 3. Save Code
+            self.log(f"💾 Saving code to {filename}...")
+            with open(os.path.join(self.workspace_path, filename), "w") as f:
+                f.write(current_code)
+                
+            # Git Commit: "Attempt Start" -> We will commit result at the end instead to keep it cleaner?
+            # User wants "Plan", "Scheme", "Result", "Decision".
+            # We can't commit result before running.
+            # But we can commit "Plan/Scheme" now?
+            # Let's do ONE commit per attempt at the END, containing everything.
+            # But if it crashes hard, we lose the code record in git.
+            # Safe bet: Commit "Start" now, then "Result" later?
+            # User said "form of structure... plan... result...".
+            # If we commit twice, the tree gets deep.
+            # Let's commit ONCE after execution with all info.
+            
+            # 4. Execute
+            self.log(f"🚀 Executing {filename} in Docker ({attempt_label})...")
             if attempt == 0:
                 self._update_status(step_idx, total_steps, step['name'], "running", "Executing code...")
             
             sandbox = DockerSandbox()
-            
-            # We pass the code directly. DockerSandbox will write/overwrite the file in the mounted volume and run it.
             res = sandbox.run_code(current_code, self.workspace_path, filename, image_name=self.image_tag)
             
+            # Review Phase
             if res["exit_code"] == 0:
-                self.log(f"✅ Execution successful.")
-                # Log output but truncate if too long
-                stdout = res['stdout'].strip()
-                if len(stdout) > 500:
-                    self.log(f"Output (truncated):\n{stdout[:500]}...")
-                else:
-                    self.log(f"Output:\n{stdout}")
-                    
-                # 5. Git Commit
-                self.log("📦 Commiting changes to Git...")
+                self.log(f"🧐 Reviewing execution results...")
                 try:
-                    subprocess.run(["git", "add", "."], cwd=self.workspace_path, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    subprocess.run(["git", "commit", "-m", f"Completed Step {step['step_id']}: {step['name']}"], cwd=self.workspace_path, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    self.log("Git commit successful.")
+                    review_res = self.review_agent.review_code(step, self.plan, current_code, res, self.workspace_path)
+                    if review_res['status'] != 'pass':
+                        self.log(f"❌ Review Failed: {review_res['reason']}")
+                        res["exit_code"] = 1
+                        # Append review feedback to stderr so it's treated as an error log
+                        res["stderr"] = f"Review Agent Rejected Result:\nReason: {review_res['reason']}\nSuggestions: {review_res['suggestions']}\n\n" + res.get('stderr', '')
+                    else:
+                        self.log(f"✅ Review Passed.")
                 except Exception as e:
-                    self.log(f"⚠️ Git commit failed: {e}")
+                    self.log(f"⚠️ Review check failed: {e}")
+
+            if res["exit_code"] == 0:
+                # SUCCESS
+                self.log(f"✅ Execution successful.")
+                stdout = res['stdout'].strip()
+                log_out = stdout[:500] + "..." if len(stdout) > 500 else stdout
+                self.log(f"Output:\n{log_out}")
+                
+                # Commit Success with Structured Info
+                self._commit_structured(
+                    step_id=step['step_id'],
+                    attempt=attempt+1,
+                    plan=plan_desc,
+                    scheme=scheme_desc,
+                    result="Success",
+                    decision="Merge to main",
+                    output=stdout
+                )
+                
+                # Merge to main
+                self.log(f"twisted_rightwards_arrows Merging {branch_name} into main...")
+                self._run_git_cmd(["checkout", "main"])
+                self._run_git_cmd(["merge", branch_name])
                 
                 self._update_status(step_idx, total_steps, step['name'], "completed", "Execution successful")
-                self.log(f"✅ Step {step['step_id']} completed sequence.")
-                return # Success, exit function
+                return
                 
             else:
-                # Failure
+                # FAILURE
                 output = res['stdout'] if res['stdout'] else res['stderr']
-                self.log(f"❌ Execution failed (Attempt {attempt+1}). Error:\n{output[:200]}...")
+                self.log(f"❌ Execution failed ({attempt_label}). Error:\n{output[:200]}...")
                 
-                if attempt < max_retries:
-                    # Try to fix
-                    try:
-                        self.log("🤖 Asking CodingAgent to fix the code...")
-                        new_code = self.coding_agent.fix_code(
-                            current_code, 
-                            output, 
-                            context=f"Step: {step['name']}\nDescription: {step['description']}",
-                            previous_attempts=attempt_history
-                        )
-                        
-                        # Add current failure to history for next attempt
-                        attempt_history.append({"code": current_code, "error": output})
-                        
-                        current_code = new_code
-                        # Save new code
-                        self.log(f"💾 Saving fixed code to {filename}...")
-                        with open(os.path.join(self.workspace_path, filename), "w") as f:
-                            f.write(current_code)
-                    except Exception as e:
-                        self.log(f"⚠️ Failed to generate fix: {e}")
-                        break # Stop retrying if fixer fails
-                else:
-                    # Final failure
-                    error_msg = f"Execution failed after {max_retries} retries.\nLast Error: {output[:500]}"
+                # Decide next step
+                decision = "Retry with fix" if attempt < max_retries else "Abort (Max retries reached)"
+                
+                # Commit Failure with Structured Info
+                self._commit_structured(
+                    step_id=step['step_id'],
+                    attempt=attempt+1,
+                    plan=plan_desc,
+                    scheme=scheme_desc,
+                    result="Failed",
+                    decision=decision,
+                    output=output
+                )
+                
+                # Add to history for next branch to see
+                attempt_history.append({"code": current_code, "error": output})
+                
+                # We DO NOT merge. We leave this branch dangling (or part of the tree history).
+                # The loop continues -> Next iteration will checkout main and start a NEW branch.
+                
+                if attempt == max_retries:
+                    error_msg = f"Execution failed after {max_retries + 1} attempts.\nLast Error: {output[:500]}"
                     self._update_status(step_idx, total_steps, step['name'], "failed", error_msg, experiment_status="failed")
                     raise Exception(f"Step {step['step_id']} execution failed.")
 
@@ -233,6 +432,36 @@ class ExperimentRunner:
         sandbox = DockerSandbox()
         exp_id = os.path.basename(self.workspace_path)
         
+        # Pre-Build Review
+        req_path = os.path.join(self.workspace_path, "requirements.txt")
+        if os.path.exists(req_path):
+            with open(req_path, "r") as f:
+                current_reqs = f.read()
+            
+            self.log("🧐 Reviewing requirements.txt before build...")
+            review_res = self.review_agent.review_requirements(current_reqs, self.plan)
+            
+            if review_res['status'] == 'fail':
+                self.log(f"⚠️ Requirements review failed: {review_res['reason']}")
+                self.log(f"🛠️ Applying suggested fixes...")
+                
+                # If suggestion looks like a full file content, use it directly
+                # Otherwise, we might need to ask CodingAgent to apply it.
+                # For simplicity, if suggestions are short instructions, we ask CodingAgent.
+                # If it's a list of packages, we might just overwrite.
+                # Let's ask CodingAgent to fix it based on suggestions.
+                
+                try:
+                    new_reqs = self.coding_agent.resolve_environment_error(
+                        current_reqs, 
+                        f"Reviewer rejected requirements: {review_res['reason']}\nSuggestions: {review_res['suggestions']}"
+                    )
+                    with open(req_path, "w") as f:
+                        f.write(new_reqs)
+                    self.log("✅ Applied requirements fixes.")
+                except Exception as e:
+                    self.log(f"⚠️ Failed to apply requirements fixes: {e}. Proceeding with original...")
+
         max_retries = 3
         attempt_history = []
         for attempt in range(max_retries + 1):
@@ -257,6 +486,13 @@ class ExperimentRunner:
                             current_reqs = f.read()
                         
                         error_msg = str(e)
+                        
+                        # Get git history context
+                        try:
+                            res = subprocess.run(["git", "log", "--oneline", "--graph", "-n", "5"], cwd=self.workspace_path, capture_output=True, text=True)
+                            error_msg += f"\n\nGit History (Recent):\n{res.stdout}"
+                        except:
+                            pass
                         
                         try:
                             new_reqs = self.coding_agent.resolve_environment_error(
@@ -286,6 +522,13 @@ class ExperimentRunner:
         self.log("📊 Checking for data preparation requirements...")
         self._update_status(step_idx, total_steps, "Data Preparation", "running", "Preparing datasets...", experiment_status="running")
         
+        # Git: Ensure clean slate
+        self._run_git_cmd(["checkout", "main"])
+        # Use timestamp to avoid collision if retrying
+        timestamp = int(time.time())
+        branch_name = f"phase-data-prep-{timestamp}"
+        self._run_git_cmd(["checkout", "-b", branch_name])
+        
         # Create a dummy step for data prep to use CodingAgent
         dummy_step = {
             "step_id": "setup",
@@ -301,8 +544,13 @@ class ExperimentRunner:
             code = self.coding_agent.generate_code(dummy_step, self.plan, existing_files)
             
             filename = "setup_data.py"
+            self.log(f"💾 Saving data prep code to {filename}...")
             with open(os.path.join(self.workspace_path, filename), "w") as f:
                 f.write(code)
+                
+            # Git Commit
+            self._run_git_cmd(["add", "."])
+            self._run_git_cmd(["commit", "-m", "Generated setup_data.py"])
                 
             self.log("🚀 Running data preparation script...")
             sandbox = DockerSandbox()
@@ -311,8 +559,18 @@ class ExperimentRunner:
             
             if res["exit_code"] == 0:
                 self.log(f"✅ Data preparation complete.\nOutput: {res['stdout'][:500]}")
+                
+                # Git Success
+                self._run_git_cmd(["add", "."])
+                self._run_git_cmd(["commit", "--allow-empty", "-m", "Data Preparation Success"])
+                self._run_git_cmd(["checkout", "main"])
+                self._run_git_cmd(["merge", branch_name])
             else:
                 self.log(f"❌ Data preparation failed: {res['stderr']}")
+                
+                # Git Fail
+                self._run_git_cmd(["add", "."])
+                self._run_git_cmd(["commit", "--allow-empty", "-m", "Data Preparation Failed"])
                 raise Exception(f"Data preparation failed: {res['stderr']}")
                 
         except Exception as e:
@@ -326,56 +584,126 @@ class ExperimentRunner:
         self.log("📈 Starting Data Analysis & Conclusion Synthesis...")
         self._update_status(step_idx, total_steps, "Data Analysis", "running", "Generating analysis code...", experiment_status="running")
         
+        # Git: Ensure clean slate
+        self._run_git_cmd(["checkout", "main"])
+        timestamp = int(time.time())
+        branch_name = f"phase-analysis-{timestamp}"
+        self._run_git_cmd(["checkout", "-b", branch_name])
+        
+        # Retry loop for Analysis Code & Conclusion
+        max_retries = 3
+        current_code = ""
+        execution_success = False
+        
         try:
-            # 1. Generate Analysis Code
-            existing_files = [f for f in os.listdir(self.workspace_path) 
-                            if not f.startswith('.') and f not in ['execution.log', 'requirements.txt', '__pycache__']]
-            
-            code = self.data_agent.generate_analysis_code(self.plan, existing_files)
-            
-            filename = "final_analysis.py"
-            with open(os.path.join(self.workspace_path, filename), "w") as f:
-                f.write(code)
+            for attempt in range(max_retries):
+                self.log(f"🔄 Analysis & Conclusion Attempt {attempt + 1}/{max_retries}")
                 
-            self.log(f"🚀 Executing {filename} in Docker...")
-            sandbox = DockerSandbox()
-            # Use the custom image we built
-            res = sandbox.run_code(code, self.workspace_path, filename, image_name=self.image_tag)
-            
-            if res["exit_code"] != 0:
-                self.log(f"⚠️ Analysis script execution failed: {res['stderr']}")
-                # We don't fail hard here, as we might still try to synthesize a conclusion from what we have
-            else:
-                self.log("✅ Analysis script executed successfully.")
-                if len(res['stdout']) > 200:
-                    self.log(f"Output: {res['stdout'][:200]}...")
+                # 1. Generate/Fix Analysis Code
+                existing_files = [f for f in os.listdir(self.workspace_path) 
+                                if not f.startswith('.') and f not in ['execution.log', 'requirements.txt', '__pycache__']]
+                
+                if attempt == 0:
+                    current_code = self.data_agent.generate_analysis_code(self.plan, existing_files)
                 else:
-                    self.log(f"Output: {res['stdout']}")
-
-            # 2. Synthesize Conclusion
-            self._update_status(step_idx, total_steps, "Conclusion Synthesis", "running", "Synthesizing findings...", experiment_status="running")
-            
-            # Load quantitative summary if exists
-            summary_path = os.path.join(self.workspace_path, "quantitative_summary.json")
-            quantitative_data = {}
-            if os.path.exists(summary_path):
-                try:
-                    with open(summary_path, "r") as f:
-                        quantitative_data = json.load(f)
-                except:
+                    self.log("🛠️ Fixing analysis code...")
+                    # We need the error from the PREVIOUS iteration.
+                    # It is stored in 'last_error' variable from the continue block
                     pass
-            
-            conclusion = self.data_agent.synthesize_conclusion(self.plan, quantitative_data)
-            
-            # Save conclusion
-            with open(os.path.join(self.workspace_path, "conclusion.json"), "w") as f:
-                json.dump(conclusion, f, indent=2)
                 
-            self.log("✅ Conclusion synthesized and saved to conclusion.json")
+                filename = "final_analysis.py"
+                with open(os.path.join(self.workspace_path, filename), "w") as f:
+                    f.write(current_code)
+                
+                # Git Commit Code
+                self._run_git_cmd(["add", "."])
+                self._run_git_cmd(["commit", "-m", f"Analysis Code Attempt {attempt+1}"])
+                    
+                self.log(f"🚀 Executing {filename} in Docker (Attempt {attempt+1})...")
+                sandbox = DockerSandbox()
+                res = sandbox.run_code(current_code, self.workspace_path, filename, image_name=self.image_tag)
+                
+                if res["exit_code"] != 0:
+                    self.log(f"⚠️ Analysis failed: {res['stderr']}")
+                    last_error = res['stderr']
+                    
+                    # Git Commit Failure
+                    self._run_git_cmd(["add", "."])
+                    self._run_git_cmd(["commit", "--allow-empty", "-m", f"Analysis Failed: {last_error[:50]}..."])
+                    
+                    # Prepare for next attempt
+                    if attempt < max_retries - 1:
+                         current_code = self.data_agent.fix_analysis_code(current_code, last_error, existing_files)
+                    continue
+                else:
+                    self.log("✅ Analysis script executed successfully.")
+                    if len(res['stdout']) > 200:
+                        self.log(f"Output: {res['stdout'][:200]}...")
+                    else:
+                        self.log(f"Output: {res['stdout']}")
+                    
+                    # Check if output files were actually created (quantitative_summary.json)
+                    if not os.path.exists(os.path.join(self.workspace_path, "quantitative_summary.json")):
+                        self.log("⚠️ quantitative_summary.json missing. Treating as logical failure.")
+                        last_error = "Script ran but did not generate 'quantitative_summary.json'. Check file paths."
+                        
+                        self._run_git_cmd(["add", "."])
+                        self._run_git_cmd(["commit", "--allow-empty", "-m", "Analysis Missing Output"])
+                        
+                        if attempt < max_retries - 1:
+                            current_code = self.data_agent.fix_analysis_code(current_code, last_error, existing_files)
+                        continue
+                    
+                    # 2. Synthesize Conclusion (Inside Loop now)
+                    self.log("🧠 Synthesizing findings to check for validity...")
+                    
+                    # Load quantitative summary
+                    summary_path = os.path.join(self.workspace_path, "quantitative_summary.json")
+                    quantitative_data = {}
+                    if os.path.exists(summary_path):
+                        with open(summary_path, "r") as f:
+                            quantitative_data = json.load(f)
+                    
+                    conclusion = self.data_agent.synthesize_conclusion(self.plan, quantitative_data)
+                    
+                    # Check for failure indications in conclusion
+                    summary_text = conclusion.get("summary", "").lower()
+                    if "insufficient data" in summary_text or "failed" in summary_text or not conclusion.get("key_findings"):
+                        self.log("⚠️ Conclusion indicates experiment failure (insufficient data/results).")
+                        last_error = f"Analysis script ran, but the conclusion was: {summary_text}. Please fix the script to extract meaningful data."
+                        
+                        self._run_git_cmd(["add", "."])
+                        self._run_git_cmd(["commit", "--allow-empty", "-m", "Conclusion: Insufficient Data"])
+                        
+                        if attempt < max_retries - 1:
+                            current_code = self.data_agent.fix_analysis_code(current_code, last_error, existing_files)
+                        continue
+                    
+                    # Success!
+                    self.log("✅ Conclusion verified.")
+                    
+                    # Save conclusion
+                    with open(os.path.join(self.workspace_path, "conclusion.json"), "w") as f:
+                        json.dump(conclusion, f, indent=2)
+                        
+                    self._run_git_cmd(["add", "."])
+                    self._run_git_cmd(["commit", "--allow-empty", "-m", "Analysis Success & Conclusion"])
+                    execution_success = True
+                    break
+            
+            if not execution_success:
+                raise Exception("Analysis failed after max retries (Code Error or Insufficient Data).")
+
+            # Merge to main
+            self._run_git_cmd(["checkout", "main"])
+            self._run_git_cmd(["merge", branch_name])
             
         except Exception as e:
             self.log(f"❌ Error during analysis phase: {e}")
-            # Don't fail the whole experiment
+            # Ensure status is updated to failed
+            self._update_status(step_idx, total_steps, "Analysis Error", "failed", str(e), experiment_status="failed")
+            # Don't re-raise to crash the runner, just end.
+            return
 
     def run(self):
         # Clear log

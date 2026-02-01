@@ -9,6 +9,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
 from backend.utils.logger import setup_logger
+from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
 
 # Load environment variables
 load_dotenv()
@@ -18,11 +19,14 @@ class CodingAgent:
         self.logger = setup_logger(self.__class__.__name__)
         # Initialize the LLM model using SiliconFlow configuration
         # Using the same configuration as ExperimentDesignAgent for consistency
-        self.model = LiteLlm(
-            model="openai/Pro/deepseek-ai/DeepSeek-V3", 
-            api_base="https://api.siliconflow.cn/v1",
-            api_key=os.getenv("SILICON_API_KEY")
-        )
+        if LLM_API_BASE:
+            self.model = LiteLlm(
+                model=LLM_MODEL, 
+                api_base=LLM_API_BASE,
+                api_key=LLM_API_KEY
+            )
+        else:
+            self.model = LLM_MODEL
         
     def generate_code(self, step: dict, plan: dict, context_files: list = None) -> str:
         """

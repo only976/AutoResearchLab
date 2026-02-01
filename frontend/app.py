@@ -8,6 +8,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from components.kanban_board import render_kanban
 from components.idea_generator import render_idea_generator
 from components.experiment_dashboard import render_experiment_dashboard
+from components.paper_writing import render_paper_writing
+from backend.config import LLM_MODEL
 
 def main():
     st.set_page_config(
@@ -48,11 +50,12 @@ def main():
         
         st.markdown("### 📍 Navigation")
         
-        options = ["Dashboard", "Idea Generator", "Experiment Lab", "Chat Interface", "System Logs", "Configuration"]
+        options = ["Dashboard", "Idea Generator", "Experiment Lab", "Paper Drafting", "Chat Interface", "System Logs", "Configuration"]
         icons = {
             "Dashboard": "📊", 
             "Idea Generator": "💡", 
             "Experiment Lab": "🧪", 
+            "Paper Drafting": "📝",
             "Chat Interface": "💬", 
             "System Logs": "📜", 
             "Configuration": "⚙️"
@@ -61,14 +64,14 @@ def main():
         for option in options:
             # Highlight active page
             btn_type = "primary" if st.session_state.page == option else "secondary"
-            if st.button(f"{icons.get(option, '📄')} {option}", key=f"nav_{option}", type=btn_type, use_container_width=True):
+            if st.button(f"{icons.get(option, '📄')} {option}", key=f"nav_{option}", type=btn_type, width="stretch"):
                 st.session_state.page = option
                 st.rerun()
         
         st.divider()
         with st.expander("ℹ️ System Status", expanded=True):
             st.success("System Online")
-            st.caption("Model: DeepSeek-V3")
+            st.caption(f"Model: {LLM_MODEL}")
 
     page = st.session_state.page
     
@@ -85,6 +88,8 @@ def main():
         render_idea_generator()
     elif page == "Experiment Lab":
         render_experiment_dashboard()
+    elif page == "Paper Drafting":
+        render_paper_writing()
     elif page == "Chat Interface":
         st.header("Chat with Agents")
         st.info("Chat interface will be implemented here.")

@@ -9,17 +9,21 @@ from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
 from backend.utils.logger import setup_logger
+from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
 
 load_dotenv()
 
 class DataAnalysisAgent:
     def __init__(self):
         self.logger = setup_logger(self.__class__.__name__)
-        self.model = LiteLlm(
-            model="openai/Pro/deepseek-ai/DeepSeek-V3", 
-            api_base="https://api.siliconflow.cn/v1",
-            api_key=os.getenv("SILICON_API_KEY")
-        )
+        if LLM_API_BASE:
+            self.model = LiteLlm(
+                model=LLM_MODEL, 
+                api_base=LLM_API_BASE,
+                api_key=LLM_API_KEY
+            )
+        else:
+            self.model = LLM_MODEL
         
     def generate_analysis_code(self, plan: dict, existing_files: list) -> str:
         """Generates Python code to visualize and summarize experiment results."""
@@ -50,6 +54,38 @@ class DataAnalysisAgent:
         code = self._run_llm(prompt, "generate_analysis_code")
         
         # Clean up code blocks
+        if "```python" in code:
+            code = code.split("```python")[1].split("```")[0].strip()
+        elif "```" in code:
+            code = code.split("```")[1].split("```")[0].strip()
+            
+        return code
+
+    def fix_analysis_code(self, code: str, error_message: str, existing_files: list) -> str:
+        """Fixes the analysis code based on error message."""
+        prompt = f"""
+        You are a Data Science Expert. The previous analysis script execution failed.
+        
+        CODE TO FIX:
+        ```python
+        {code}
+        ```
+        
+        ERROR MESSAGE:
+        {error_message}
+        
+        AVAILABLE FILES:
+        {', '.join(existing_files)}
+        
+        TASK:
+        1. Analyze the error (e.g., missing file, syntax error, library issue).
+        2. Fix the code to handle the error (e.g., check file existence, use correct filenames, fix syntax).
+        3. Ensure it still saves `quantitative_summary.json`.
+        4. Return ONLY the fixed Python code.
+        """
+        
+        code = self._run_llm(prompt, "fix_analysis_code")
+        
         if "```python" in code:
             code = code.split("```python")[1].split("```")[0].strip()
         elif "```" in code:
