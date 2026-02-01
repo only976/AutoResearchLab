@@ -24,23 +24,15 @@ dist/
 .DS_Store
 
 # Logs
+logs/*
 *.log
 data/logs/*
-!data/logs/.gitkeep
-
 # Project Data
 data/artifacts/*
-!data/artifacts/.gitkeep
 data/repositories/*
-!data/repositories/.gitkeep
-
 # Experiment Workspaces (Runtime data & nested git repos)
 data/experiments/*
-!data/experiments/.gitkeep
-
 # Cache & Snapshots
 data/cache/*
-!data/cache/.gitkeep
 
-# Streamlit
-.streamlit/secrets.toml
+
