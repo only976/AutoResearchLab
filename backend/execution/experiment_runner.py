@@ -216,6 +216,8 @@ class ExperimentRunner:
                 f.write("\n".join(pip_packages))
             self.log(f"Created requirements.txt with default analysis libraries: {', '.join(pip_packages)}")
             
+        return pip_packages
+            
     def _update_status(self, step_idx, total_steps, current_step_name, status, details=None, experiment_status="running"):
         """Updates the status.json file for frontend monitoring."""
         status_file = os.path.join(self.workspace_path, "status.json")

@@ -28,11 +28,7 @@ logs/*
 *.log
 data/logs/*
 # Project Data
-data/artifacts/*
-data/repositories/*
-# Experiment Workspaces (Runtime data & nested git repos)
-data/experiments/*
-# Cache & Snapshots
-data/cache/*
+data/*
+
 
 
