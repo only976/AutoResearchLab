@@ -54,6 +54,10 @@ class DockerSandbox:
         if not self.client:
             return None
 
+        if not self.ensure_image():
+            self.logger.error("Failed to ensure base image exists. Cannot build custom image.")
+            return None
+
         req_path = os.path.join(workspace_path, "requirements.txt")
         if not os.path.exists(req_path):
             self.logger.info("No requirements.txt found, using base image.")
