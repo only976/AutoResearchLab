@@ -1,277 +1,148 @@
-import os
-import uuid
-from dotenv import load_dotenv
+import os, json, re, hashlib, requests, io, uuid
+import xml.etree.ElementTree as ET
+from typing import Dict, List
+import pypdf
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+from sentence_transformers import SentenceTransformer
+
 from google.adk.agents import Agent
 from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
-from backend.tools.scholar_search import OpenAlexSearchTool
-from backend.templates.idea_templates import get_template_descriptions, get_template_schema, RESEARCH_TOPIC_SCHEMA
-from backend.utils.logger import setup_logger
-from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
-import json
 
-# Load environment variables
-load_dotenv()
-
-class IdeaAgent:
-    def __init__(self):
-        self.logger = setup_logger(self.__class__.__name__)
-        # Initialize the LLM model using SiliconFlow configuration
-        if LLM_API_BASE:
-            self.model = LiteLlm(
-                model=LLM_MODEL, 
-                api_base=LLM_API_BASE,
-                api_key=LLM_API_KEY
-            )
+class ResearchIdeaEngine:
+    def __init__(self, model_config: dict, db_path: str):
+        if model_config.get("api_base"):
+            self.model = LiteLlm(model=model_config["model_name"], api_base=model_config["api_base"],
+                                 api_key=model_config["api_key"])
         else:
-            self.model = LLM_MODEL
-        
-        # Initialize Tools
-        self.scholar_tool = OpenAlexSearchTool()
-        
-        # Wrap the search method as a callable tool for ADK
-        def search_literature(query: str) -> str:
-            """
-            Search for relevant scientific literature using OpenAlex.
-            Args:
-                query: The search query string.
-            Returns:
-                A formatted string containing paper titles, authors, and abstracts.
-            """
-            return self.scholar_tool.search(query)
+            self.model = model_config["model_name"]
 
-        self.tools = [search_literature]
+        cloud_url = os.getenv("QDRANT_URL")
+        cloud_key = os.getenv("QDRANT_API_KEY")
 
-        # Initialize the ADK Agent
-        # Dynamic instruction based on template will be injected in generate_ideas
-        self.agent = Agent(
-            model=self.model,
-            name="idea_agent",
-            description="An agent specialized in generating engineering research ideas.",
-            instruction="", # Will be set dynamically
-            tools=self.tools
-        )
+        if cloud_url and cloud_key:
+            print(f"🌐 正在连接 Qdrant Cloud...")
+            self.qclient = QdrantClient(url=cloud_url, api_key=cloud_key, timeout=60)
+        else:
+            print(f"🏠 使用本地数据库模式: {db_path}")
+            self.qclient = QdrantClient(path=os.path.abspath(db_path))
 
-    def refine_topic(self, raw_scope: str) -> str:
-        """
-        Analyzes the user's raw research scope.
-        If broad, generates 3 distinct research topics.
-        If specific, refines it into 1 research topic.
-        Returns a JSON string containing 'is_broad', 'analysis', and a list of 'topics'.
-        """
-        instruction = f"""
-        You are a Senior Research Advisor.
-        
-        INPUT: "{raw_scope}"
-        
-        TASK:
-        1. Analyze the specificity of the input.
-           - "Broad": Any input that covers a CATEGORY rather than a specific INSTANCE, or lacks technical specificity.
-             * Examples of BROAD: "Board games AI", "Low-memory AI", "Healthcare LLMs", "Optimization algorithms".
-             * Even "Board games in low-memory" is BROAD because "Board games" is a category (could be Go, Chess, Gomoku, etc.).
-           - "Specific": Input that targets a SINGLE specific instance (e.g., "Gomoku", "Llama-3") AND a specific problem context.
-             * Examples of SPECIFIC: "Bitboard-based Gomoku AI for 2KB RAM microcontrollers", "Pruning Llama-3 for mobile devices".
-        
-        2. IF BROAD:
-           - You MUST classify it as "is_broad": true.
-           - Generate 3 DISTINCT, CONCRETE research topics.
-           - CRITICAL: Do not just repeat the category. You must instantiate it. 
-             * Bad: "AI for Board Game A", "AI for Board Game B".
-             * Good: "Micro-Go: MCTS for 8-bit MCUs", "Connect-4 solver on FPGA", "Chess endgame tablebase compression".
-        
-        3. IF SPECIFIC:
-           - Refine it into 1 professional research topic.
-        
-        OUTPUT SCHEMA (JSON):
-        {{
-            "is_broad": true/false,
-            "analysis": "Brief explanation. If broad, explain which category needs instantiation.",
-            "topics": [
-                {json.dumps(RESEARCH_TOPIC_SCHEMA)}
-            ]
-        }}
-        
-        IMPORTANT:
-        - Output ONLY valid JSON.
-        - Do not include markdown formatting like ```json.
-        """
-        
-        # Create a specialized agent for refinement (no tools needed) to avoid distraction
-        refinement_agent = Agent(
-            model=self.model,
-            name="refinement_agent",
-            description="Specialized agent for refining research topics.",
-            instruction=instruction,
-            tools=[] # No tools for this step
-        )
-        
-        # Use a separate runner/session for refinement
-        runner = Runner(
-            agent=refinement_agent,
-            app_name="auto_research",
-            session_service=InMemorySessionService(),
-            auto_create_session=True
-        )
-        
-        self.logger.info(f"Refining topic: {raw_scope}")
-        try:
-            events = runner.run(
-                user_id="user",
-                session_id=str(uuid.uuid4()),
-                new_message=Content(role="user", parts=[Part(text=f"Analyze and refine: {raw_scope}")])
+        self.collection_name = "academic_chunks"
+        self.encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        self.cache_dir = os.path.join(os.path.dirname(os.path.abspath(db_path)), "pdf_cache")
+        os.makedirs(self.cache_dir, exist_ok=True)
+        self.current_chunks = []
+
+        if not self.qclient.collection_exists(self.collection_name):
+            self.qclient.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=384, distance=Distance.COSINE)
             )
-            
-            final_text = ""
-            for event in events:
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.text:
-                            final_text += part.text
-                            
-            # Clean up
-            final_text = final_text.strip()
-            if final_text.startswith("```json"): final_text = final_text[7:]
-            if final_text.startswith("```"): final_text = final_text[3:]
-            if final_text.endswith("```"): final_text = final_text[:-3]
-            
-            final_text = final_text.strip()
-            
-            if not final_text:
-                raise ValueError("Empty response from model during refinement.")
-            
-            self.logger.info("Topic refinement successful")
-            return final_text
-            
-        except Exception as e:
-            self.logger.error(f"Refinement failed: {e}", exc_info=True)
-            # Fallback: return a structure indicating failure but keeping flow alive
-            return json.dumps({
-                "is_broad": False,
-                "analysis": f"Refinement failed ({str(e)}), treating as specific raw input.",
-                "topics": [{
-                    "title": "Raw Topic",
-                    "keywords": ["General"],
-                    "tldr": raw_scope,
-                    "abstract": raw_scope,
-                    "refinement_reason": "Automated refinement failed."
-                }]
-            })
 
-    def generate_ideas(self, scope: str) -> str:
-        """
-        Generates research ideas based on the provided scope using dynamic templates.
-        """
-        # Step 1: Decide which template to use (Simplified: We let the LLM decide implicitly but enforce consistency)
-        
-        template_descriptions = get_template_descriptions()
-        
-        instruction = f"""
-        You are an experienced AI researcher and Engineering Research Scientist who aims to propose high-impact research ideas resembling exciting grant proposals.
-        Your goal is to generate novel, feasible, and valuable research ideas based on a given research scope.
-        Each proposal should stem from a simple and elegant question, observation, or hypothesis.
-        
-        You have access to a literature search tool `search_literature`.
-        
-        AVAILABLE TEMPLATES:
-        {template_descriptions}
-        
-        PROTOCOL:
-        1. Analyze the user's research scope and SELECT ONE single template type that best fits the problem.
-        2. PERFORM A LITERATURE SEARCH using `search_literature` to understand the state-of-the-art and identify gaps. You CANNOT skip this step.
-        3. ITERATIVE REFINEMENT (MANDATORY 2 ROUNDS):
-           - **Round 1 (Conceptualization)**: Draft initial ideas. Critique them: Are they generic? If an idea says "use Deep Learning", it is BAD. It must specify architecture (e.g., "Transformer with relative positional encoding"). Refine the drafts.
-           - **Round 2 (Technical Deep Dive)**: Critique the refined drafts. Are the "implementation_steps" or "proposed_method" executable? Add specific algorithms, loss functions, datasets, or baselines. Ensure the "Key Insight" is non-trivial. Refine again.
-        4. Based on the 2-round refinement, finalize 3 distinct research ideas.
-        5. Output the final result as a JSON Object with two top-level keys: "reasoning" and "ideas".
-        
-        OUTPUT FORMAT (JSON):
-        {{
-            "reasoning": {{
-                "research_domain": "The specific field (e.g. Computer Vision, Game AI)",
-                "selected_template": "The ID of the template you selected (e.g. scientific_discovery)",
-                "rationale": "A brief explanation of why this template fits the user's scope."
-            }},
-            "ideas": [
-                {{
-                   // This object must strictly follow the schema of the selected template, including "title", "idea_name", "template_type", and "content".
-                }},
-                ... (2 more ideas)
-            ]
-        }}
-        
-        IMPORTANT:
-        - The output MUST be a VALID JSON Object (starting with {{ and ending with }}).
-        - STRICTLY FORBIDDEN: Do not output any conversational text, introductions (e.g. "Here are the ideas"), or markdown code blocks (```json). JUST THE RAW JSON STRING.
-        - Ensure "ideas" is a list containing exactly 3 objects.
-        """
-        
-        # Update agent instruction
-        self.agent.instruction = instruction
-        
-        prompt_text = f"""
-        Research Scope: {scope}
-        
-        Please generate 3 high-quality research ideas. 
-        First, search for literature. 
-        Then, reflect on the quality and novelty of potential ideas.
-        Finally, choose the ONE best template and generate the final JSON output.
-        
-        REQUIREMENTS:
-        - Be specific. Avoid vague terms like "optimize" or "improve" without saying HOW.
-        - Ensure the "technical_plan" or "method" details are actionable.
-        - The content should be dense and informative, suitable for a research proposal.
-        
-        REMEMBER: Output ONLY the raw JSON string. No "Here is the output" prefix.
-        """
-        
-        self.logger.info(f"Generating ideas for scope: {scope}")
-        runner = Runner(
-            agent=self.agent,
-            app_name="auto_research",
-            session_service=InMemorySessionService(),
-            auto_create_session=True
-        )
-        
+        self.agent = Agent(model=self.model, name="research_proposer",
+                           tools=[self.search_and_index_tool, self.query_knowledge_base])
+
+    def search_and_index_tool(self, topic: str, limit: int = 30) -> str:
+        words = re.findall(r"\w+", topic)
+        url = f"http://export.arxiv.org/api/query?search_query=all:{'+'.join(words[:5])}&max_results={limit}"
+        success_count = 0
+        try:
+            resp = requests.get(url, timeout=20)
+            root = ET.fromstring(resp.content)
+            for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
+                title = entry.find("{http://www.w3.org/2005/Atom}title").text.strip().replace("\n", " ")
+                link_node = entry.find("{http://www.w3.org/2005/Atom}link[@rel='alternate']")
+                if link_node is None: continue
+                link_url = link_node.attrib['href']
+
+                pdf_chunks = self._download_and_extract_pdf(link_url)
+                if not pdf_chunks: continue
+
+                points = [PointStruct(
+                    id=hashlib.md5(f"{title}_{idx}".encode()).hexdigest(),
+                    vector=self.encoder.encode(c["content"]).tolist(),
+                    payload={"title": title, "text": c["content"], "page": c["page"], "url": link_url}
+                ) for idx, c in enumerate(pdf_chunks)]
+
+                if points:
+                    self.qclient.upsert(collection_name=self.collection_name, points=points)
+                    success_count += 1
+            print(f"✅ 成功同步了 {success_count} 篇论文到云端。")
+            return f"Success: Indexed {success_count} papers."
+        except Exception as e:
+            return f"Error: {e}"
+
+    def query_knowledge_base(self, query: str) -> str:
+        """【调试】增加打印，确认 Agent 是否在检索"""
+        print(f"🔍 Agent 正在检索知识库: {query}")
+        vector = self.encoder.encode(query).tolist()
+        result = self.qclient.query_points(collection_name=self.collection_name, query=vector, limit=90)
+        self.current_chunks = [p.payload for p in result.points]
+        print(f"💡 检索到 {len(self.current_chunks)} 条相关片段。")
+        return "\n\n".join([f"[Source ID: {i}] (Title: {p.payload['title']})\n{p.payload['text']}" for i, p in
+                            enumerate(result.points)])
+
+    def run_agent_workflow(self, topic: str, system_instruction: str):
+        self.agent.instruction = system_instruction
+        runner = Runner(agent=self.agent, app_name="auto_research", session_service=InMemorySessionService(),
+                        auto_create_session=True)
         final_text = ""
-        try:
-            events = runner.run(
-                user_id="user", 
-                session_id=str(uuid.uuid4()), 
-                new_message=Content(role="user", parts=[Part(text=prompt_text)])
-            )
-            
-            for event in events:
-                # Debug: print event to see structure if needed
-                # print(f"DEBUG EVENT: {event}")
-                
-                # Only collect text content from model responses, ignoring tool calls/outputs in the final stream
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        # Check if part has text and is NOT a tool call
-                        # Note: DeepSeek/LiteLLM might return tool calls as text with special tokens
-                        if part.text:
-                            # Heuristic to skip tool call logs that might leak into text
-                            if "<\uff5ctool" in part.text or "<function>" in part.text:
-                                continue
-                            final_text += part.text
-            
-            self.logger.info("Idea generation execution finished")
-            
-        except Exception as e:
-            # Handle potential runtime errors from event loop closure
-            self.logger.error(f"Runner execution completed with potential warning: {e}", exc_info=True)
-            if not final_text:
-                raise e
+        # 强制增加一个 user 信息，提醒它必须先 query
+        prompt = f"请先通过 query_knowledge_base 检索关于 '{topic}' 的文献，然后根据检索到的 Source ID 给出 JSON 报告。"
+        events = runner.run(user_id="admin", session_id=str(uuid.uuid4()),
+                            new_message=Content(role="user", parts=[Part(text=prompt)]))
 
-        # Post-processing: Clean up potential markdown wrappers
-        final_text = final_text.strip()
-        if final_text.startswith("```json"):
-            final_text = final_text[7:]
-        if final_text.startswith("```"):
-            final_text = final_text[3:]
-        if final_text.endswith("```"):
-            final_text = final_text[:-3]
-        
-        return final_text.strip()
+        for event in events:
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        if any(x in part.text for x in ["<|tool", "<function", "调用工具"]): continue
+                        final_text += part.text
+
+        match = re.search(r'(\{.*\})', final_text, re.DOTALL)
+        if match:
+            json_str = match.group(1)
+            try:
+                raw_res = json.loads(json_str)
+            except json.JSONDecodeError:
+                json_str_fixed = re.sub(r'(?<!\\)\\(?!["\\/bfnrtu])', r'\\\\', json_str)
+                raw_res = json.loads(json_str_fixed)
+
+            # 核心：计算召回
+            cited_ids = raw_res.get("cited_source_ids", [])
+            cited_map = {}
+            for i in cited_ids:
+                try:
+                    idx = int(i)
+                    if idx < len(self.current_chunks):
+                        title = self.current_chunks[idx]['title']
+                        cited_map[title] = self.current_chunks[idx].get('url', 'N/A')
+                except: continue
+
+            raw_res["recall_metrics"] = {
+                "recall_score": round(len(cited_map) / 10, 2) if len(self.current_chunks) > 0 else 0, # 以 10 篇为基准参考
+                "cited_papers": [f"{t} ({u})" for t, u in cited_map.items()],
+                "total_papers": list(set([f"{p['title']} ({p.get('url', 'N/A')})" for p in self.current_chunks]))[:10]
+            }
+            return raw_res
+        return {"error": "No JSON found", "raw": final_text}
+
+    def _download_and_extract_pdf(self, pdf_url: str) -> List[Dict]:
+        url_hash = hashlib.md5(pdf_url.encode()).hexdigest()
+        cache_path = os.path.join(self.cache_dir, f"{url_hash}.json")
+        if os.path.exists(cache_path):
+            with open(cache_path, "r", encoding="utf-8") as f: return json.load(f)
+        try:
+            pdf_link = pdf_url.replace("/abs/", "/pdf/") + ".pdf"
+            response = requests.get(pdf_link, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+            if not response.content.startswith(b'%PDF'): return []
+            reader = pypdf.PdfReader(io.BytesIO(response.content))
+            chunks = [{"content": p.extract_text().replace("\n", " ")[:1000], "page": i + 1} for i, p in
+                      enumerate(reader.pages[:3]) if p.extract_text()] # 只取前 3 页提高速度
+            if chunks:
+                with open(cache_path, "w", encoding="utf-8") as f: json.dump(chunks, f, ensure_ascii=False)
+            return chunks
+        except: return []
