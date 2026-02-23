@@ -221,17 +221,33 @@ class ExperimentRunner:
     def _update_status(self, step_idx, total_steps, current_step_name, status, details=None, experiment_status="running"):
         """Updates the status.json file for frontend monitoring."""
         status_file = os.path.join(self.workspace_path, "status.json")
-        data = {
-            "experiment_status": experiment_status,
-            "current_step": step_idx + 1,
-            "total_steps": total_steps,
-            "step_name": current_step_name,
-            "status": status, # "running", "completed", "failed", "fixing"
-            "details": details or "",
-            "last_updated": time.time()
-        }
+        data = {}
+        
+        # Read existing status to preserve other fields (like iterations)
+        if os.path.exists(status_file):
+            try:
+                with open(status_file, "r") as f:
+                    data = json.load(f)
+            except:
+                pass
+        
+        # Update fields
+        data["experiment_status"] = experiment_status
+        data["current_step"] = step_idx + 1
+        data["total_steps"] = total_steps
+        data["step_name"] = current_step_name
+        data["status"] = status # "running", "completed", "failed", "fixing"
+        data["details"] = details or ""
+        data["last_updated"] = time.time()
+        
+        # Ensure iteration state is preserved from memory if missing in file
+        if "current_iterations" not in data:
+            data["current_iterations"] = self.current_iterations
+        if "max_iterations" not in data:
+            data["max_iterations"] = self.max_iterations
+
         with open(status_file, "w") as f:
-            json.dump(data, f)
+            json.dump(data, f, indent=2)
 
     def _get_git_graph(self):
         """Returns the git graph for context."""

@@ -11,6 +11,134 @@ from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
+from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
+from backend.templates.idea_templates import get_template_descriptions, RESEARCH_TOPIC_SCHEMA
+from backend.utils.logger import setup_logger
+
+class IdeaAgent:
+    def __init__(self):
+        self.logger = setup_logger(self.__class__.__name__)
+        if LLM_API_BASE:
+            self.model = LiteLlm(
+                model=LLM_MODEL,
+                api_base=LLM_API_BASE,
+                api_key=LLM_API_KEY
+            )
+        else:
+            self.model = LLM_MODEL
+        self.tools = [self.search_literature]
+
+    def search_literature(self, query: str, limit: int = 5) -> str:
+        words = re.findall(r"\w+", query)
+        if not words:
+            return "No query provided."
+        url = f"http://export.arxiv.org/api/query?search_query=all:{'+'.join(words[:5])}&max_results={limit}"
+        try:
+            resp = requests.get(url, timeout=20)
+            root = ET.fromstring(resp.content)
+            results = []
+            for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
+                title = entry.find("{http://www.w3.org/2005/Atom}title").text.strip().replace("\n", " ")
+                link_node = entry.find("{http://www.w3.org/2005/Atom}link[@rel='alternate']")
+                link_url = link_node.attrib["href"] if link_node is not None else ""
+                results.append(f"{title} | {link_url}")
+            return "\n".join(results) if results else "No results found."
+        except Exception as e:
+            return f"Error: {e}"
+
+    def refine_topic(self, raw_scope: str) -> str:
+        instruction = f"""
+You are a Research Topic Refiner.
+Determine if the input is broad or specific.
+If broad, propose 3 focused research topics.
+If specific, return 1 refined topic.
+Output JSON only with keys: is_broad (bool), analysis (str), topics (list).
+Each topic must follow this schema: {RESEARCH_TOPIC_SCHEMA}.
+"""
+        agent = Agent(
+            model=self._get_model_for_agent(),
+            name="idea_refiner",
+            instruction=instruction,
+            tools=[]
+        )
+        runner = Runner(
+            agent=agent,
+            app_name="auto_research",
+            session_service=InMemorySessionService(),
+            auto_create_session=True
+        )
+        try:
+            events = runner.run(
+                user_id="user",
+                session_id=str(uuid.uuid4()),
+                new_message=Content(role="user", parts=[Part(text=raw_scope)])
+            )
+            final_text = self._collect_text(events)
+            return self._clean_json_text(final_text)
+        except Exception as e:
+            self.logger.error(f"Topic refinement failed: {e}", exc_info=True)
+            return json.dumps({"is_broad": False, "analysis": str(e), "topics": []}, ensure_ascii=False)
+
+    def generate_ideas(self, scope: str) -> str:
+        instruction = f"""
+You are an expert Research Idea Generator.
+Choose the best template and generate 3 research ideas.
+Available templates:
+{get_template_descriptions()}
+Return JSON only with keys: reasoning, ideas.
+reasoning includes: research_domain, selected_template, rationale.
+ideas is a list of 3 items following the selected template schema.
+"""
+        agent = Agent(
+            model=self._get_model_for_agent(),
+            name="idea_generator",
+            instruction=instruction,
+            tools=self.tools
+        )
+        runner = Runner(
+            agent=agent,
+            app_name="auto_research",
+            session_service=InMemorySessionService(),
+            auto_create_session=True
+        )
+        try:
+            events = runner.run(
+                user_id="user",
+                session_id=str(uuid.uuid4()),
+                new_message=Content(role="user", parts=[Part(text=scope)])
+            )
+            final_text = self._collect_text(events)
+            return self._clean_json_text(final_text)
+        except Exception as e:
+            self.logger.error(f"Idea generation failed: {e}", exc_info=True)
+            return json.dumps({"reasoning": {}, "ideas": [], "error": str(e)}, ensure_ascii=False)
+
+    def _collect_text(self, events) -> str:
+        final_text = ""
+        for event in events:
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        final_text += part.text
+        return final_text.strip()
+
+    def _clean_json_text(self, text: str) -> str:
+        cleaned = text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        return cleaned.strip()
+
+    def _get_model_for_agent(self):
+        model = self.model
+        if isinstance(model, str):
+            return model
+        if type(model).__module__.startswith("google.adk."):
+            return model
+        return str(model)
 
 class ResearchIdeaEngine:
     def __init__(self, model_config: dict, db_path: str):

@@ -4,7 +4,12 @@ python-dotenv
 pandas
 plotly
 pydantic
+fastapi==0.123.10
+uvicorn==0.40.0
 litellm
 backoff
 requests
 docker
+qdrant-client
+sentence-transformers
+pypdf
