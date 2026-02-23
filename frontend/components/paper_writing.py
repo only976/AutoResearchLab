@@ -69,26 +69,39 @@ def render_paper_writing():
         except: pass
             
     # Auto-fill content
-    default_title = plan_data.get("title", "Untitled Research")
+    default_title = plan_data.get("experiment_name", "Untitled Research")
     default_abstract = conclusion_data.get("summary", "No summary available.")
     
     # Layout
     st.header(f"Draft: {default_title}")
     
     # AI Generation
-    if st.button("🤖 Generate Draft with AI", type="primary"):
+    col1, col2 = st.columns(2)
+    
+    generate_md = col1.button("🤖 Generate Draft in Markdown", type="primary")
+    generate_latex = col2.button("🤖 Generate Draft in LaTeX", type="primary")
+    
+    if generate_md or generate_latex:
         if not data_status["Conclusion"]:
-             st.error("Cannot generate draft without conclusion.")
+            st.error("Cannot generate draft without conclusion.")
         else:
-             with st.spinner("AI is writing your paper (this may take a minute)..."):
-                 try:
-                     agent = WritingAgent()
-                     artifacts = [f for f in os.listdir(exp_path) if f.endswith(('.png', '.jpg', '.csv'))]
-                     draft = agent.generate_paper(plan_data, conclusion_data, artifacts)
-                     st.session_state[f"paper_draft_{selected_exp}"] = draft
-                     st.success("Draft generated!")
-                 except Exception as e:
-                     st.error(f"Generation failed: {e}")
+            with st.spinner("AI is writing your paper (this may take a minute)..."):
+                try:
+                    agent = WritingAgent()
+                    artifacts = [f for f in os.listdir(exp_path) if f.endswith(('.png', '.jpg', '.csv'))]
+                    
+                    if generate_md:
+                        draft = agent.generate_paper(plan_data, conclusion_data, artifacts, format="markdown")
+                        st.session_state[f"paper_draft_{selected_exp}"] = draft
+                        st.session_state[f"paper_draft_format_{selected_exp}"] = "markdown"
+                        st.success("Markdown draft generated!")
+                    else:
+                        draft = agent.generate_paper(plan_data, conclusion_data, artifacts, format="latex")
+                        st.session_state[f"paper_draft_{selected_exp}"] = draft
+                        st.session_state[f"paper_draft_format_{selected_exp}"] = "latex"
+                        st.success("LaTeX draft generated!")
+                except Exception as e:
+                    st.error(f"Generation failed: {e}")
     
     tab1, tab2, tab3, tab4 = st.tabs(["📄 Content Editor", "📊 Figures & Data", "📥 Export", "🤖 AI Full Draft"])
     
@@ -135,8 +148,14 @@ def render_paper_writing():
 
     with tab4:
         draft_content = st.session_state.get(f"paper_draft_{selected_exp}", "")
+        draft_format = st.session_state.get(f"paper_draft_format_{selected_exp}", "markdown")
+        
         if draft_content:
-            st.markdown(draft_content)
-            st.download_button("Download Markdown", draft_content, file_name="paper.md")
+            if draft_format == "markdown":
+                st.markdown(draft_content)
+                st.download_button("Download Markdown", draft_content, file_name="paper.md")
+            else:
+                st.text(draft_content)
+                st.download_button("Download LaTeX", draft_content, file_name="paper.tex")
         else:
-            st.info("Click 'Generate Draft with AI' above to create a full paper draft.")
+            st.info("Click 'Generate Draft in Markdown' or 'Generate Draft in LaTeX' above to create a full paper draft.")
