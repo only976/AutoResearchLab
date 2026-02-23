@@ -25,8 +25,20 @@ class WritingAgent:
             # Use native model (e.g. Gemini) if API base is not provided
             self.model = LLM_MODEL
         
-    def generate_paper(self, plan: dict, conclusion: dict, artifacts: list) -> str:
+    def generate_paper(self, plan: dict, conclusion: dict, artifacts: list, format: str = "markdown") -> str:
         """Generates a research paper based on experiment data."""
+        
+        # Set up format-specific instructions
+        if format.lower() == "latex":
+            format_instruction = """Output the paper in LaTeX format.
+Use standard LaTeX syntax with proper document structure.
+Include placeholders for figures like \includegraphics{filename.png} where appropriate based on the available artifacts.
+"""
+        else:
+            format_instruction = """Output the paper in Markdown format.
+Use standard markdown headers (#, ##, ###).
+Include placeholders for figures like `[Figure: filename.png]` where appropriate based on the available artifacts.
+"""
         
         system_instruction = """You are an academic writing assistant. 
 Your task is to write a comprehensive research paper based on the provided experiment plan, results, and conclusion.
@@ -38,12 +50,9 @@ The paper should follow standard academic structure:
 5. Results (Key Findings & Evidence)
 6. Discussion (Implications & Limitations)
 7. Conclusion
-8. References (Mocked if necessary)
+8. References (Mocked if necessary, but strictly written according to APA format)
 
-Output the paper in Markdown format.
-Use standard markdown headers (#, ##, ###).
-Include placeholders for figures like `[Figure: filename.png]` where appropriate based on the available artifacts.
-"""
+""" + format_instruction
         
         user_prompt = f"""
 Experiment Title: {plan.get('title', 'Untitled')}
