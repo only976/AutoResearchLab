@@ -1,5 +1,5 @@
 import pytest
-from backend.sandbox.docker_sandbox import DockerSandbox
+from backend.public.sandbox.docker_sandbox import DockerSandbox
 
 class TestDockerSandbox:
     @pytest.fixture

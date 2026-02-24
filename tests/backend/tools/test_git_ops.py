@@ -1,5 +1,5 @@
 import pytest
-from backend.tools.git_ops import GitOps
+from backend.public.tools.git_ops import GitOps
 
 class TestGitOps:
     @pytest.fixture

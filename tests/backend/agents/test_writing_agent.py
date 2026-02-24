@@ -1,7 +1,7 @@
 import pytest
 import os
 import json
-from backend.agents.writing_agent import WritingAgent
+from backend.paper.writing_agent import WritingAgent
 
 class TestWritingAgent:
     @pytest.fixture
@@ -18,12 +18,16 @@ class TestWritingAgent:
         
         # Load plan data
         plan_path = os.path.join(exp_dir, "plan.json")
-        with open(plan_path, 'r') as f:
+        if not os.path.exists(plan_path):
+            pytest.skip("Missing test experiment data")
+        with open(plan_path, "r") as f:
             plan_data = json.load(f)
         
         # Load conclusion data
         conclusion_path = os.path.join(exp_dir, "conclusion.json")
-        with open(conclusion_path, 'r') as f:
+        if not os.path.exists(conclusion_path):
+            pytest.skip("Missing test experiment data")
+        with open(conclusion_path, "r") as f:
             conclusion_data = json.load(f)
         
         # Identify artifacts

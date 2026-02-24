@@ -5,7 +5,7 @@
 ## 📁 目录结构
 
 ```
-backend/agents/data_agent/
+backend/experiments/agents/data_agent/
 ├── __init__.py                  # 模块入口
 ├── docker_data_agent.py         # 主程序：数据验证与报告生成
 ├── visualizer.py                # 可视化模块：支持多种图表类型
@@ -25,32 +25,32 @@ backend/agents/data_agent/
 
 ```bash
 # 基础用法
-python -m backend.agents.data_agent.docker_data_agent -i data/simulation.csv -o report.json
+python -m backend.experiments.agents.data_agent.docker_data_agent -i data/simulation.csv -o report.json
 
 # 使用 LLM 智能识别列类型
-python -m backend.agents.data_agent.docker_data_agent -i data/simulation.csv -o report.json
+python -m backend.experiments.agents.data_agent.docker_data_agent -i data/simulation.csv -o report.json
 
 # 禁用 LLM（仅使用规则识别）
-python -m backend.agents.data_agent.docker_data_agent -i data/simulation.csv -o report.json --no-llm
+python -m backend.experiments.agents.data_agent.docker_data_agent -i data/simulation.csv -o report.json --no-llm
 
 # 自定义输出目录
-python -m backend.agents.data_agent.docker_data_agent \
+python -m backend.experiments.agents.data_agent.docker_data_agent \
     -i data/simulation.csv \
     -o report.json \
-    --out-dir backend/agents/data_agent/outputs
+    --out-dir backend/experiments/agents/data_agent/outputs
 ```
 
 ### 2. Docker 集成
 
 ```bash
 # 从 Dockerfile 构建并运行
-python -m backend.agents.data_agent.docker_data_agent \
+python -m backend.experiments.agents.data_agent.docker_data_agent \
     --dockerfile path/to/Dockerfile \
     --container-output-path /output \
     -o report.json
 
 # 使用现有 Docker 镜像
-python -m backend.agents.data_agent.docker_data_agent \
+python -m backend.experiments.agents.data_agent.docker_data_agent \
     --docker-image my_simulation:latest \
     --container-output-path /output \
     -o report.json
@@ -59,7 +59,7 @@ python -m backend.agents.data_agent.docker_data_agent \
 ### 3. 使用可视化模块
 
 ```python
-from backend.agents.data_agent import DataVisualizer, create_line_chart, create_bar_chart
+from backend.experiments.agents.data_agent import DataVisualizer, create_line_chart, create_bar_chart
 
 # 方式 1：使用便捷函数
 svg_base64 = create_line_chart(
@@ -158,7 +158,7 @@ Data Agent 自动为以下类型生成可视化：
 ### 自定义可视化
 
 ```python
-from backend.agents.data_agent.visualizer import DataVisualizer
+from backend.experiments.agents.data_agent.visualizer import DataVisualizer
 
 viz = DataVisualizer()
 
@@ -198,10 +198,10 @@ confusion = viz.create_chart(
 
 ```bash
 # 测试可视化模块
-python backend/agents/data_agent/test_visualizer.py
+python backend/experiments/agents/data_agent/test_visualizer.py
 
 # 查看测试输出
-ls backend/agents/data_agent/outputs/test_*.svg
+ls backend/experiments/agents/data_agent/outputs/test_*.svg
 ```
 
 ## 📋 输出报告格式

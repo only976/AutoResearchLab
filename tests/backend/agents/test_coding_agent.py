@@ -1,7 +1,7 @@
 import pytest
 import unittest
 from unittest.mock import MagicMock, patch
-from backend.agents.coding_agent import CodingAgent
+from backend.experiments.agents.coding_agent import CodingAgent
 
 class TestCodingAgent:
     """
@@ -14,7 +14,7 @@ class TestCodingAgent:
 
     @pytest.fixture
     def agent(self):
-        with patch('backend.agents.coding_agent.LiteLlm') as MockLlm:
+        with patch('backend.experiments.agents.coding_agent.LiteLlm') as MockLlm:
              agent = CodingAgent()
              agent.model = MockLlm.return_value 
              return agent
@@ -34,8 +34,8 @@ class TestCodingAgent:
         mock_event = MagicMock()
         mock_event.content.parts = [MagicMock(text=f"Here is the code:\n```python\n{expected_code}\n```")]
         
-        with patch('backend.agents.coding_agent.Runner') as MockRunner, \
-             patch('backend.agents.coding_agent.Agent') as MockAgent:
+        with patch('backend.experiments.agents.coding_agent.Runner') as MockRunner, \
+             patch('backend.experiments.agents.coding_agent.Agent') as MockAgent:
             instance = MockRunner.return_value
             instance.run.return_value = [mock_event]
             
@@ -55,8 +55,8 @@ class TestCodingAgent:
         mock_event = MagicMock()
         mock_event.content.parts = [MagicMock(text=f"```python\n{fixed_code}\n```")]
         
-        with patch('backend.agents.coding_agent.Runner') as MockRunner, \
-             patch('backend.agents.coding_agent.Agent') as MockAgent:
+        with patch('backend.experiments.agents.coding_agent.Runner') as MockRunner, \
+             patch('backend.experiments.agents.coding_agent.Agent') as MockAgent:
             instance = MockRunner.return_value
             instance.run.return_value = [mock_event]
             

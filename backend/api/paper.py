@@ -3,9 +3,9 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
-from backend.agents.writing_agent import WritingAgent
+from backend.paper.writing_agent import WritingAgent
 from backend.api.common import ensure_experiment_path, read_json
-from backend.schemas.request_models import DraftRequest
+from backend.public.schemas.request_models import DraftRequest
 
 router = APIRouter(prefix="/api/experiments")
 

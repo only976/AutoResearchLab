@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400">
+<style>text{font-family:Arial,sans-serif;font-size:12px;}</style>
+<text x='300' y='25' text-anchor='middle' font-size='14' font-weight='bold'>Data Quality Checks</text>
+<text x="110" y="59" text-anchor="end">Pass</text>
+<rect x="120" y="40" width="400" height="30" fill="#4c78a8" rx="2"></rect>
+<text x="528" y="59">45</text>
+<text x="110" y="99" text-anchor="end">Warning</text>
+<rect x="120" y="80" width="107" height="30" fill="#4c78a8" rx="2"></rect>
+<text x="235" y="99">12</text>
+<text x="110" y="139" text-anchor="end">Fail</text>
+<rect x="120" y="120" width="27" height="30" fill="#4c78a8" rx="2"></rect>
+<text x="155" y="139">3</text>
+</svg>

@@ -3,7 +3,7 @@ import os
 import json
 import pandas as pd
 
-from backend.agents.writing_agent import WritingAgent
+from backend.paper.writing_agent import WritingAgent
 
 def render_paper_writing():
     st.title("📝 Paper Drafting")

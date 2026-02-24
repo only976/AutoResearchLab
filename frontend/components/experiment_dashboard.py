@@ -5,10 +5,10 @@ import time
 import subprocess
 import re
 import graphviz
-from backend.agents.experiment_design_agent import ExperimentDesignAgent
-from backend.execution.feedback_manager import FeedbackManager
-from backend.execution.experiment_runner import start_experiment_background, start_analysis_background
-from backend.sandbox.docker_sandbox import DockerSandbox
+from backend.experiments.agents.experiment_design_agent import ExperimentDesignAgent
+from backend.experiments.execution.feedback_manager import FeedbackManager
+from backend.experiments.execution.experiment_runner import start_experiment_background, start_analysis_background
+from backend.public.sandbox.docker_sandbox import DockerSandbox
 
 def load_experiment(exp_id):
     """Loads an existing experiment from disk."""

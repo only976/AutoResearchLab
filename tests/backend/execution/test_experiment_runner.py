@@ -3,7 +3,7 @@ import os
 import shutil
 import json
 from unittest.mock import MagicMock, patch
-from backend.execution.experiment_runner import ExperimentRunner
+from backend.experiments.execution.experiment_runner import ExperimentRunner
 
 class TestExperimentRunner:
     """
@@ -40,10 +40,10 @@ class TestExperimentRunner:
     @pytest.fixture
     def runner(self, workspace, plan):
         # Patch internal agents to avoid real instantiation
-        with patch('backend.execution.experiment_runner.CodingAgent'), \
-             patch('backend.execution.experiment_runner.DataAnalysisAgent'), \
-             patch('backend.execution.experiment_runner.ReviewAgent'), \
-             patch('backend.execution.experiment_runner.FeedbackManager'):
+        with patch('backend.experiments.execution.experiment_runner.CodingAgent'), \
+             patch('backend.experiments.execution.experiment_runner.DataAnalysisAgent'), \
+             patch('backend.experiments.execution.experiment_runner.ReviewAgent'), \
+             patch('backend.experiments.execution.experiment_runner.FeedbackManager'):
             
             runner = ExperimentRunner(workspace, plan)
             return runner

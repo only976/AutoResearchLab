@@ -8,9 +8,9 @@ import datetime
 # Add project root to sys.path to allow imports from backend
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from backend.agents.idea_agent import IdeaAgent
-from backend.templates.idea_templates import get_template_schema
-from backend.utils.snapshot_manager import save_snapshot, list_snapshots, load_snapshot
+from backend.ideas.agent import IdeaAgent
+from backend.ideas.templates import get_template_schema
+from backend.ideas.snapshots import save_snapshot, list_snapshots, load_snapshot
 
 def render_idea_card(idea, index, unique_key_prefix, topic=None):
     """Renders a single research idea based on its template type."""

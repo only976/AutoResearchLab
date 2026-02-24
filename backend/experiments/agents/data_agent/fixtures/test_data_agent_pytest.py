@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.agents.data_agent import docker_data_agent as dda
+from backend.experiments.agents.data_agent import docker_data_agent as dda
 
 
 def test_parse_and_checks_metrics_csv() -> None:

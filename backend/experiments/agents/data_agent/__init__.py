@@ -1,7 +1,4 @@
-"""
-Data Agent Module
-数据可靠性验证、可视化和分析工具
-"""
+from backend.experiments.agents.base_agent import BaseAgent
 from .visualizer import (
     DataVisualizer,
     create_line_chart,
@@ -9,9 +6,16 @@ from .visualizer import (
     create_confusion_matrix
 )
 
+
+class DataAgent(BaseAgent):
+    def __init__(self):
+        super().__init__()
+
+
 __all__ = [
-    'DataVisualizer',
-    'create_line_chart',
-    'create_bar_chart',
-    'create_confusion_matrix'
+    "DataAgent",
+    "DataVisualizer",
+    "create_line_chart",
+    "create_bar_chart",
+    "create_confusion_matrix",
 ]

@@ -6,7 +6,7 @@ current_file_path = os.path.abspath(__file__)
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file_path)))
 if project_root not in sys.path: sys.path.insert(0, project_root)
 
-from backend.agents.idea_agent import ResearchIdeaEngine
+from backend.ideas.agent import ResearchIdeaEngine
 from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
 
 def main():

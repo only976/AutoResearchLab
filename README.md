@@ -172,9 +172,11 @@ After startup, the browser will automatically open `http://localhost:8501`.
 ```
 AutoResearchLab/
 ├── backend/                # Backend Core Logic
-│   ├── agents/             # Agent Implementations (Coding, Design, Review...)
-│   ├── execution/          # Experiment Execution Engine (Runner)
-│   ├── sandbox/            # Docker Sandbox Management
+│   ├── api/                # FastAPI routes
+│   ├── ideas/              # Idea generation phase
+│   ├── experiments/        # Experiment design & execution
+│   ├── paper/              # Paper drafting
+│   ├── public/             # Shared modules across phases
 │   ├── config.py           # Unified Config Center
 │   └── ...
 ├── frontend/               # Frontend Interface

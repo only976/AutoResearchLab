@@ -1,9 +1,9 @@
 from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
-from backend.agents.idea_agent import IdeaAgent
+from backend.ideas.agent import IdeaAgent
 from backend.api.common import parse_json_text
-from backend.schemas.request_models import IdeaRefineRequest, IdeaGenerateRequest, SnapshotSaveRequest
-from backend.utils.snapshot_manager import save_snapshot, list_snapshots, load_snapshot
+from backend.public.schemas.request_models import IdeaRefineRequest, IdeaGenerateRequest, SnapshotSaveRequest
+from backend.ideas.snapshots import save_snapshot, list_snapshots, load_snapshot
 
 router = APIRouter(prefix="/api/ideas")
 

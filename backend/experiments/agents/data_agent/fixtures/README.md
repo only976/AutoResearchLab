@@ -19,5 +19,5 @@
 ## 运行方式（示例）
 在仓库根目录运行：
 ```
-pytest backend/agents/data_agent/fixtures/test_data_agent_pytest.py
+pytest backend/experiments/agents/data_agent/fixtures/test_data_agent_pytest.py
 ```

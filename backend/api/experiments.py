@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from backend.agents.experiment_design_agent import ExperimentDesignAgent
+from backend.experiments.agents.experiment_design_agent import ExperimentDesignAgent
 from backend.api.common import (
     EXPERIMENTS_DIR,
     ensure_dir,
@@ -19,9 +19,9 @@ from backend.api.common import (
     list_experiments,
     safe_artifact_path,
 )
-from backend.execution.experiment_runner import start_experiment_background
-from backend.execution.feedback_manager import FeedbackManager
-from backend.schemas.request_models import (
+from backend.experiments.execution.experiment_runner import start_experiment_background
+from backend.experiments.execution.feedback_manager import FeedbackManager
+from backend.public.schemas.request_models import (
     ExperimentCreateRequest,
     ExperimentPlanRequest,
     ExperimentRunRequest,
@@ -119,7 +119,7 @@ def get_status(exp_id: str) -> Dict[str, Any]:
     return status
 
 
-@router.get("/api/experiments/{exp_id}/logs")
+@router.get("/{exp_id}/logs")
 def get_logs(exp_id: str, lines: int = Query(default=200, ge=1, le=2000)) -> Dict[str, Any]:
     workspace_path = get_workspace_path(exp_id)
     log_path = os.path.join(workspace_path, "execution.log")
@@ -130,7 +130,7 @@ def get_logs(exp_id: str, lines: int = Query(default=200, ge=1, le=2000)) -> Dic
     return {"lines": content[-lines:]}
 
 
-@router.get("/api/experiments/{exp_id}/artifacts")
+@router.get("/{exp_id}/artifacts")
 def get_artifacts(exp_id: str) -> Dict[str, Any]:
     workspace_path = ensure_experiment_path(exp_id)
     files = []
@@ -140,14 +140,14 @@ def get_artifacts(exp_id: str) -> Dict[str, Any]:
     return {"files": sorted(files)}
 
 
-@router.get("/api/experiments/{exp_id}/artifacts/{name}")
+@router.get("/{exp_id}/artifacts/{name}")
 def get_artifact(exp_id: str, name: str):
     workspace_path = ensure_experiment_path(exp_id)
     path = safe_artifact_path(workspace_path, name)
     return FileResponse(path)
 
 
-@router.get("/api/experiments/{exp_id}/history")
+@router.get("/{exp_id}/history")
 def get_history(exp_id: str) -> Dict[str, Any]:
     workspace_path = ensure_experiment_path(exp_id)
     if not os.path.exists(os.path.join(workspace_path, ".git")):
@@ -175,7 +175,7 @@ def get_history(exp_id: str) -> Dict[str, Any]:
     return {"commits": commits}
 
 
-@router.post("/api/experiments/{exp_id}/feedback")
+@router.post("/{exp_id}/feedback")
 def add_feedback(exp_id: str, payload: FeedbackRequest) -> Dict[str, Any]:
     workspace_path = ensure_experiment_path(exp_id)
     fm = FeedbackManager(workspace_path)

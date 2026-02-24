@@ -12,7 +12,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
 from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
-from backend.templates.idea_templates import get_template_descriptions, RESEARCH_TOPIC_SCHEMA
+from backend.ideas.templates import get_template_descriptions, RESEARCH_TOPIC_SCHEMA
 from backend.utils.logger import setup_logger
 
 class IdeaAgent:

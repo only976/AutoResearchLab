@@ -172,9 +172,11 @@ streamlit run frontend/app.py
 ```
 AutoResearchLab/
 ├── backend/                # 后端核心逻辑
-│   ├── agents/             # 各类智能体实现 (Coding, Design, Review...)
-│   ├── execution/          # 实验执行引擎 (Runner)
-│   ├── sandbox/            # Docker 沙箱管理
+│   ├── api/                # FastAPI 路由
+│   ├── ideas/              # 想法阶段
+│   ├── experiments/        # 实验设计与执行
+│   ├── paper/              # 论文撰写
+│   ├── public/             # 跨阶段共享模块
 │   ├── config.py           # 统一配置中心
 │   └── ...
 ├── frontend/               # 前端界面

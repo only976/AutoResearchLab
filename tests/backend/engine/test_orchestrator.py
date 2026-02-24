@@ -1,5 +1,5 @@
 import pytest
-from backend.engine.orchestrator import Orchestrator
+from backend.public.engine.orchestrator import Orchestrator
 
 class TestOrchestrator:
     @pytest.fixture

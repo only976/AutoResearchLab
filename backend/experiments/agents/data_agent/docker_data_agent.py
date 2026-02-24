@@ -4,7 +4,7 @@
 - 支持读取 `.csv` 和 `.log`（简单数字序列）作为仿真输出输入
 - **使用 LLM 智能识别列的语义类型**（可回退到规则识别）
 - 执行物理/逻辑可靠性校验（收敛性、NaN/无穷、能量守恒近似等）
-- 在关键失败时触发 Git 回滚机制（通过 `backend.tools.git_ops.rollback_last_commit`）
+- 在关键失败时触发 Git 回滚机制（通过 `backend.public.tools.git_ops.rollback_last_commit`）
 - 生成科研可视化（收敛曲线 SVG，base64）并输出 JSON 报告
 
 设计原则：优先使用标准库以减少新增依赖；与原先 Dockerfile 检测功能兼容性降低，转为聚焦于仿真数据分析。
@@ -55,14 +55,14 @@ load_env()
 
 # optional: git ops helper
 try:
-    from backend.tools.git_ops import rollback_last_commit
+    from backend.public.tools.git_ops import rollback_last_commit
 except Exception:
     # Try dynamic import by file location (when script executed directly)
     try:
         import importlib.util
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        git_ops_path = os.path.join(repo_root, "backend", "tools", "git_ops.py")
-        spec = importlib.util.spec_from_file_location("backend.tools.git_ops", git_ops_path)
+        git_ops_path = os.path.join(repo_root, "backend", "public", "tools", "git_ops.py")
+        spec = importlib.util.spec_from_file_location("backend.public.tools.git_ops", git_ops_path)
         git_ops = importlib.util.module_from_spec(spec)  # type: ignore
         spec.loader.exec_module(git_ops)  # type: ignore
         rollback_last_commit = getattr(git_ops, "rollback_last_commit")
@@ -776,7 +776,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--docker-image", help="已存在的 Docker 镜像 tag：直接运行并收集容器输出")
     parser.add_argument("--container-output-path", default="/output", help="容器内输出路径（默认 /output）")
     parser.add_argument("--repo-root", required=False, help="仓库根路径，用于回滚（可选）")
-    parser.add_argument("--out-dir", required=False, help="基目录：为每次运行创建子目录以保存 report.json 与图像文件 (默认 backend/agents/outputs)")
+    parser.add_argument("--out-dir", required=False, help="基目录：为每次运行创建子目录以保存 report.json 与图像文件 (默认 backend/experiments/agents/data_agent/outputs)")
     parser.add_argument("--no-llm", action="store_true", help="禁用 LLM 智能识别，仅使用规则匹配")
     args = parser.parse_args(argv)
 

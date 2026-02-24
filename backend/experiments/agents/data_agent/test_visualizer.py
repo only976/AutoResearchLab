@@ -5,7 +5,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from backend.agents.data_agent.visualizer import (
+from backend.experiments.agents.data_agent.visualizer import (
     DataVisualizer,
     create_line_chart,
     create_bar_chart,

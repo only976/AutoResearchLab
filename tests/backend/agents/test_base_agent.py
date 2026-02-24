@@ -1,5 +1,5 @@
 import pytest
-from backend.agents.base_agent import BaseAgent
+from backend.experiments.agents.base_agent import BaseAgent
 
 class TestBaseAgent:
     def test_base_agent_structure(self):

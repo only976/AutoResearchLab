@@ -1,7 +1,7 @@
 import pytest
 import unittest
 from unittest.mock import MagicMock, patch
-from backend.agents.idea_agent import IdeaAgent
+from backend.ideas.agent import IdeaAgent
 from tests.helpers.context_manager import TestContextManager
 
 class TestIdeaAgent:
@@ -21,7 +21,7 @@ class TestIdeaAgent:
         # Since IdeaAgent init creates LiteLlm which might connect to network, 
         # we might want to patch LiteLlm or LLM config.
         # For now, we assume LiteLlm init is safe or we mock it.
-        with patch('backend.agents.idea_agent.LiteLlm') as MockLlm:
+        with patch('backend.ideas.agent.LiteLlm') as MockLlm:
              agent = IdeaAgent()
              agent.model = MockLlm.return_value # Replace model with mock
              return agent
@@ -59,8 +59,8 @@ class TestIdeaAgent:
         
         # We need to patch 'google.adk.Runner.run' or the specific runner instance usage inside refine_topic
         # Since refine_topic instantiates its own Runner, we patch the class.
-        with patch('backend.agents.idea_agent.Runner') as MockRunner, \
-             patch('backend.agents.idea_agent.Agent') as MockAgent:
+        with patch('backend.ideas.agent.Runner') as MockRunner, \
+             patch('backend.ideas.agent.Agent') as MockAgent:
             instance = MockRunner.return_value
             instance.run.return_value = [mock_event]
             
@@ -90,8 +90,8 @@ class TestIdeaAgent:
         import json
         mock_event.content.parts = [MagicMock(text=json.dumps(mock_response_json))]
         
-        with patch('backend.agents.idea_agent.Runner') as MockRunner, \
-             patch('backend.agents.idea_agent.Agent') as MockAgent:
+        with patch('backend.ideas.agent.Runner') as MockRunner, \
+             patch('backend.ideas.agent.Agent') as MockAgent:
             instance = MockRunner.return_value
             instance.run.return_value = [mock_event]
             
@@ -147,7 +147,7 @@ class TestIdeaAgent:
         # No, generate_ideas in IdeaAgent (lines 162+) creates a prompt but...
         # Wait, let's look at generate_ideas implementation again.
         
-        with patch('backend.agents.idea_agent.Runner') as MockRunner:
+        with patch('backend.ideas.agent.Runner') as MockRunner:
             instance = MockRunner.return_value
             instance.run.return_value = [mock_event]
             
