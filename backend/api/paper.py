@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from backend.paper.writing_agent import WritingAgent
 from backend.api.common import ensure_experiment_path, read_json
-from backend.public.schemas.request_models import DraftRequest
+from backend.schemas.request_models import DraftRequest
 
 router = APIRouter(prefix="/api/experiments")
 

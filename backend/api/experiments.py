@@ -21,7 +21,7 @@ from backend.api.common import (
 )
 from backend.experiments.execution.experiment_runner import start_experiment_background
 from backend.experiments.execution.feedback_manager import FeedbackManager
-from backend.public.schemas.request_models import (
+from backend.schemas.request_models import (
     ExperimentCreateRequest,
     ExperimentPlanRequest,
     ExperimentRunRequest,

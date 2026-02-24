@@ -2,7 +2,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 from backend.ideas.agent import IdeaAgent
 from backend.api.common import parse_json_text
-from backend.public.schemas.request_models import IdeaRefineRequest, IdeaGenerateRequest, SnapshotSaveRequest
+from backend.schemas.request_models import IdeaRefineRequest, IdeaGenerateRequest, SnapshotSaveRequest
 from backend.ideas.snapshots import save_snapshot, list_snapshots, load_snapshot
 
 router = APIRouter(prefix="/api/ideas")

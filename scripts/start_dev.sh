@@ -7,7 +7,8 @@ FRONTEND_PORT="${FRONTEND_PORT:-3030}"
 
 # Define commands
 BACKEND_CMD="source ~/miniconda3/etc/profile.d/conda.sh && conda activate AutoResearchLab && uvicorn backend.main:app --reload --port ${BACKEND_PORT}"
-FRONTEND_CMD="cd \"$ROOT_DIR/web\" && API_BASE_URL=\"http://localhost:${BACKEND_PORT}\" npm run dev -- --port ${FRONTEND_PORT}"
+FRONTEND_CMD="cd \"$ROOT_DIR/frontend\" && API_BASE_URL=\"http://localhost:${BACKEND_PORT}\" npm run dev -- --port ${FRONTEND_PORT}"
+
 
 # Kill existing processes on ports
 echo "Checking ports..."

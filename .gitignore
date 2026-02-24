@@ -30,9 +30,9 @@ data/logs/*
 # Project Data
 data/*
 
-web/node_modules/
-web/.next/
-web/out/
-web/.eslintcache
-web/.turbo/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.eslintcache
+frontend/.turbo/
 

@@ -1,0 +1,47 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='700' height='300'>
+<style>text{font-family:Arial,sans-serif;font-size:12px;}</style>
+<text x='350' y='20' text-anchor='middle' font-size='14' font-weight='bold'>Training Loss Curve</text>
+<line x1='60' y1='30' x2='60' y2='250' stroke='#333' stroke-width='1.5'/>
+<line x1='60' y1='250' x2='680' y2='250' stroke='#333' stroke-width='1.5'/>
+<line x1='55' y1='250' x2='60' y2='250' stroke='#333'/>
+<text x='50' y='254' text-anchor='end'>0.2</text>
+<line x1='55' y1='195' x2='60' y2='195' stroke='#333'/>
+<text x='50' y='199' text-anchor='end'>2.7</text>
+<line x1='55' y1='140' x2='60' y2='140' stroke='#333'/>
+<text x='50' y='144' text-anchor='end'>5.2</text>
+<line x1='55' y1='85' x2='60' y2='85' stroke='#333'/>
+<text x='50' y='89' text-anchor='end'>7.6</text>
+<line x1='55' y1='30' x2='60' y2='30' stroke='#333'/>
+<text x='50' y='34' text-anchor='end'>10</text>
+<line x1='60' y1='250' x2='60' y2='255' stroke='#333'/>
+<text x='60' y='270' text-anchor='middle'>0</text>
+<line x1='215' y1='250' x2='215' y2='255' stroke='#333'/>
+<text x='215' y='270' text-anchor='middle'>24</text>
+<line x1='370' y1='250' x2='370' y2='255' stroke='#333'/>
+<text x='370' y='270' text-anchor='middle'>48</text>
+<line x1='525' y1='250' x2='525' y2='255' stroke='#333'/>
+<text x='525' y='270' text-anchor='middle'>71</text>
+<line x1='680' y1='250' x2='680' y2='255' stroke='#333'/>
+<text x='680' y='270' text-anchor='middle'>95</text>
+<polyline fill='none' stroke='#ff7f0e' stroke-width='2' points='60,30 92,216 125,233 157,239 190,242 223,244 255,246 288,247 321,247 353,248 386,248 418,249 451,249 484,249 516,250 549,250 582,250 614,250 647,250 680,250' />
+<circle cx='60' cy='30' r='3' fill='#ff7f0e'/>
+<circle cx='92' cy='216' r='3' fill='#ff7f0e'/>
+<circle cx='125' cy='233' r='3' fill='#ff7f0e'/>
+<circle cx='157' cy='239' r='3' fill='#ff7f0e'/>
+<circle cx='190' cy='242' r='3' fill='#ff7f0e'/>
+<circle cx='223' cy='244' r='3' fill='#ff7f0e'/>
+<circle cx='255' cy='246' r='3' fill='#ff7f0e'/>
+<circle cx='288' cy='247' r='3' fill='#ff7f0e'/>
+<circle cx='321' cy='247' r='3' fill='#ff7f0e'/>
+<circle cx='353' cy='248' r='3' fill='#ff7f0e'/>
+<circle cx='386' cy='248' r='3' fill='#ff7f0e'/>
+<circle cx='418' cy='249' r='3' fill='#ff7f0e'/>
+<circle cx='451' cy='249' r='3' fill='#ff7f0e'/>
+<circle cx='484' cy='249' r='3' fill='#ff7f0e'/>
+<circle cx='516' cy='250' r='3' fill='#ff7f0e'/>
+<circle cx='549' cy='250' r='3' fill='#ff7f0e'/>
+<circle cx='582' cy='250' r='3' fill='#ff7f0e'/>
+<circle cx='614' cy='250' r='3' fill='#ff7f0e'/>
+<circle cx='647' cy='250' r='3' fill='#ff7f0e'/>
+<circle cx='680' cy='250' r='3' fill='#ff7f0e'/>
+</svg>

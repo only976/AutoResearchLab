@@ -1,5 +1,5 @@
-from backend.public.engine.event_emitter import EventEmitter
-from backend.public.engine.state_manager import StateManager
+from backend.engine.event_emitter import EventEmitter
+from backend.engine.state_manager import StateManager
 
 
 class Orchestrator:

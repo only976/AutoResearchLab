@@ -5,7 +5,7 @@ import threading
 import subprocess
 import re
 from backend.experiments.execution.feedback_manager import FeedbackManager
-from backend.public.sandbox.docker_sandbox import DockerSandbox
+from backend.sandbox.docker_sandbox import DockerSandbox
 from backend.experiments.agents.coding_agent import CodingAgent
 from backend.experiments.agents.data_analysis_agent import DataAnalysisAgent
 from backend.experiments.agents.review_agent import ReviewAgent
