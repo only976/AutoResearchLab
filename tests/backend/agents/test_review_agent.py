@@ -1,5 +1,5 @@
 import pytest
-from backend.agents.review_agent import ReviewAgent
+from backend.experiments.agents.review_agent import ReviewAgent
 
 class TestReviewAgent:
     @pytest.fixture

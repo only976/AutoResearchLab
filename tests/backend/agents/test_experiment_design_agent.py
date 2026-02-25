@@ -1,5 +1,5 @@
 import pytest
-from backend.agents.experiment_design_agent import ExperimentDesignAgent
+from backend.experiments.agents.experiment_design_agent import ExperimentDesignAgent
 
 class TestExperimentDesignAgent:
     @pytest.fixture

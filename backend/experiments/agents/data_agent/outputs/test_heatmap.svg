@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="500">
+<style>text{font-family:Arial,sans-serif;font-size:10px;}</style>
+<text x='300' y='20' text-anchor='middle' font-size='14' font-weight='bold'>Parameter Sensitivity Analysis</text>
+<rect x="100" y="80" width="40" height="40" fill="#ff0000" stroke="#fff"/>
+<text x="120.0" y="103.0" text-anchor="middle" fill="#000">0.9</text>
+<rect x="140" y="80" width="40" height="40" fill="#1e1eff" stroke="#fff"/>
+<text x="160.0" y="103.0" text-anchor="middle" fill="#000">0.1</text>
+<rect x="180" y="80" width="40" height="40" fill="#0000ff" stroke="#fff"/>
+<text x="200.0" y="103.0" text-anchor="middle" fill="#000">0.05</text>
+<rect x="100" y="120" width="40" height="40" fill="#5a5aff" stroke="#fff"/>
+<text x="120.0" y="143.0" text-anchor="middle" fill="#000">0.2</text>
+<rect x="140" y="120" width="40" height="40" fill="#ff7878" stroke="#fff"/>
+<text x="160.0" y="143.0" text-anchor="middle" fill="#000">0.7</text>
+<rect x="180" y="120" width="40" height="40" fill="#3c3cff" stroke="#fff"/>
+<text x="200.0" y="143.0" text-anchor="middle" fill="#000">0.15</text>
+<rect x="100" y="160" width="40" height="40" fill="#0000ff" stroke="#fff"/>
+<text x="120.0" y="183.0" text-anchor="middle" fill="#000">0.05</text>
+<rect x="140" y="160" width="40" height="40" fill="#1e1eff" stroke="#fff"/>
+<text x="160.0" y="183.0" text-anchor="middle" fill="#000">0.1</text>
+<rect x="180" y="160" width="40" height="40" fill="#ff3c3c" stroke="#fff"/>
+<text x="200.0" y="183.0" text-anchor="middle" fill="#000">0.8</text>
+<text x="90" y="104.0" text-anchor="end">Param A</text>
+<text x="90" y="144.0" text-anchor="end">Param B</text>
+<text x="90" y="184.0" text-anchor="end">Param C</text>
+<text x="120.0" y="70" text-anchor="middle" transform="rotate(-45, 120.0, 70)">Low</text>
+<text x="160.0" y="70" text-anchor="middle" transform="rotate(-45, 160.0, 70)">Medium</text>
+<text x="200.0" y="70" text-anchor="middle" transform="rotate(-45, 200.0, 70)">High</text>
+</svg>

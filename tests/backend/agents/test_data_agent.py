@@ -1,5 +1,5 @@
 import pytest
-from backend.agents.data_agent import DataAgent
+from backend.experiments.agents.data_agent import DataAgent
 
 class TestDataAgent:
     @pytest.fixture
