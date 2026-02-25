@@ -19,7 +19,31 @@ def refine_ideas(payload: IdeaRefineRequest) -> Dict[str, Any]:
 def generate_ideas(payload: IdeaGenerateRequest) -> Dict[str, Any]:
     agent = IdeaAgent()
     text = agent.generate_ideas(payload.scope)
-    return parse_json_text(text)
+    result = parse_json_text(text)
+    
+    # Auto-save the generated ideas
+    try:
+        import json
+        # payload.scope is expected to be a JSON string of the refined topic
+        try:
+            refined_topic = json.loads(payload.scope)
+        except Exception:
+            # Fallback if scope is just a string
+            refined_topic = {"title": "Untitled Idea", "scope": payload.scope}
+            
+        ideas_list = result.get("ideas", []) if isinstance(result, dict) else result
+        
+        # Structure matches what frontend expects for results
+        snapshot_results = [{
+            "topic": refined_topic,
+            "ideas": ideas_list
+        }]
+        
+        save_snapshot(refined_topic, snapshot_results)
+    except Exception as e:
+        print(f"Auto-save failed: {e}")
+        
+    return result
 
 
 @router.get("/snapshots")

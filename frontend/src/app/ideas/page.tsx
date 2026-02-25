@@ -33,6 +33,8 @@ type IdeaResult = {
 
 type Snapshot = {
   filename: string
+  title: string
+  timestamp: string
 }
 
 export default function IdeasPage() {
@@ -41,7 +43,7 @@ export default function IdeasPage() {
   const [refinedTopic, setRefinedTopic] = useState<RefinedTopic | null>(null)
   const [results, setResults] = useState<IdeaResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [snapshots, setSnapshots] = useState<string[]>([])
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [saving, setSaving] = useState(false)
 
   // Load snapshots on mount
@@ -54,7 +56,15 @@ export default function IdeasPage() {
       const res = await fetch("/api/ideas/snapshots")
       if (res.ok) {
         const data = await res.json()
-        setSnapshots(data.files || [])
+        // Handle both old (string[]) and new (object[]) formats
+        const files = data.files || []
+        const parsedSnapshots = files.map((f: any) => {
+          if (typeof f === 'string') {
+             return { filename: f, title: f, timestamp: '' }
+          }
+          return f
+        })
+        setSnapshots(parsedSnapshots)
       }
     } catch (e) {
       console.error("Failed to load snapshots", e)
@@ -100,6 +110,8 @@ export default function IdeasPage() {
       }
       setResults([result])
       setStep(3)
+      // Refresh snapshots list as it's auto-saved
+      fetchSnapshots()
     } catch (e) {
       console.error(e)
       alert("Failed to generate ideas")
@@ -191,17 +203,17 @@ export default function IdeasPage() {
         )}
       </PageHeader>
 
-      <div className="flex-1">
-        <AnimatePresence mode="wait">
-          {step === 1 && (
-            <motion.div
-              key="step1"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="grid gap-8 lg:grid-cols-3"
-            >
-              <div className="lg:col-span-2 space-y-6">
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-6">
+          <AnimatePresence mode="wait">
+            {step === 1 && (
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="max-w-3xl mx-auto space-y-6"
+              >
                 <Card className="border-primary/20 bg-card/50 backdrop-blur">
                   <CardHeader>
                     <CardTitle>Research Topic</CardTitle>
@@ -227,125 +239,130 @@ export default function IdeasPage() {
                     </Button>
                   </CardFooter>
                 </Card>
-              </div>
+              </motion.div>
+            )}
 
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Recent Snapshots</h3>
-                <div className="space-y-2">
-                  {snapshots.length === 0 && <div className="text-sm text-muted-foreground">No saved snapshots found.</div>}
-                  {snapshots.slice(0, 5).map((file) => (
-                    <Button
-                      key={file}
-                      variant="ghost"
-                      className="w-full justify-start text-xs truncate"
-                      onClick={() => loadSnapshot(file)}
-                    >
-                      <FileJson className="mr-2 h-3 w-3 text-primary" />
-                      <span className="truncate">{file}</span>
+            {step === 2 && refinedTopic && (
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="max-w-3xl mx-auto space-y-6"
+              >
+                <Card className="border-primary/20 bg-card/50 backdrop-blur">
+                  <CardHeader>
+                    <CardTitle>Refined Topic: {refinedTopic.title}</CardTitle>
+                    <CardDescription>Review the refined research direction before generating concrete ideas.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
+                      <span className="font-semibold text-foreground">TL;DR:</span> {refinedTopic.tldr}
+                    </div>
+                    <div className="text-sm leading-relaxed">
+                      {refinedTopic.abstract}
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex justify-between gap-4">
+                    <Button variant="ghost" onClick={() => setStep(1)}>Edit Topic</Button>
+                    <Button onClick={handleGenerate} disabled={loading} size="lg" className="flex-1">
+                      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                      Generate Ideas
                     </Button>
+                  </CardFooter>
+                </Card>
+              </motion.div>
+            )}
+
+            {step === 3 && (
+              <motion.div
+                key="step3"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex items-center justify-between">
+                   <h2 className="text-xl font-semibold">Generated Ideas</h2>
+                   <div className="flex gap-2">
+                     <Button variant="outline" onClick={handleGenerate} disabled={loading}>
+                       <RefreshCw className="mr-2 h-4 w-4" /> Regenerate
+                     </Button>
+                     <Button onClick={handleSaveSnapshot} disabled={saving || results.length === 0}>
+                       {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                       Save Copy
+                     </Button>
+                   </div>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {results.flatMap(r => r.ideas).map((idea, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: idx * 0.1 }}
+                    >
+                      <Card className="h-full flex flex-col hover:border-primary/50 transition-colors">
+                        <CardHeader>
+                          <Badge variant="outline" className="w-fit mb-2">{idea.template_type || "Idea"}</Badge>
+                          <CardTitle className="text-lg leading-tight">{idea.title || idea.idea_name || `Idea ${idx + 1}`}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1">
+                          <p className="text-sm text-muted-foreground line-clamp-4">
+                            {idea.content && typeof idea.content === "object" 
+                              ? JSON.stringify(idea.content).slice(0, 200) 
+                              : String(idea.content || "").slice(0, 200)}
+                            ...
+                          </p>
+                        </CardContent>
+                        <CardFooter>
+                          <Button 
+                            className="w-full" 
+                            onClick={() => handleStartExperiment(results[0].topic, idea, idx)}
+                            disabled={startingExperiment !== null}
+                          >
+                            {startingExperiment === String(idx) ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting...
+                              </>
+                            ) : (
+                              <>
+                                Start Experiment <ChevronRight className="ml-2 h-4 w-4" />
+                              </>
+                            )}
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    </motion.div>
                   ))}
                 </div>
-              </div>
-            </motion.div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-          {step === 2 && refinedTopic && (
-            <motion.div
-              key="step2"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="max-w-3xl mx-auto space-y-6"
-            >
-              <Card className="border-primary/20 bg-card/50 backdrop-blur">
-                <CardHeader>
-                  <CardTitle>Refined Topic: {refinedTopic.title}</CardTitle>
-                  <CardDescription>Review the refined research direction before generating concrete ideas.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
-                    <span className="font-semibold text-foreground">TL;DR:</span> {refinedTopic.tldr}
-                  </div>
-                  <div className="text-sm leading-relaxed">
-                    {refinedTopic.abstract}
-                  </div>
-                </CardContent>
-                <CardFooter className="flex justify-between gap-4">
-                  <Button variant="ghost" onClick={() => setStep(1)}>Edit Topic</Button>
-                  <Button onClick={handleGenerate} disabled={loading} size="lg" className="flex-1">
-                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                    Generate Ideas
-                  </Button>
-                </CardFooter>
-              </Card>
-            </motion.div>
-          )}
-
-          {step === 3 && (
-            <motion.div
-              key="step3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              <div className="flex items-center justify-between">
-                 <h2 className="text-xl font-semibold">Generated Ideas</h2>
-                 <div className="flex gap-2">
-                   <Button variant="outline" onClick={handleGenerate} disabled={loading}>
-                     <RefreshCw className="mr-2 h-4 w-4" /> Regenerate
-                   </Button>
-                   <Button onClick={handleSaveSnapshot} disabled={saving || results.length === 0}>
-                     {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                     Save Snapshot
-                   </Button>
-                 </div>
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {results.flatMap(r => r.ideas).map((idea, idx) => (
-                  <motion.div
-                    key={idx}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: idx * 0.1 }}
-                  >
-                    <Card className="h-full flex flex-col hover:border-primary/50 transition-colors">
-                      <CardHeader>
-                        <Badge variant="outline" className="w-fit mb-2">{idea.template_type || "Idea"}</Badge>
-                        <CardTitle className="text-lg leading-tight">{idea.title || idea.idea_name || `Idea ${idx + 1}`}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex-1">
-                        <p className="text-sm text-muted-foreground line-clamp-4">
-                          {idea.content && typeof idea.content === "object" 
-                            ? JSON.stringify(idea.content).slice(0, 200) 
-                            : String(idea.content || "").slice(0, 200)}
-                          ...
-                        </p>
-                      </CardContent>
-                      <CardFooter>
-                        <Button 
-                          className="w-full" 
-                          onClick={() => handleStartExperiment(results[0].topic, idea, idx)}
-                          disabled={startingExperiment !== null}
-                        >
-                          {startingExperiment === String(idx) ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Starting...
-                            </>
-                          ) : (
-                            <>
-                              Start Experiment <ChevronRight className="ml-2 h-4 w-4" />
-                            </>
-                          )}
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="w-80 border-l bg-muted/10 p-4 overflow-y-auto flex flex-col gap-4">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Saved Ideas</h3>
+          <div className="space-y-2">
+            {snapshots.length === 0 && <div className="text-sm text-muted-foreground">No saved snapshots found.</div>}
+            {snapshots.map((file) => (
+              <Button
+                key={file.filename}
+                variant="ghost"
+                className="w-full justify-start text-xs h-auto py-2 flex flex-col items-start gap-1 hover:bg-muted"
+                onClick={() => loadSnapshot(file.filename)}
+              >
+                <div className="flex items-center w-full truncate font-medium">
+                  <FileJson className="mr-2 h-3 w-3 text-primary shrink-0" />
+                  <span className="truncate">{file.title}</span>
+                </div>
+                {file.timestamp && (
+                  <span className="text-[10px] text-muted-foreground pl-5">{file.timestamp}</span>
+                )}
+              </Button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )

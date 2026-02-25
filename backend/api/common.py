@@ -54,17 +54,44 @@ def list_experiments() -> List[Dict[str, Any]]:
         path = get_workspace_path(exp_id)
         if not os.path.isdir(path):
             continue
+            
         plan = read_json(os.path.join(path, "plan.json")) or {}
         status = read_json(os.path.join(path, "status.json")) or {}
+        meta = read_json(os.path.join(path, "meta.json")) or {}
+        
+        # Determine title with fallback to meta
+        title = (
+            plan.get("title") 
+            or plan.get("experiment_name") 
+            or meta.get("idea", {}).get("title") 
+            or meta.get("topic", {}).get("title") 
+            or exp_id
+        )
+        
+        # Parse creation time from exp_id (format: exp_YYYYMMDD_HHMMSS_...)
+        created_at = None
+        try:
+            parts = exp_id.split("_")
+            if len(parts) >= 3:
+                date_str = parts[1]
+                time_str = parts[2]
+                # Format: YYYY-MM-DD HH:MM:SS
+                created_at = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]} {time_str[:2]}:{time_str[2:4]}:{time_str[4:]}"
+        except Exception:
+            pass
+            
         items.append(
             {
                 "id": exp_id,
-                "title": plan.get("title") or plan.get("experiment_name") or exp_id,
+                "title": title,
                 "status": status.get("experiment_status", "initialized"),
                 "updated_at": status.get("last_updated"),
+                "created_at": created_at,
             }
         )
-    items.sort(key=lambda x: x.get("updated_at") or 0, reverse=True)
+        
+    # Sort by updated_at or created_at
+    items.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True)
     return items
 
 

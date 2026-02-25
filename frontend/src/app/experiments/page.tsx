@@ -20,7 +20,8 @@ import {
   ListTodo,
   History,
   FileText,
-  MoreVertical
+  MoreVertical,
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card"
@@ -87,6 +88,7 @@ export default function ExperimentsPage() {
   
   const [activeTab, setActiveTab] = useState<"overview" | "plan" | "history" | "conclusion" | "logs" | "artifacts">("overview")
   const [detailLoading, setDetailLoading] = useState(false)
+  const [planLoading, setPlanLoading] = useState(false)
 
   // Fetch List
   const fetchExperiments = useCallback(async () => {
@@ -198,6 +200,35 @@ export default function ExperimentsPage() {
       }
   }
 
+  const generatePlan = async () => {
+    if (!selectedId || !meta) return
+    setPlanLoading(true)
+    try {
+        const res = await fetch(`/api/experiments/${selectedId}/plan`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                idea: meta.idea,
+                topic: meta.topic
+            })
+        })
+        if (res.ok) {
+            const data = await res.json()
+            setPlan(data)
+            setActiveTab("plan")
+            // Refresh list to update title if it was missing
+            fetchExperiments()
+        } else {
+            alert("Failed to generate plan")
+        }
+    } catch (e) {
+        console.error("Failed to generate plan", e)
+        alert("Failed to generate plan")
+    } finally {
+        setPlanLoading(false)
+    }
+  }
+
   const TabButton = ({ id, label, icon: Icon }: { id: typeof activeTab, label: string, icon: any }) => (
     <button
       onClick={() => setActiveTab(id)}
@@ -260,7 +291,11 @@ export default function ExperimentsPage() {
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-2">
                     <Clock className="h-3 w-3" />
-                    {item.updated_at ? new Date(item.updated_at * 1000).toLocaleDateString() : "Unknown date"}
+                    {item.updated_at 
+                      ? new Date(item.updated_at * 1000).toLocaleDateString() 
+                      : item.created_at 
+                        ? new Date(item.created_at).toLocaleDateString()
+                        : "Unknown date"}
                   </div>
                   {selectedId === item.id && (
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l-lg" />
@@ -290,9 +325,16 @@ export default function ExperimentsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={runExperiment} disabled={status?.experiment_status === "running"}>
-                    <Play className="mr-2 h-4 w-4" /> Run
-                  </Button>
+                  {!plan ? (
+                     <Button variant="outline" size="sm" onClick={generatePlan} disabled={planLoading}>
+                        {planLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                        Generate Plan
+                     </Button>
+                  ) : (
+                     <Button variant="outline" size="sm" onClick={runExperiment} disabled={status?.experiment_status === "running"}>
+                        <Play className="mr-2 h-4 w-4" /> Run
+                     </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => fetchExperiments()}>
                     <RotateCw className="mr-2 h-4 w-4" /> Refresh
                   </Button>

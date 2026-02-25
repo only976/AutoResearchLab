@@ -2,7 +2,7 @@ import { API_BASE_URL } from "@/lib/api"
 
 export async function GET(request: Request, context: { params: { name: string } }) {
   const url = new URL(request.url)
-  const upstream = await fetch(`${API_BASE_URL}/api/snapshots/${context.params.name}${url.search}`, {
+  const upstream = await fetch(`${API_BASE_URL}/api/ideas/snapshots/${context.params.name}${url.search}`, {
     method: "GET"
   })
   const payload = await upstream.text()
