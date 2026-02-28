@@ -108,13 +108,11 @@
         const originalText = btn.textContent;
         startExecutionUI();
         try {
-            const socket = window.MAARS?.state?.socket;
-            if (!socket || !socket.connected) {
-                try {
-                    await window.MAARS.ws?.init?.();
-                } catch (_) {}
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
+            // In this integration we use SSE (EventSource) for live updates.
+            // Best-effort: ensure the SSE stream is initialized.
+            try {
+                await window.MAARS.ws?.init?.();
+            } catch (_) {}
             const response = await fetch(`${cfg.API_BASE_URL}/execution/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

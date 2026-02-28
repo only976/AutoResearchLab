@@ -20,18 +20,11 @@
             alert('Please enter an idea first.');
             return;
         }
-        let socket = window.MAARS?.state?.socket;
-        if (!socket || !socket.connected) {
-            try {
-                await window.MAARS.ws?.init?.();
-            } catch (_) {}
-            await new Promise(resolve => setTimeout(resolve, 200));
-            socket = window.MAARS?.state?.socket;
-            if (!socket || !socket.connected) {
-                alert('WebSocket not connected. Please wait and try again.');
-                return;
-            }
-        }
+        // In this integration we use SSE (EventSource) for live updates.
+        // Best-effort: ensure the SSE stream is initialized, but don't block plan generation.
+        try {
+            await window.MAARS.ws?.init?.();
+        } catch (_) {}
 
         try {
             generatePlanBtn.disabled = true;
