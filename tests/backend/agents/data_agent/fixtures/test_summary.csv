@@ -1,5 +1,0 @@
-group,domain,method,dimension,metric,value,unit,time_or_step,evidence
-control,turbulence,Baseline,accuracy,accuracy,0.78,,9,基于基线达到稳健水平
-experiment,turbulence,PINN,accuracy,accuracy,0.95,,9,基于稀疏采样达到SOTA水平
-control,turbulence,Baseline,loss,loss,0.35,,9,基于基线达到稳健水平
-experiment,turbulence,PINN,loss,loss,0.10,,9,基于稀疏采样达到SOTA水平

@@ -11,21 +11,22 @@ from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
-from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
+from backend.config import get_llm_config
 from backend.ideas.templates import get_template_descriptions, RESEARCH_TOPIC_SCHEMA
 from backend.utils.logger import setup_logger
 
 class IdeaAgent:
     def __init__(self):
         self.logger = setup_logger(self.__class__.__name__)
-        if LLM_API_BASE:
+        cfg = get_llm_config()
+        if cfg.get("api_base"):
             self.model = LiteLlm(
-                model=LLM_MODEL,
-                api_base=LLM_API_BASE,
-                api_key=LLM_API_KEY
+                model=cfg["model"],
+                api_base=cfg["api_base"],
+                api_key=cfg.get("api_key")
             )
         else:
-            self.model = LLM_MODEL
+            self.model = cfg["model"]
         self.tools = [self.search_literature]
 
     def search_literature(self, query: str, limit: int = 5) -> str:

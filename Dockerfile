@@ -22,8 +22,6 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# 暴露后端端口（如果需要）
 EXPOSE 8000
 
-# 启动前端（使用 Streamlit）
-CMD ["streamlit", "run", "frontend/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["uvicorn", "backend.main:asgi_app", "--host", "0.0.0.0", "--port", "8000"]
