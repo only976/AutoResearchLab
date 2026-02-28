@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { Suspense, useCallback, useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
@@ -69,7 +69,17 @@ type ExperimentHistoryItem = {
   [key: string]: any
 }
 
-export default function ExperimentsPage() {
+type ArtifactManifestItem = {
+  name: string
+  type?: string
+  stage?: string
+  step_id?: string
+  summary?: string | null
+  for_next_stage?: boolean
+  created_at?: string
+}
+
+function ExperimentsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [items, setItems] = useState<ExperimentItem[]>([])
@@ -85,6 +95,7 @@ export default function ExperimentsPage() {
   const [conclusion, setConclusion] = useState<string | null>(null)
   const [logs, setLogs] = useState<string[]>([])
   const [artifacts, setArtifacts] = useState<string[]>([])
+  const [artifactManifest, setArtifactManifest] = useState<ArtifactManifestItem[]>([])
   
   const [activeTab, setActiveTab] = useState<"overview" | "plan" | "history" | "conclusion" | "logs" | "artifacts">("overview")
   const [detailLoading, setDetailLoading] = useState(false)
@@ -142,8 +153,14 @@ export default function ExperimentsPage() {
             setHistory(Array.isArray(historyData) ? historyData : [])
         }
         if (conclusionRes.ok) {
-            const conclusionData = await conclusionRes.text() // Assume text or markdown
+          const contentType = conclusionRes.headers.get("content-type") || ""
+          if (contentType.includes("application/json")) {
+            const data = await conclusionRes.json()
+            setConclusion(JSON.stringify(data, null, 2))
+          } else {
+            const conclusionData = await conclusionRes.text()
             setConclusion(conclusionData)
+          }
         }
         if (logsRes.ok) {
             const logData = await logsRes.json()
@@ -152,6 +169,7 @@ export default function ExperimentsPage() {
         if (artifactsRes.ok) {
             const artifactData = await artifactsRes.json()
             setArtifacts(artifactData.files || [])
+          setArtifactManifest(Array.isArray(artifactData.manifest) ? artifactData.manifest : [])
         }
       } catch (e) {
         console.error("Failed to fetch details", e)
@@ -165,10 +183,23 @@ export default function ExperimentsPage() {
     const interval = setInterval(() => {
         fetch(`/api/experiments/${selectedId}/status`).then(r => r.json()).then(setStatus).catch(() => {})
         fetch(`/api/experiments/${selectedId}/logs`).then(r => r.json()).then(d => setLogs(d.lines || [])).catch(() => {})
+        if (!conclusion) {
+          fetch(`/api/experiments/${selectedId}/conclusion`).then(async r => {
+            if (!r.ok) return
+            const contentType = r.headers.get("content-type") || ""
+            if (contentType.includes("application/json")) {
+              const data = await r.json()
+              setConclusion(JSON.stringify(data, null, 2))
+            } else {
+              const text = await r.text()
+              setConclusion(text)
+            }
+          }).catch(() => {})
+        }
     }, 5000)
     
     return () => clearInterval(interval)
-  }, [selectedId])
+  }, [selectedId, conclusion])
 
   const filteredItems = items.filter(item => 
     item.title?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -525,17 +556,52 @@ export default function ExperimentsPage() {
                       animate={{ opacity: 1, y: 0 }} 
                       exit={{ opacity: 0, y: -10 }}
                     >
-                      {artifacts.length > 0 ? (
+                      {artifactManifest.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {artifactManifest.map(item => (
+                            <a
+                              key={item.name}
+                              href={`/api/experiments/${selectedId}/artifacts/${item.name}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <Card className="hover:border-primary transition-all hover:shadow-md group bg-card/50 h-full">
+                                <CardContent className="p-5 flex flex-col gap-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="p-2 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                                      <FileJson className="h-5 w-5 text-primary" />
+                                    </div>
+                                    {item.for_next_stage ? (
+                                      <Badge variant="outline" className="text-[10px]">Next Stage</Badge>
+                                    ) : null}
+                                  </div>
+                                  <div className="text-xs font-medium truncate" title={item.name}>{item.name}</div>
+                                  <div className="text-[11px] text-muted-foreground">
+                                    Stage: {item.stage || "N/A"} · Step: {item.step_id || "N/A"}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </a>
+                          ))}
+                        </div>
+                      ) : artifacts.length > 0 ? (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                           {artifacts.map(file => (
-                            <Card key={file} className="hover:border-primary cursor-pointer transition-all hover:shadow-md group bg-card/50">
-                              <CardContent className="p-6 flex flex-col items-center justify-center gap-4 aspect-square">
-                                <div className="p-3 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                                    <FileJson className="h-6 w-6 text-primary" />
-                                </div>
-                                <span className="text-xs text-center font-medium truncate w-full" title={file}>{file}</span>
-                              </CardContent>
-                            </Card>
+                            <a
+                              key={file}
+                              href={`/api/experiments/${selectedId}/artifacts/${file}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <Card className="hover:border-primary cursor-pointer transition-all hover:shadow-md group bg-card/50">
+                                <CardContent className="p-6 flex flex-col items-center justify-center gap-4 aspect-square">
+                                  <div className="p-3 rounded-full bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                                      <FileJson className="h-6 w-6 text-primary" />
+                                  </div>
+                                  <span className="text-xs text-center font-medium truncate w-full" title={file}>{file}</span>
+                                </CardContent>
+                              </Card>
+                            </a>
                           ))}
                         </div>
                       ) : (
@@ -559,5 +625,13 @@ export default function ExperimentsPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ExperimentsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading experiments...</div>}>
+      <ExperimentsPageContent />
+    </Suspense>
   )
 }

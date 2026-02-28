@@ -7,9 +7,15 @@ from backend.api.experiments import router as experiments_router
 from backend.api.ideas import router as ideas_router
 from backend.api.paper import router as paper_router
 from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
+from backend.db import init_db
 from backend.sandbox.docker_sandbox import DockerSandbox
+from backend.utils.logger import configure_logging
+
+configure_logging()
 
 app = FastAPI(title="AutoResearchLab API", version="0.1.0")
+
+init_db()
 
 app.add_middleware(
     CORSMiddleware,

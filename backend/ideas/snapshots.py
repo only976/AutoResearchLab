@@ -1,103 +1,101 @@
-import os
-import json
 from datetime import datetime
+import re
+from typing import Any, Dict, List, Optional
 
-SNAPSHOT_DIR = os.path.join(os.getcwd(), "data", "cache", "snapshots")
+from backend.db.repository import (
+    list_idea_snapshots,
+    load_idea_snapshot,
+    save_idea_snapshot,
+)
 
-def save_snapshot(refinement_data, results, custom_name=None):
-    """Saves the current session state (refinement + ideas) to a JSON file."""
-    if not os.path.exists(SNAPSHOT_DIR):
-        os.makedirs(SNAPSHOT_DIR)
-        
+
+def _extract_topic_title(topic_data: Any, refinement_data: Any = None) -> str:
+    candidates: List[Any] = []
+
+    if isinstance(topic_data, dict):
+        candidates.extend(
+            [
+                topic_data.get("title"),
+                topic_data.get("idea_name"),
+                topic_data.get("topic"),
+                topic_data.get("scope"),
+                topic_data.get("tldr"),
+                topic_data.get("abstract"),
+            ]
+        )
+    elif isinstance(topic_data, str):
+        candidates.append(topic_data)
+
+    if isinstance(refinement_data, dict):
+        candidates.extend(
+            [
+                refinement_data.get("title"),
+                refinement_data.get("idea_name"),
+                refinement_data.get("topic"),
+                refinement_data.get("scope"),
+                refinement_data.get("tldr"),
+            ]
+        )
+    elif isinstance(refinement_data, str):
+        candidates.append(refinement_data)
+
+    for raw in candidates:
+        if raw is None:
+            continue
+        value = str(raw).strip()
+        if value:
+            return value
+
+    return "idea_snapshot"
+
+
+def _sanitize_snapshot_name(raw_name: str) -> str:
+    cleaned = (raw_name or "").strip()
+    if cleaned.endswith(".json"):
+        cleaned = cleaned[:-5]
+    cleaned = " ".join(cleaned.split())
+    cleaned = re.sub(r"[^\w\s-]", "_", cleaned)
+    cleaned = "_".join(cleaned.split())
+    cleaned = re.sub(r"_+", "_", cleaned).strip("_")
+    return cleaned[:80] or "idea_snapshot"
+
+def save_snapshot(refinement_data: Any, results: Any, custom_name: Optional[str] = None) -> str:
+    """Saves the current session state (refinement + ideas) to SQLite."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # Generate a default name from the first topic title if not provided
+
     if not custom_name:
         if results and len(results) > 0:
-            # results is a list of dicts: {'topic': ..., 'ideas': ...}
-            # Note: The key in results is 'topic', and inside topic we expect 'title'
-            # But sometimes it might be nested differently depending on how it's passed
             topic_data = results[0].get("topic", {})
-            # Handle case where topic_data might be a string (though it should be dict)
-            if isinstance(topic_data, dict):
-                title = topic_data.get("title", "untitled")
-            else:
-                title = "untitled"
-                
-            # Sanitize title: keep alphanumeric and spaces, replace others with underscore
-            # Limit length to 50 chars for better readability
+            title = _extract_topic_title(topic_data, refinement_data)
+
             safe_title = "".join([c if c.isalnum() or c == ' ' else "_" for c in title])
-            safe_title = "_".join(safe_title.split()) # collapse multiple spaces/underscores
+            safe_title = "_".join(safe_title.split())
             safe_title = safe_title[:50]
-            
+            if not safe_title:
+                safe_title = "idea_snapshot"
+
             custom_name = f"{timestamp}_{safe_title}"
         else:
             custom_name = f"{timestamp}_empty"
-            
-    # Ensure .json extension
+
+    custom_name = _sanitize_snapshot_name(custom_name)
+
     if not custom_name.endswith(".json"):
         custom_name += ".json"
-            
-    filepath = os.path.join(SNAPSHOT_DIR, custom_name)
-    
-    data = {
+
+    data: Dict[str, Any] = {
         "timestamp": timestamp,
         "refinement_data": refinement_data,
         "results": results
     }
-    
-    with open(filepath, "w") as f:
-        json.dump(data, f, indent=2)
-        
+
+    save_idea_snapshot(custom_name, refinement_data, results, data)
     return custom_name
 
-def list_snapshots():
-    """Returns a list of snapshot metadata sorted by modification time (newest first)."""
-    if not os.path.exists(SNAPSHOT_DIR):
-        return []
-        
-    files = [f for f in os.listdir(SNAPSHOT_DIR) if f.endswith(".json")]
-    # Sort by mtime descending
-    files.sort(key=lambda x: os.path.getmtime(os.path.join(SNAPSHOT_DIR, x)), reverse=True)
-    
-    snapshots = []
-    for f in files:
-        try:
-            # Parse filename format: YYYYMMDD_HHMMSS_Title.json
-            parts = f.replace(".json", "").split("_", 2)
-            timestamp_str = ""
-            title = f
-            
-            if len(parts) >= 2:
-                timestamp_str = f"{parts[0]} {parts[1][:2]}:{parts[1][2:4]}"
-                if len(parts) > 2:
-                    # Replace underscores with spaces for display, but be careful if original title had underscores
-                    # The simple split above limits to 2 splits, so parts[2] is the rest of the string
-                    # We can try to make it look nicer
-                    title_part = parts[2].replace(".json", "")
-                    title = title_part.replace("_", " ")
-            
-            snapshots.append({
-                "filename": f,
-                "timestamp": timestamp_str,
-                "title": title,
-                "path": os.path.join(SNAPSHOT_DIR, f)
-            })
-        except Exception:
-            snapshots.append({
-                "filename": f,
-                "timestamp": "",
-                "title": f,
-                "path": os.path.join(SNAPSHOT_DIR, f)
-            })
-            
-    return snapshots
+def list_snapshots() -> List[Dict[str, Any]]:
+    """Returns snapshot metadata sorted by created time (newest first)."""
+    return list_idea_snapshots()
 
-def load_snapshot(filename):
-    """Loads a snapshot JSON file."""
-    filepath = os.path.join(SNAPSHOT_DIR, filename)
-    if not os.path.exists(filepath):
-        return None
-        
-    with open(filepath, "r") as f:
-        return json.load(f)
+def load_snapshot(filename: str) -> Optional[Dict[str, Any]]:
+    """Loads a snapshot by name from SQLite."""
+    return load_idea_snapshot(filename)

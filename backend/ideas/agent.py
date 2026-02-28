@@ -1,6 +1,6 @@
 import os, json, re, hashlib, requests, io, uuid
 import xml.etree.ElementTree as ET
-from typing import Dict, List
+from typing import Any, Dict, List
 import pypdf
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
@@ -74,7 +74,9 @@ Each topic must follow this schema: {RESEARCH_TOPIC_SCHEMA}.
                 new_message=Content(role="user", parts=[Part(text=raw_scope)])
             )
             final_text = self._collect_text(events)
-            return self._clean_json_text(final_text)
+            cleaned = self._clean_json_text(final_text)
+            self.logger.info("[idea_agent.refine] output_chars=%s", len(cleaned))
+            return cleaned
         except Exception as e:
             self.logger.error(f"Topic refinement failed: {e}", exc_info=True)
             return json.dumps({"is_broad": False, "analysis": str(e), "topics": []}, ensure_ascii=False)
@@ -108,10 +110,53 @@ ideas is a list of 3 items following the selected template schema.
                 new_message=Content(role="user", parts=[Part(text=scope)])
             )
             final_text = self._collect_text(events)
-            return self._clean_json_text(final_text)
+            cleaned = self._clean_json_text(final_text)
+            if '"ideas"' not in cleaned:
+                self.logger.warning("[idea_agent.generate] response missing ideas key")
+            else:
+                self.logger.info("[idea_agent.generate] output_chars=%s", len(cleaned))
+            return cleaned
         except Exception as e:
             self.logger.error(f"Idea generation failed: {e}", exc_info=True)
             return json.dumps({"reasoning": {}, "ideas": [], "error": str(e)}, ensure_ascii=False)
+
+    def generate_snapshot_title(self, refinement_data: Any, results: Any) -> str:
+        instruction = """
+You are a concise research assistant.
+Generate one short title for an idea snapshot.
+Rules:
+- Return plain text only (no JSON, no markdown, no quotes).
+- Keep it within 4-10 words.
+- Make it specific and academic.
+"""
+        agent = Agent(
+            model=self._get_model_for_agent(),
+            name="snapshot_title_generator",
+            instruction=instruction,
+            tools=[]
+        )
+        runner = Runner(
+            agent=agent,
+            app_name="auto_research",
+            session_service=InMemorySessionService(),
+            auto_create_session=True
+        )
+        prompt_payload = {
+            "topic": refinement_data,
+            "ideas": (results[0].get("ideas", []) if isinstance(results, list) and results else results),
+        }
+        try:
+            events = runner.run(
+                user_id="user",
+                session_id=str(uuid.uuid4()),
+                new_message=Content(role="user", parts=[Part(text=json.dumps(prompt_payload, ensure_ascii=False))])
+            )
+            title = self._collect_text(events).strip()
+            title = title.replace("\n", " ").strip().strip('"\'')
+            return title[:120]
+        except Exception as e:
+            self.logger.error(f"Snapshot title generation failed: {e}", exc_info=True)
+            return ""
 
     def _collect_text(self, events) -> str:
         final_text = ""

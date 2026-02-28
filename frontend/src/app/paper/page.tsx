@@ -26,12 +26,23 @@ type DraftResponse = {
   content: string
 }
 
+type ArtifactManifestItem = {
+  name: string
+  type?: string
+  stage?: string
+  step_id?: string
+  summary?: string | null
+  for_next_stage?: boolean
+  created_at?: string
+}
+
 export default function PaperPage() {
   const [experiments, setExperiments] = useState<ExperimentItem[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
   const [plan, setPlan] = useState<Plan | null>(null)
   const [conclusion, setConclusion] = useState<Conclusion | null>(null)
   const [artifacts, setArtifacts] = useState<string[]>([])
+  const [artifactManifest, setArtifactManifest] = useState<ArtifactManifestItem[]>([])
   const [draft, setDraft] = useState<DraftResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,7 +80,12 @@ export default function PaperPage() {
       setPlan(planRes.ok ? await planRes.json() : null)
       setConclusion(conclusionRes.ok ? await conclusionRes.json() : null)
       const artifactsData = artifactsRes.ok ? await artifactsRes.json() : null
-      setArtifacts(artifactsData?.files || [])
+      const manifest = Array.isArray(artifactsData?.manifest) ? artifactsData.manifest : []
+      setArtifactManifest(manifest)
+      const nextStageFiles = manifest
+        .filter((item: ArtifactManifestItem) => item.for_next_stage)
+        .map((item: ArtifactManifestItem) => item.name)
+      setArtifacts(nextStageFiles.length > 0 ? nextStageFiles : (artifactsData?.files || []))
       setDraft(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error")
@@ -170,7 +186,7 @@ export default function PaperPage() {
               Conclusion: {conclusion ? "Available" : "Missing"}
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
-              Artifacts: {artifacts.length}
+              Artifacts: {artifacts.length} {artifactManifest.length > 0 ? `(manifest: ${artifactManifest.length})` : ""}
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
               Draft: {draft ? draft.format : "Not generated"}
@@ -217,16 +233,20 @@ export default function PaperPage() {
       <Section title="Figures & Data" description="Preview artifacts to include in the draft.">
         <div className="flex flex-wrap gap-2">
           {artifacts.length ? (
-            artifacts.map((file) => (
-              <a
-                key={file}
-                className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200"
-                href={`/api/experiments/${selectedId}/artifacts/${file}`}
-                target="_blank"
-              >
-                {file}
-              </a>
-            ))
+            artifacts.map((file) => {
+              const item = artifactManifest.find((manifestItem) => manifestItem.name === file)
+              const tag = item?.stage ? ` · ${item.stage}` : ""
+              return (
+                <a
+                  key={file}
+                  className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200"
+                  href={`/api/experiments/${selectedId}/artifacts/${file}`}
+                  target="_blank"
+                >
+                  {file}{tag}
+                </a>
+              )
+            })
           ) : (
             <div className="text-xs text-slate-400">No artifacts available</div>
           )}
