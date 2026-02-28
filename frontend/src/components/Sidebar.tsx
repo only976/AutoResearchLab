@@ -19,6 +19,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ideas", label: "Ideas", icon: Lightbulb },
   { href: "/experiments", label: "Experiments", icon: FlaskConical },
+  { href: "/experiments/maars", label: "MAARS Lab", icon: Activity },
   { href: "/paper", label: "Paper Drafting", icon: FileText },
   { href: "/chat", label: "Chat Interface", icon: MessageSquare },
   { href: "/logs", label: "System Logs", icon: ScrollText },

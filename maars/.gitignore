@@ -1,0 +1,53 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python env
+.venv/
+venv/
+env/
+
+# Plan data folders (generated at runtime)
+backend/db/plan_*/
+
+# Vendor / upstream clones (skills are copied to backend/skills/)
+backend/vendor/
+
+# Settings & API config (contain secrets)
+backend/db/settings.json
+backend/db/api_config.json
+
+# Atomic write leftovers (crash recovery)
+*.tmp
+
+# Download temp files
+*.qkdownloading
+
+# Test & coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Node (skills may use npm/pnpm)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE & editor
+.cursor
+.history
+history
+
+# Local env (secrets)
+.env
+.env.local
+.env.*.local

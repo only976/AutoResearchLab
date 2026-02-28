@@ -1,15 +1,24 @@
 from typing import Any, Dict
 
 from fastapi import FastAPI
+import socketio
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.experiments import router as experiments_router
 from backend.api.ideas import router as ideas_router
 from backend.api.paper import router as paper_router
+from backend.api.maars_proxy import router as maars_router
 from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
+from backend.db import init_db
+from backend.maars_integration import attach_maars
 from backend.sandbox.docker_sandbox import DockerSandbox
+from backend.utils.logger import configure_logging
+
+configure_logging()
 
 app = FastAPI(title="AutoResearchLab API", version="0.1.0")
+
+init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +30,11 @@ app.add_middleware(
 app.include_router(ideas_router)
 app.include_router(experiments_router)
 app.include_router(paper_router)
+app.include_router(maars_router)
+sio = attach_maars(app)
+
+# Expose Socket.IO at /maars/socket.io while preserving all FastAPI routes.
+asgi_app = socketio.ASGIApp(sio, other_asgi_app=app, socketio_path="maars/socket.io")
 
 @app.get("/health")
 def health() -> Dict[str, Any]:

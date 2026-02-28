@@ -1,19 +1,30 @@
 import time
 import json
 import os
-import threading
 import subprocess
 import re
+import sys
+from pathlib import Path
 from backend.experiments.execution.feedback_manager import FeedbackManager
 from backend.sandbox.docker_sandbox import DockerSandbox
 from backend.experiments.agents.coding_agent import CodingAgent
 from backend.experiments.agents.data_analysis_agent import DataAnalysisAgent
 from backend.experiments.agents.review_agent import ReviewAgent
+from backend.db.repository import (
+    append_experiment_log as db_append_experiment_log,
+    get_experiment_status as db_get_experiment_status,
+    get_experiment_plan as db_get_experiment_plan,
+    upsert_experiment_artifact as db_upsert_experiment_artifact,
+    upsert_experiment_conclusion as db_upsert_experiment_conclusion,
+    upsert_experiment_plan as db_upsert_experiment_plan,
+    upsert_experiment_status as db_upsert_experiment_status,
+)
 from backend.utils.logger import setup_logger
 
 class ExperimentRunner:
     def __init__(self, workspace_path, plan):
         self.workspace_path = workspace_path
+        self.exp_id = os.path.basename(workspace_path)
         self.plan = plan
         self.log_file = os.path.join(workspace_path, "execution.log")
         self.fm = FeedbackManager(workspace_path)
@@ -30,6 +41,12 @@ class ExperimentRunner:
 
     def _load_iteration_state(self):
         """Loads iteration state from status.json if exists."""
+        db_status = db_get_experiment_status(self.exp_id)
+        if db_status:
+            self.current_iterations = db_status.get("current_iterations", self.current_iterations)
+            self.max_iterations = db_status.get("max_iterations", self.max_iterations)
+            return
+
         status_path = os.path.join(self.workspace_path, "status.json")
         if os.path.exists(status_path):
             try:
@@ -56,6 +73,8 @@ class ExperimentRunner:
         
         with open(status_path, "w") as f:
             json.dump(data, f, indent=2)
+
+        db_upsert_experiment_status(self.exp_id, data)
 
     def _check_and_wait_for_limit(self):
         """Checks if iteration limit is reached and waits for user approval."""
@@ -119,9 +138,51 @@ class ExperimentRunner:
         # Write to experiment-specific execution log
         with open(self.log_file, "a") as f:
             f.write(entry)
+
+        db_append_experiment_log(self.exp_id, entry)
             
         # Also log to system-wide logger
         self.logger.info(f"[{os.path.basename(self.workspace_path)}] {message}")
+
+    def _sync_artifacts_to_db(self, stage=None, step_id=None):
+        allowed = (".png", ".jpg", ".csv", ".json", ".md", ".tex")
+        names = [
+            name
+            for name in os.listdir(self.workspace_path)
+            if name.endswith(allowed) and not name.startswith(".")
+        ]
+        for name in names:
+            artifact_type = name.rsplit(".", 1)[-1].lower() if "." in name else "file"
+            for_next_stage = (
+                name.endswith((".png", ".jpg", ".csv", ".json"))
+                and name not in {"status.json", "meta.json", "plan.json"}
+            )
+            summary = self._build_artifact_summary(name, artifact_type, stage, step_id, for_next_stage)
+            db_upsert_experiment_artifact(
+                self.exp_id,
+                name,
+                artifact_type,
+                stage=stage,
+                step_id=str(step_id) if step_id is not None else None,
+                summary=summary,
+                for_next_stage=for_next_stage,
+            )
+
+    def _build_artifact_summary(self, name, artifact_type, stage, step_id, for_next_stage):
+        stage_text = stage or "unknown_stage"
+        step_text = str(step_id) if step_id is not None else "unknown_step"
+
+        kind_desc = {
+            "png": "chart/figure",
+            "jpg": "image",
+            "csv": "tabular data",
+            "json": "structured output",
+            "md": "markdown draft",
+            "tex": "latex draft",
+        }.get(artifact_type, "artifact")
+
+        usage = "recommended for next stage" if for_next_stage else "internal/reference artifact"
+        return f"{kind_desc} generated in {stage_text} (step: {step_text}); {usage}."
 
     def _sanitize_filename(self, text):
         """Converts text to a safe filename."""
@@ -167,6 +228,7 @@ class ExperimentRunner:
         # Save plan to disk for persistence
         with open(os.path.join(self.workspace_path, "plan.json"), "w") as f:
             json.dump(self.plan, f, indent=2)
+        db_upsert_experiment_plan(self.exp_id, self.plan)
 
     def _setup_dependencies(self):
         """Prepares requirements.txt for Docker."""
@@ -248,6 +310,7 @@ class ExperimentRunner:
 
         with open(status_file, "w") as f:
             json.dump(data, f, indent=2)
+        db_upsert_experiment_status(self.exp_id, data)
 
     def _get_git_graph(self):
         """Returns the git graph for context."""
@@ -409,6 +472,7 @@ class ExperimentRunner:
                 self._run_git_cmd(["merge", branch_name])
                 
                 self._update_status(step_idx, total_steps, step['name'], "completed", "Execution successful")
+                self._sync_artifacts_to_db(stage="experiment_step", step_id=step.get("step_id"))
                 return
                 
             else:
@@ -583,6 +647,7 @@ class ExperimentRunner:
                 self._run_git_cmd(["commit", "--allow-empty", "-m", "Data Preparation Success"])
                 self._run_git_cmd(["checkout", "main"])
                 self._run_git_cmd(["merge", branch_name])
+                self._sync_artifacts_to_db(stage="data_prep", step_id="setup")
             else:
                 self.log(f"❌ Data preparation failed: {res['stderr']}")
                 
@@ -703,6 +768,8 @@ class ExperimentRunner:
                     # Save conclusion
                     with open(os.path.join(self.workspace_path, "conclusion.json"), "w") as f:
                         json.dump(conclusion, f, indent=2)
+                    db_upsert_experiment_conclusion(self.exp_id, conclusion)
+                    self._sync_artifacts_to_db(stage="analysis", step_id="final")
                         
                     self._run_git_cmd(["add", "."])
                     self._run_git_cmd(["commit", "--allow-empty", "-m", "Analysis Success & Conclusion"])
@@ -747,6 +814,7 @@ class ExperimentRunner:
             
             # Perform Analysis
             self._perform_analysis(total-1, total)
+            self._sync_artifacts_to_db(stage="experiment_final", step_id="final")
 
             self.log("🎉 All steps executed successfully. Experiment finished.")
             self._update_status(total-1, total, "Experiment Completed", "completed", "Experiment finished.", experiment_status="completed")
@@ -790,15 +858,73 @@ class ExperimentRunner:
             self._update_status(0, 1, "Analysis Error", "failed", str(e), experiment_status="failed")
 
 def start_experiment_background(workspace_path, plan):
-    """Starts the experiment runner in a background thread."""
-    runner = ExperimentRunner(workspace_path, plan)
-    thread = threading.Thread(target=runner.run, daemon=True)
-    thread.start()
-    return thread
+    """Starts the experiment runner in a background process."""
+    _write_plan_to_workspace(workspace_path, plan)
+    return _spawn_experiment_process(workspace_path, mode="run")
 
 def start_analysis_background(workspace_path, plan):
-    """Starts the analysis only in a background thread."""
-    runner = ExperimentRunner(workspace_path, plan)
-    thread = threading.Thread(target=runner.run_analysis_only, daemon=True)
-    thread.start()
-    return thread
+    """Starts the analysis only in a background process."""
+    _write_plan_to_workspace(workspace_path, plan)
+    return _spawn_experiment_process(workspace_path, mode="analysis")
+
+
+def _write_plan_to_workspace(workspace_path, plan):
+    os.makedirs(workspace_path, exist_ok=True)
+    plan_path = os.path.join(workspace_path, "plan.json")
+    try:
+        with open(plan_path, "w") as f:
+            json.dump(plan, f, indent=2)
+        exp_id = os.path.basename(workspace_path)
+        db_upsert_experiment_plan(exp_id, plan)
+    except Exception:
+        # Best-effort write; runner will attempt to load from DB if needed.
+        pass
+
+
+def _load_plan_from_workspace(workspace_path):
+    plan_path = os.path.join(workspace_path, "plan.json")
+    if os.path.exists(plan_path):
+        try:
+            with open(plan_path, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    exp_id = os.path.basename(workspace_path)
+    return db_get_experiment_plan(exp_id) or {}
+
+
+def _spawn_experiment_process(workspace_path, mode="run"):
+    project_root = str(Path(__file__).resolve().parents[3])
+    cmd = [sys.executable, "-m", "backend.experiments.execution.experiment_runner", mode, workspace_path]
+    os.makedirs(workspace_path, exist_ok=True)
+    log_path = os.path.join(workspace_path, "execution.log")
+    log_file = open(log_path, "a", encoding="utf-8")
+    log_file.write(f"[launcher] starting process: {' '.join(cmd)}\n")
+    log_file.flush()
+    return subprocess.Popen(
+        cmd,
+        cwd=project_root,
+        stdout=log_file,
+        stderr=log_file,
+        start_new_session=True,
+    )
+
+
+def _cli_main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run experiment execution in a standalone process")
+    parser.add_argument("mode", choices=["run", "analysis"], help="Execution mode")
+    parser.add_argument("workspace_path", help="Experiment workspace path")
+    args = parser.parse_args()
+
+    plan = _load_plan_from_workspace(args.workspace_path)
+    runner = ExperimentRunner(args.workspace_path, plan)
+    if args.mode == "analysis":
+        runner.run_analysis_only()
+    else:
+        runner.run()
+
+
+if __name__ == "__main__":
+    _cli_main()
