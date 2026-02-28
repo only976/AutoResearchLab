@@ -1,0 +1,346 @@
+/**
+ * Task Tree - Tree nodes, connection lines
+ */
+
+/* Tasks tree area */
+.plan-agent-execution-tree-area {
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--bg-area-secondary);
+    box-shadow: var(--shadow-inset);
+}
+
+.plan-agent-tree-area {
+    overflow: hidden;
+    background: var(--bg-area-secondary);
+}
+
+.plan-agent-thinking-tree-row .plan-agent-tree-area {
+    flex: 0 0 30%;
+    width: 30%;
+    min-width: 0;
+    min-height: 0;
+    height: var(--main-content-height);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: none;
+    border-radius: 0;
+}
+
+/* View tabs - fixed size, content-based width */
+.tree-view-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 4px 6px;
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 20;
+    flex-wrap: nowrap;
+}
+
+.tree-view-tab {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg-area-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--state-transition);
+    white-space: nowrap;
+}
+
+.tree-view-tab:hover {
+    color: var(--text-color);
+    background: var(--interactive-hover);
+    border-color: var(--interactive-border-hover);
+}
+
+.tree-view-tab.active {
+    color: var(--text-color);
+    background: var(--bg-area-secondary);
+    border-color: var(--accent-primary-border);
+}
+
+.tree-view-panel {
+    display: none;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    flex-direction: column;
+}
+
+.tree-view-panel.active {
+    display: flex;
+}
+
+.tree-view-panel .plan-agent-execution-tree-area {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.tree-view-panel .tree-container {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 0;
+}
+
+.tree-view-panel.view-decomposition {
+    position: relative;
+}
+
+.tree-view-panel.view-output {
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Output area: match tree-container structure (same as Decomposition/Execution) */
+.tree-view-panel.view-output .plan-agent-output-area {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: none;
+    border-radius: 0;
+    background: var(--bg-area-primary);
+}
+
+.tree-view-panel.view-output .task-agent-output-content {
+    flex: 1;
+    min-height: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    word-break: break-word;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--padding);
+    padding-top: 52px;
+    box-sizing: border-box;
+}
+
+.plan-agent-quality-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    z-index: 10;
+    padding: 4px 10px;
+    border-radius: var(--border-radius);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.plan-agent-quality-badge.quality-high {
+    color: var(--success-color, #22c55e);
+}
+
+.plan-agent-quality-badge.quality-mid {
+    color: var(--warning-color, #eab308);
+}
+
+.plan-agent-quality-badge.quality-low {
+    color: var(--error-color, #ef4444);
+}
+
+.tree-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: var(--padding);
+    padding-top: 52px;
+    box-sizing: border-box;
+    background: var(--bg-area-primary);
+}
+
+/* Tasks Tree */
+.tasks-tree {
+    position: relative;
+    min-height: 150px;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    margin: 0 auto;
+}
+
+.tree-nodes-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.tree-nodes-container .tree-task {
+    pointer-events: auto;
+}
+
+/* Connection lines */
+.tree-connection-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: visible;
+}
+
+.tree-task-count {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.tree-task-merged {
+    position: relative;
+}
+
+.tree-connection-lines path {
+    stroke: var(--tree-line-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: stroke 0.3s ease, stroke-width 0.3s ease;
+}
+
+.connection-line.connection-line-cross-layer {
+    stroke-dasharray: 4 4;
+    stroke-opacity: 0.25;
+}
+
+@keyframes yellowGlowTopToBottom {
+    0%, 100% {
+        stroke: var(--tree-line-stroke);
+        stroke-width: 1.5;
+        filter: drop-shadow(0 0 0 transparent);
+    }
+    50% {
+        stroke: var(--tree-status-doing-border);
+        stroke-width: 2.5;
+        filter: drop-shadow(var(--shadow-glow-doing));
+    }
+}
+
+@keyframes redGlowBottomToTop {
+    0%, 100% {
+        stroke: var(--tree-line-stroke);
+        stroke-width: 1.5;
+        filter: drop-shadow(0 0 0 transparent);
+    }
+    50% {
+        stroke: var(--status-failed-border);
+        stroke-width: 2.5;
+        filter: drop-shadow(var(--shadow-glow-failure));
+    }
+}
+
+.tree-connection-lines path.animate-yellow-glow {
+    animation: yellowGlowTopToBottom 1s ease-out;
+}
+
+.tree-connection-lines path.animate-red-glow {
+    animation: redGlowBottomToTop 1s ease-out;
+}
+
+/* Task Tree Node - unified design (decomposition & execution) */
+.tree-task {
+    --node-bg: var(--bg-area-secondary);
+    --node-border: var(--border-color);
+    padding: 2px 4px;
+    font-size: 10px;
+    background: var(--node-bg);
+    border: 1.5px solid var(--node-border);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: 500;
+    box-sizing: border-box;
+    transition: var(--state-transition);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    z-index: 1;
+    box-shadow: var(--tree-node-shadow);
+}
+
+.tree-task:hover {
+    background: var(--interactive-hover);
+    border-color: var(--interactive-border-hover);
+    box-shadow: var(--tree-node-shadow-hover);
+}
+
+.tree-task-leaf {
+    border-width: 2px;
+    border-color: var(--text-light);
+}
+
+.tree-task.task-status-doing {
+    --node-bg: var(--status-doing);
+    --node-border: var(--tree-status-doing-border);
+    background: var(--node-bg);
+    border-color: var(--node-border);
+}
+
+.tree-task.task-status-doing:hover {
+    background: var(--status-doing-hover);
+    border-color: var(--tree-status-doing-border);
+}
+
+.tree-task.task-status-validating {
+    --node-bg: var(--status-validating);
+    --node-border: var(--tree-status-validating-border);
+    background: var(--node-bg);
+    border-color: var(--node-border);
+}
+
+.tree-task.task-status-validating:hover {
+    background: var(--status-validating-hover);
+    border-color: var(--tree-status-validating-border);
+}
+
+.tree-task.task-status-done {
+    --node-bg: var(--status-done);
+    --node-border: var(--tree-status-done-border);
+    background: var(--node-bg);
+    border-color: var(--node-border);
+}
+
+.tree-task.task-status-done:hover {
+    background: var(--status-done-hover);
+    border-color: var(--tree-status-done-border);
+}
+
+.tree-task.task-status-validation-failed,
+.tree-task.task-status-execution-failed {
+    --node-bg: var(--failure-bg);
+    --node-border: var(--failure-border);
+    background: var(--node-bg);
+    border-color: var(--node-border);
+}
+
+.tree-task.task-status-validation-failed:hover,
+.tree-task.task-status-execution-failed:hover {
+    background: var(--failure-bg-hover);
+    border-color: var(--failure-border);
+}

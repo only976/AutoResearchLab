@@ -1,0 +1,146 @@
+/**
+ * Plan - Idea input, AI thinking area, task tree layout
+ */
+
+/* Idea input row */
+.idea-input-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: var(--gap);
+    align-items: center;
+}
+
+.idea-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 14px;
+    font-family: var(--font-family);
+    background: var(--bg-input);
+    color: var(--text-color);
+}
+
+.idea-input:focus {
+    outline: none;
+    border-color: var(--accent-primary-border);
+    box-shadow: 0 0 0 2px var(--accent-primary-soft);
+}
+
+.idea-input::placeholder {
+    color: var(--text-muted);
+}
+
+.plan-agent-thinking-tree-row {
+    display: flex;
+    gap: 0;
+    margin-top: var(--gap);
+    min-height: var(--main-content-height);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    background: var(--bg-area-secondary);
+}
+
+.plan-agent-thinking-tree-row .plan-agent-thinking-area {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    border-left: 1px solid var(--border-color);
+    border-radius: 0;
+    background: var(--bg-area-secondary);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-width: 0;
+    height: var(--main-content-height);
+}
+
+.plan-agent-thinking-content {
+    flex: 1;
+    margin: 0;
+    padding: 12px 14px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    overflow-y: auto;
+    overflow-x: hidden;
+    word-break: break-word;
+    min-height: 0;
+    overflow-anchor: none;
+}
+
+.plan-agent-thinking-block {
+    height: 140px;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+    background: var(--bg-area-tertiary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    cursor: pointer;
+    transition: var(--state-transition);
+}
+.plan-agent-thinking-block.is-focused {
+    border-color: var(--text-muted, #6b7280);
+    box-shadow: 0 0 0 1px var(--text-muted, #6b7280);
+}
+.plan-agent-thinking-block:last-child {
+    margin-bottom: 0;
+}
+
+/* Schedule message - simple text line, no border, no click */
+.plan-agent-thinking-block--schedule {
+    height: auto;
+    min-height: 0;
+    margin-bottom: 4px;
+    padding: 4px 0;
+    background: transparent;
+    border: none;
+    cursor: default;
+}
+.plan-agent-thinking-block--schedule .plan-agent-thinking-block-schedule-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-family);
+}
+
+.plan-agent-thinking-block-header {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg-area-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+.plan-agent-thinking-block-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: hidden;
+    overflow-x: hidden;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+.plan-agent-thinking-block.is-focused .plan-agent-thinking-block-body {
+    overflow-y: auto;
+    cursor: default;
+}
+
+.plan-agent-thinking-placeholder {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    right: 14px;
+    padding: 12px 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    pointer-events: none;
+}
+.plan-agent-thinking-area.has-content .plan-agent-thinking-placeholder {
+    display: none;
+}

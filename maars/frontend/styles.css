@@ -1,0 +1,13 @@
+/**
+ * MAARS - Main stylesheet
+ * Imports theme and modular CSS partials.
+ */
+
+@import "css/theme.css";
+@import "css/base.css";
+@import "css/layout.css";
+@import "css/plan.css";
+@import "css/components.css";
+@import "css/settings.css";
+@import "css/task-tree.css";
+@import "css/execution.css";

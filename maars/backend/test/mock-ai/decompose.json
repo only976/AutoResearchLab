@@ -1,0 +1,315 @@
+{
+  "0": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1",
+          "description": "技术性能分析：对比 Python (GIL, 异步处理) 与 JavaScript (V8 引擎, 事件循环) 的运行时性能、内存占用及并发处理能力",
+          "dependencies": []
+        },
+        {
+          "task_id": "2",
+          "description": "生态系统调研：梳理并比较两者的后端框架 (如 Django/FastAPI vs Express/NestJS)、第三方库质量及社区活跃度",
+          "dependencies": []
+        },
+        {
+          "task_id": "3",
+          "description": "部署与运维对比：分析两者在容器化 (Docker)、Serverless 适配性、可扩展性及云服务厂商支持方面的差异",
+          "dependencies": []
+        },
+        {
+          "task_id": "4",
+          "description": "综合评估报告：汇总各项对比结果，总结优缺点，并根据不同应用场景给出平衡的选型建议",
+          "dependencies": [
+            "1",
+            "2",
+            "3"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_1",
+          "description": "运行时架构分析：对比 CPython (GIL 机制) 与 JavaScript (V8 引擎 JIT 编译) 的执行效率与单线程性能瓶颈",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_2",
+          "description": "并发模型对比：研究 Python asyncio/多进程模式与 Node.js 非阻塞事件循环在处理高并发 I/O 时的表现差异",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_3",
+          "description": "内存管理调研：比较两者的垃圾回收 (GC) 策略及在典型后端应用负载下的内存占用情况",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_4",
+          "description": "性能综合评估：结合计算密集型与 I/O 密集型场景，汇总得出两者的技术性能对比结论",
+          "dependencies": [
+            "1_1",
+            "1_2",
+            "1_3"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_2": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_2_1",
+          "description": "调研 Python 的并发机制，重点分析 asyncio 的协程调度原理以及多进程模式（multiprocessing）在规避 GIL 限制方面的表现。",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_2_2",
+          "description": "剖析 Node.js 的非阻塞 I/O 模型，研究基于 libuv 的事件循环机制及其处理高频 I/O 事件的工作流程。",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_2_3",
+          "description": "对比两者在高并发 I/O 场景下的性能差异，分析其在吞吐量、响应延迟及系统上下文切换开销等方面的优劣。",
+          "dependencies": [
+            "1_2_1",
+            "1_2_2"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_2_2": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_2_2_1",
+          "description": "研究 libuv 的底层架构，分析其如何封装操作系统内核原语（如 epoll, kqueue, IOCP）以及在阻塞操作中利用线程池的机制。",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_2_2_2",
+          "description": "剖析 Node.js 事件循环（Event Loop）的各个阶段（Timers, Poll, Check 等）的任务执行顺序与 Microtasks 队列的处理规则。",
+          "dependencies": [
+            "1_2_2_1"
+          ]
+        },
+        {
+          "task_id": "1_2_2_3",
+          "description": "梳理非阻塞 I/O 请求在高频并发场景下的全生命周期工作流，从异步调用发起、内核通知到 libuv 回调触发的完整过程。",
+          "dependencies": [
+            "1_2_2_2"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_2_2_1": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_2_2_1_1",
+          "description": "分析 libuv 的跨平台抽象层架构，研究其如何将 epoll、kqueue 和 IOCP 等内核原语统一封装为事件驱动接口。",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_2_2_1_2",
+          "description": "剖析 libuv 内部线程池（Worker Threads）的实现机制，分析其对文件 I/O、DNS 等阻塞型操作的调度与结果回传逻辑。",
+          "dependencies": []
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_2_2_1_1": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_2_2_1_1_1",
+          "description": "调研 libuv 在 Unix 平台（epoll, kqueue）与 Windows 平台（IOCP）下的底层差异化代码组织与数据结构实现。",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_2_2_1_1_2",
+          "description": "分析 libuv 如何通过抽象接口（如 uv_loop_t 与 uv_run）将“就绪触发”与“完成通知”两种异构模型封装为统一的事件循环逻辑。",
+          "dependencies": [
+            "1_2_2_1_1_1"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_3": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_3_1",
+          "description": "调研 Python 的内存管理机制，重点分析引用计数、分代回收算法及内存池（PyMalloc）的运作原理",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_3_2",
+          "description": "调研 JavaScript (V8) 的内存管理机制，重点分析分代回收原理、新生代/老生代算法及增量标记优化",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_3_3",
+          "description": "综合对比两者在后端典型负载下的内存占用、GC 停顿时间（Stop-the-world）及内存泄漏风险",
+          "dependencies": [
+            "1_3_1",
+            "1_3_2"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_3_3": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_3_3_1",
+          "description": "定义后端典型负载场景（如高并发 I/O、大数据量处理）及内存对比的具体度量指标",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_3_3_2",
+          "description": "对比分析两者在典型负载下的初始内存占用、堆增长速度及在大规模对象存储时的表现",
+          "dependencies": [
+            "1_3_3_1"
+          ]
+        },
+        {
+          "task_id": "1_3_3_3",
+          "description": "对比分析两者在垃圾回收触发时的停顿时间（STW）及其对服务端长尾延迟（P99）的影响",
+          "dependencies": [
+            "1_3_3_1"
+          ]
+        },
+        {
+          "task_id": "1_3_3_4",
+          "description": "评估并对比两者在复杂引用关系下的内存泄漏风险点及生产环境排查工具的成熟度",
+          "dependencies": [
+            "1_3_3_1"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_3": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_3_3_3_1",
+          "description": "实验测量：在定义的负载场景下，采集 Python (CPython/PyPy) 与 JavaScript (Node.js/V8) 的 GC 停顿（STW）耗时分布与频率。",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_3_3_3_2",
+          "description": "关联分析：同步测量服务端请求的 P99 延迟，量化 GC 停顿事件与长尾延迟尖峰之间的相关性。",
+          "dependencies": [
+            "1_3_3_3_1"
+          ]
+        },
+        {
+          "task_id": "1_3_3_3_3",
+          "description": "机制对比：对比两者垃圾回收算法（如分代回收 vs 增量/并发回收）在控制长尾延迟方面的表现差异与优劣。",
+          "dependencies": [
+            "1_3_3_3_2"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_3_1": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_3_3_3_1_1",
+          "description": "配置 Python (CPython/PyPy) 与 Node.js 的 GC 采样工具与监控环境参数",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_3_3_3_1_2",
+          "description": "在定义的负载场景下执行压力测试，采集各运行时的 GC 停顿（STW）原始事件日志",
+          "dependencies": [
+            "1_3_3_3_1_1"
+          ]
+        },
+        {
+          "task_id": "1_3_3_3_1_3",
+          "description": "对原始日志进行数据清洗与分析，计算 GC 停顿的耗时百分位数分布与单位时间触发频率",
+          "dependencies": [
+            "1_3_3_3_1_2"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_4": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "1_3_3_4_1",
+          "description": "分析并对比两者在复杂引用关系（如循环引用、长生命周期闭包、未清理的事件监听器）下的内存泄漏风险及诱因",
+          "dependencies": []
+        },
+        {
+          "task_id": "1_3_3_4_2",
+          "description": "调研并对比两者在生产环境下用于定位内存泄漏的监控、堆快照分析及 Profiling 工具（如 tracemalloc, heapdump, clinic.js）的成熟度与易用性",
+          "dependencies": []
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "2": {
+    "content": {
+      "tasks": [
+        {
+          "task_id": "2_1",
+          "description": "对比主流后端框架（Django/FastAPI vs Express/NestJS）的设计哲学、开发效率与适用场景",
+          "dependencies": []
+        },
+        {
+          "task_id": "2_2",
+          "description": "评估两者的第三方库生态（如 ORM、中间件、认证插件等）的成熟度与质量",
+          "dependencies": []
+        },
+        {
+          "task_id": "2_3",
+          "description": "调研社区活跃度、维护状态及开发者支持资源（如文档、教程、Stack Overflow 热度）",
+          "dependencies": []
+        },
+        {
+          "task_id": "2_4",
+          "description": "综合汇总两者生态系统的优劣势对比，为选型建议提供支撑",
+          "dependencies": [
+            "2_1",
+            "2_2",
+            "2_3"
+          ]
+        }
+      ]
+    },
+    "reasoning": "-"
+  },
+  "_default": {
+    "content": {
+      "tasks": []
+    },
+    "reasoning": "-"
+  }
+}

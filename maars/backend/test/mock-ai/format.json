@@ -1,0 +1,865 @@
+{
+  "3": {
+    "content": {
+      "input": {
+        "description": "Technical profiles or architectural definitions of the two entities being compared, typically derived from initial research tasks.",
+        "artifacts": [
+          "subject_technical_specifications"
+        ],
+        "parameters": [
+          "comparison_scope"
+        ]
+      },
+      "output": {
+        "description": "A structured comparative analysis focusing on deployment and operational characteristics across four specific technical dimensions.",
+        "artifact": "deployment_ops_comparison_report",
+        "format": "Markdown document with comparative tables"
+      },
+      "validation": {
+        "description": "Ensure the comparison is balanced, covers all required dimensions, and provides technical depth.",
+        "criteria": [
+          "The output must contain a section or table entry for 'Containerization (Docker) support'",
+          "The output must contain a section or table entry for 'Serverless compatibility'",
+          "The output must explicitly compare 'Scalability' mechanisms (vertical vs horizontal)",
+          "The output must list specific 'Cloud Service Provider' support (e.g., AWS, Azure, GCP)",
+          "Each dimension must provide a direct comparison between the two subjects, not just individual descriptions"
+        ],
+        "optionalChecks": [
+          "Include versioning info for specific tool support",
+          "Include a summary recommendation based on the comparison"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "4": {
+    "content": {
+      "input": {
+        "description": "Aggregated data from previous comparison tasks including performance metrics, cost analysis, and feature sets.",
+        "artifacts": [
+          "performance_comparison_data",
+          "cost_benefit_analysis",
+          "feature_comparison_matrix"
+        ],
+        "parameters": [
+          "target_application_scenarios"
+        ]
+      },
+      "output": {
+        "description": "A comprehensive evaluation report summarizing the strengths, weaknesses, and scenario-based recommendations for the evaluated options.",
+        "artifact": "comprehensive_evaluation_report",
+        "format": "Document (Markdown or PDF) containing: Summary Table, SWOT Analysis, and Selection Recommendation Matrix."
+      },
+      "validation": {
+        "description": "Verify the report provides a logical synthesis of data and actionable recommendations.",
+        "criteria": [
+          "Report must include a summary section for each option evaluated in previous steps",
+          "Must contain a clearly defined 'Pros and Cons' or SWOT analysis for every option",
+          "Recommendations must be explicitly mapped to at least three distinct application scenarios",
+          "The final selection advice must be supported by the data provided in the input artifacts"
+        ],
+        "optionalChecks": [
+          "Inclusion of a weighted scoring model for objective comparison",
+          "Visual aids like a radar chart or comparison table for quick reference"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "2_1": {
+    "content": {
+      "input": {
+        "description": "System architecture requirements and project scope defined in previous analysis phases.",
+        "artifacts": [
+          "system_requirements",
+          "technical_constraints"
+        ],
+        "parameters": [
+          "target_project_scale",
+          "team_expertise_level"
+        ]
+      },
+      "output": {
+        "description": "A comprehensive comparison document analyzing Django, FastAPI, Express, and NestJS.",
+        "artifact": "backend_framework_comparison_report",
+        "format": "Markdown Table or JSON document"
+      },
+      "validation": {
+        "description": "Ensure the comparison is objective, comprehensive, and addresses all required frameworks and dimensions.",
+        "criteria": [
+          "Must include all four specified frameworks: Django, FastAPI, Express, and NestJS",
+          "Must compare each framework across exactly three dimensions: Design Philosophy, Development Efficiency, and Application Scenarios",
+          "Must provide a concluding recommendation or mapping based on project types",
+          "Data regarding performance or efficiency must be supported by qualitative or quantitative justifications"
+        ],
+        "optionalChecks": [
+          "Comparison of community support and ecosystem maturity",
+          "Learning curve assessment for each framework"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "2_2": {
+    "content": {
+      "input": {
+        "description": "The two technologies/frameworks identified for comparison in the research scope.",
+        "artifacts": [
+          "2_1.technology_comparison_scope"
+        ],
+        "parameters": [
+          "comparison_dimensions"
+        ]
+      },
+      "output": {
+        "description": "A comparative evaluation of library ecosystems for both technologies.",
+        "artifact": "ecosystem_evaluation_report",
+        "format": "Table or JSON: { categories: [{ name: string, tech_a_libs: object[], tech_b_libs: object[] }], summary: string }"
+      },
+      "validation": {
+        "description": "Verify the ecosystem comparison is comprehensive and data-driven.",
+        "criteria": [
+          "Report must cover at least ORM, Middleware, and Authentication categories",
+          "Each library mentioned must include maturity indicators (e.g., GitHub stars, update frequency, or community size)",
+          "Direct side-by-side comparison for both technologies is provided for each category",
+          "The summary must conclude which ecosystem is more mature or better suited for specific needs"
+        ],
+        "optionalChecks": [
+          "Check if documentation quality or tutorial availability is mentioned",
+          "Verify if enterprise support or major backer information is included"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "2_3": {
+    "content": {
+      "input": {
+        "description": "List of candidate technologies or frameworks identified in the selection phase.",
+        "artifacts": [
+          "candidate_list"
+        ],
+        "parameters": []
+      },
+      "output": {
+        "description": "A comparative analysis report of community activity and support resources for each candidate.",
+        "artifact": "community_ecosystem_report",
+        "format": "Markdown Table or JSON"
+      },
+      "validation": {
+        "description": "Verify the depth and accuracy of the community and maintenance data.",
+        "criteria": [
+          "Report must cover every candidate listed in the input artifact.",
+          "Maintenance status must include concrete data (e.g., last commit date, release frequency).",
+          "Community activity must include metrics for at least two platforms (e.g., GitHub Stars/Issues, Stack Overflow tags).",
+          "Documentation quality must be assessed (e.g., presence of Getting Started guides, API refs)."
+        ],
+        "optionalChecks": [
+          "Presence of official tutorials or video courses",
+          "Existence of a dedicated Discord/Slack community or forum"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "2_4": {
+    "content": {
+      "input": {
+        "description": "Detailed analysis reports and comparative data for the two target ecosystems generated in previous sub-tasks.",
+        "artifacts": [
+          "ecosystem_a_report",
+          "ecosystem_b_report",
+          "comparative_metrics_data"
+        ],
+        "parameters": [
+          "selection_criteria_weights"
+        ]
+      },
+      "output": {
+        "description": "A comprehensive synthesis of strengths and weaknesses for both ecosystems, mapped to selection drivers.",
+        "artifact": "ecosystem_comparison_summary",
+        "format": "Markdown Table or Document with Pros/Cons sections"
+      },
+      "validation": {
+        "description": "Ensure the summary is balanced, evidence-based, and actionable for decision-making.",
+        "criteria": [
+          "Must include a direct side-by-side comparison table of both ecosystems",
+          "Must identify at least three distinct advantages and disadvantages for each system",
+          "The synthesis must be explicitly linked to the research objective/selection criteria",
+          "Conclusions must be supported by data points from the input artifacts"
+        ],
+        "optionalChecks": [
+          "Include a 'Winner' or 'Recommended Use Case' for each compared dimension"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_1": {
+    "content": {
+      "input": {
+        "description": "Research scope and technical specifications regarding Python (CPython) and JavaScript (V8) performance profiling.",
+        "artifacts": [
+          "research_topic_scope"
+        ],
+        "parameters": [
+          "target_python_version",
+          "target_v8_version"
+        ]
+      },
+      "output": {
+        "description": "Comparative analysis of CPython and V8 runtime architectures focusing on GIL, JIT, and single-thread constraints.",
+        "artifact": "runtime_architecture_analysis",
+        "format": "Markdown document containing structured comparison tables and technical analysis sections."
+      },
+      "validation": {
+        "description": "Ensure the analysis accurately differentiates between the two engines' execution models and identifies specific bottlenecks.",
+        "criteria": [
+          "Must explain the Global Interpreter Lock (GIL) and its impact on multi-core utilization in CPython.",
+          "Must explain the V8 JIT compilation pipeline (Ignition/TurboFan) and its optimization levels.",
+          "Must contain a side-by-side comparison table of execution efficiency factors (memory management, startup time, peak performance).",
+          "Analysis must explicitly identify at least two specific performance bottlenecks for each engine (e.g., CPU-bound tasks in Python, garbage collection pauses in V8)."
+        ],
+        "optionalChecks": [
+          "Inclusion of recent Python updates (e.g., PEP 684 per-interpreter GIL or faster CPython initiatives).",
+          "Comparison of bytecode generation and execution overhead."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_4": {
+    "content": {
+      "input": {
+        "description": "Analysis results and performance data from compute-intensive and I/O-intensive scenario evaluations.",
+        "artifacts": [
+          "compute_intensive_performance_data",
+          "io_intensive_performance_data"
+        ],
+        "parameters": []
+      },
+      "output": {
+        "description": "A comprehensive performance evaluation report comparing both technologies across different workloads.",
+        "artifact": "comprehensive_performance_comparison_report",
+        "format": "Markdown document containing text analysis and a summary comparison table."
+      },
+      "validation": {
+        "description": "Verify the report provides a balanced and data-driven comparison of both performance scenarios.",
+        "criteria": [
+          "Must include a comparison table covering key metrics (e.g., latency, throughput, CPU/IO wait) for both scenarios",
+          "Must provide a qualitative conclusion explaining which technology excels in which scenario",
+          "All conclusions must be directly supported by the input performance data",
+          "The report must explicitly address both compute-intensive and I/O-intensive workloads"
+        ],
+        "optionalChecks": [
+          "Visual charts or graphs representing the performance delta",
+          "Recommendations for specific use cases based on the findings"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_2_1": {
+    "content": {
+      "input": {
+        "description": "Research scope regarding Python performance optimization and concurrency requirements from the parent task.",
+        "artifacts": [
+          "research_scope_definition"
+        ],
+        "parameters": [
+          "focus_areas: ['asyncio coroutine scheduling', 'multiprocessing vs GIL']"
+        ]
+      },
+      "output": {
+        "description": "Technical analysis report detailing Python's concurrency mechanisms.",
+        "artifact": "python_concurrency_analysis",
+        "format": "Markdown Document"
+      },
+      "validation": {
+        "description": "Verify the depth and accuracy of the concurrency analysis.",
+        "criteria": [
+          "Must explain the role of the Event Loop and 'awaitable' objects in asyncio scheduling.",
+          "Must detail how multiprocessing utilizes separate memory spaces to bypass the Global Interpreter Lock (GIL).",
+          "Must include a comparison of overhead (CPU vs Memory) between coroutines and processes.",
+          "Must provide code snippets or pseudo-code illustrating both mechanisms."
+        ],
+        "optionalChecks": [
+          "Mention of 'uvloop' or other high-performance event loop implementations.",
+          "Discussion on IPC (Inter-Process Communication) overhead in multiprocessing."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_2_3": {
+    "content": {
+      "input": {
+        "description": "Raw performance benchmark data for the two compared technologies under high-concurrency I/O conditions.",
+        "artifacts": [
+          "performance_benchmark_results"
+        ],
+        "parameters": [
+          "concurrency_level",
+          "workload_type"
+        ]
+      },
+      "output": {
+        "description": "Comparative analysis report detailing performance metrics and system overhead.",
+        "artifact": "io_performance_comparison_report",
+        "format": "Markdown document including tables and analysis"
+      },
+      "validation": {
+        "description": "Ensure the report covers all required metrics and provides a logical analysis of the trade-offs.",
+        "criteria": [
+          "Report must include quantitative comparisons for throughput (e.g., QPS/TPS)",
+          "Report must include response latency statistics (e.g., p95, p99 metrics)",
+          "Report must explicitly analyze system context switching overhead for both candidates",
+          "Analysis must conclude with a summary of strengths and weaknesses for each technology in high-concurrency scenarios",
+          "Data presented in tables must match the input benchmark results"
+        ],
+        "optionalChecks": [
+          "Visual charts representing the performance delta",
+          "Resource utilization (CPU/Memory) analysis as supporting evidence"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_1": {
+    "content": {
+      "input": {
+        "description": "Research scope and technical focus areas defined in the parent task (1_3) regarding Python runtime performance or architecture.",
+        "artifacts": [
+          "1_3.research_scope"
+        ],
+        "parameters": []
+      },
+      "output": {
+        "description": "A comprehensive technical report detailing Python's memory management architecture.",
+        "artifact": "python_memory_management_report",
+        "format": "Markdown or PDF document"
+      },
+      "validation": {
+        "description": "Verify the technical depth and coverage of the specific Python memory management components.",
+        "criteria": [
+          "Report must contain a dedicated section for Reference Counting explaining how it handles object lifecycle.",
+          "Report must explain the Generational Garbage Collection algorithm, including the concept of generations (0, 1, 2) and trigger conditions.",
+          "Report must detail the PyMalloc (Memory Pool) mechanism, including block, pool, and arena hierarchies.",
+          "The explanation must be specific to CPython (the standard implementation)."
+        ],
+        "optionalChecks": [
+          "Inclusion of diagrams illustrating the memory hierarchy or GC cycles.",
+          "Mention of the Global Interpreter Lock (GIL) interaction with memory management."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_2": {
+    "content": {
+      "input": {
+        "description": "Research scope and technical requirements regarding JavaScript engine performance analysis.",
+        "artifacts": [
+          "research_scope",
+          "literature_search_results"
+        ],
+        "parameters": [
+          "target_engine: V8"
+        ]
+      },
+      "output": {
+        "description": "A detailed technical report on V8 memory management and garbage collection mechanisms.",
+        "artifact": "v8_memory_analysis_report",
+        "format": "Markdown Document"
+      },
+      "validation": {
+        "description": "Verify the technical depth and coverage of V8's GC implementation details.",
+        "criteria": [
+          "Report must explain the 'Generational Hypothesis' and how V8 divides the heap into Young and Old generations.",
+          "Must detail the Scavenge algorithm (Semispace) for the Young generation.",
+          "Must explain Mark-Sweep and Mark-Compact algorithms for the Old generation.",
+          "Must describe the 'Incremental Marking' optimization and how it reduces stop-the-world pauses.",
+          "Technical terms (e.g., Write Barriers, Pointer Tagging) should be used accurately."
+        ],
+        "optionalChecks": [
+          "Include diagrams representing memory layout",
+          "Mention Orinoco or recent parallel/concurrent GC improvements"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_1": {
+    "content": {
+      "input": {
+        "description": "System architecture overview and performance research goals defined in previous sub-tasks of Task 1.",
+        "artifacts": [
+          "research_scope",
+          "system_architecture_definition"
+        ],
+        "parameters": []
+      },
+      "output": {
+        "description": "A detailed specification of backend load scenarios and the technical metrics used for memory comparison.",
+        "artifact": "load_scenarios_and_metrics_spec",
+        "format": "JSON: { scenarios: Array<{name, description, parameters}>, metrics: Array<{name, unit, description}> }"
+      },
+      "validation": {
+        "description": "Ensure the scenarios are technically sound and the metrics are quantifiable and relevant to memory performance.",
+        "criteria": [
+          "Must include at least two distinct load scenarios: 'High-Concurrency I/O' and 'Large Data Processing'",
+          "Each scenario must define specific parameters (e.g., requests per second, data size in GB)",
+          "Metrics must include standard memory indicators such as Resident Set Size (RSS), Heap Usage, or Garbage Collection frequency",
+          "All metrics must have a defined unit of measurement (e.g., MB, ms, %)"
+        ],
+        "optionalChecks": [
+          "Check if peak memory vs. average memory usage is addressed",
+          "Verify if scenarios reflect real-world backend bottleneck conditions"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_2": {
+    "content": {
+      "input": {
+        "description": "Raw performance metrics and logs from benchmarking tests performed under typical loads for both targets.",
+        "artifacts": [
+          "benchmark_results_raw",
+          "test_scenario_definitions"
+        ],
+        "parameters": [
+          "target_A_name",
+          "target_B_name"
+        ]
+      },
+      "output": {
+        "description": "A comparative analysis report detailing memory performance metrics and observed trends.",
+        "artifact": "memory_performance_comparison_report",
+        "format": "Markdown document containing comparative tables and analysis text"
+      },
+      "validation": {
+        "description": "Ensure the analysis covers all specified metrics with quantitative data and logical conclusions.",
+        "criteria": [
+          "Report must include a direct comparison of 'Initial Memory Footprint' (e.g., in MB/GB) for both targets.",
+          "Report must provide a calculated or observed 'Heap Growth Rate' (e.g., MB/s or % increase over time) under load.",
+          "Report must analyze 'Large-scale Object Storage' performance (e.g., latency, GC frequency, or throughput).",
+          "Conclusions must be supported by the provided input benchmark data.",
+          "All units of measurement must be consistent across the comparison."
+        ],
+        "optionalChecks": [
+          "Visual charts or graphs representing heap growth trends over the test duration",
+          "Identification of specific memory bottlenecks for either target"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_2_2_2": {
+    "content": {
+      "input": {
+        "description": "Technical research scope for Node.js internals and asynchronous architecture.",
+        "artifacts": [
+          "node_js_architecture_overview"
+        ],
+        "parameters": []
+      },
+      "output": {
+        "description": "A technical analysis of the Node.js Event Loop phases and microtask scheduling logic.",
+        "artifact": "event_loop_analysis_report",
+        "format": "Markdown Document"
+      },
+      "validation": {
+        "description": "Verify the technical accuracy and completeness of the Event Loop analysis.",
+        "criteria": [
+          "Must explicitly define the behavior of the following phases: Timers, Pending Callbacks, Idle/Prepare, Poll, Check, and Close Callbacks.",
+          "Must define the execution priority of Microtasks (process.nextTick and Promises) in relation to the main phases.",
+          "Must include a sequence diagram or step-by-step logic flow of a single loop iteration.",
+          "Technical descriptions must align with official Node.js documentation (libuv implementation)."
+        ],
+        "optionalChecks": [
+          "Illustration of common pitfalls like starvation of the loop via process.nextTick recursive calls."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_2_2_3": {
+    "content": {
+      "input": {
+        "description": "Technical background on libuv architecture and non-blocking I/O principles from previous research tasks.",
+        "artifacts": [
+          "libuv_architecture_overview",
+          "io_concurrency_parameters"
+        ],
+        "parameters": [
+          "target_os_kernel (e.g., Linux epoll, macOS kqueue)"
+        ]
+      },
+      "output": {
+        "description": "A detailed technical breakdown of the non-blocking I/O lifecycle in high-concurrency scenarios.",
+        "artifact": "io_lifecycle_workflow_doc",
+        "format": "Markdown: Structured document with sequential phases and descriptions"
+      },
+      "validation": {
+        "description": "Verify the completeness and technical accuracy of the I/O workflow phases.",
+        "criteria": [
+          "Must explicitly include the 'Asynchronous Call Initiation' phase (JS/C++ boundary)",
+          "Must detail the 'Kernel Notification' mechanism (e.g., epoll_wait/kevent interaction)",
+          "Must detail the 'libuv Callback Triggering' phase within the event loop",
+          "Workflow must specifically address how high-frequency concurrent requests are queued or polled",
+          "The document must be technically accurate regarding libuv's thread pool vs. event loop handling for I/O"
+        ],
+        "optionalChecks": [
+          "Include a sequence diagram (Mermaid or similar) for visual clarity",
+          "Mention of specific system calls (e.g., read/write/accept) used in the process"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_2_2_1_2": {
+    "content": {
+      "input": {
+        "description": "libuv architecture overview and source code access references (specifically threadpool.c and related headers).",
+        "artifacts": [
+          "libuv_core_architecture_report"
+        ],
+        "parameters": [
+          "libuv_version"
+        ]
+      },
+      "output": {
+        "description": "A technical analysis report on libuv's thread pool implementation, covering its initialization, scheduling, and result return paths.",
+        "artifact": "libuv_threadpool_analysis",
+        "format": "Markdown document containing architectural diagrams and code-level logic flow."
+      },
+      "validation": {
+        "description": "Ensure the analysis covers the full lifecycle of a threaded operation from submission to completion callback.",
+        "criteria": [
+          "Must explain the role of 'uv_work_t' and the 'uv_queue_work' API.",
+          "Must describe the global work queue (wq) and its synchronization mechanism (mutex/cond).",
+          "Must detail how the 'UV_THREADPOOL_SIZE' environment variable impacts the pool.",
+          "Must explain the 'post-processing' phase: how worker threads signal the main loop (e.g., via uv_async_t or internal pipe).",
+          "Must explicitly trace the path for at least one specific blocking operation: File I/O or DNS (getaddrinfo)."
+        ],
+        "optionalChecks": [
+          "Include a sequence diagram of the task flow.",
+          "Analyze potential bottlenecks or performance characteristics of the fixed-size pool."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_4_1": {
+    "content": {
+      "input": {
+        "description": "Definition of the two subjects being compared and their basic memory management mechanisms identified in previous research steps.",
+        "artifacts": [
+          "comparison_subjects_definition",
+          "memory_management_profiles"
+        ],
+        "parameters": [
+          "target_scenarios: [circular_references, long_lived_closures, event_listeners]"
+        ]
+      },
+      "output": {
+        "description": "A detailed comparative analysis report identifying memory leak risks and root causes for both subjects across specific scenarios.",
+        "artifact": "memory_leak_risk_analysis",
+        "format": "Markdown Table or JSON structured by scenario"
+      },
+      "validation": {
+        "description": "Verify the depth and coverage of the memory leak analysis.",
+        "criteria": [
+          "Must explicitly compare both subjects for all three specified scenarios: circular references, long-lived closures, and uncleaned event listeners.",
+          "Each scenario must distinguish between the 'Risk' (probability/impact) and the 'Cause' (technical reason/engine behavior).",
+          "Analysis must be based on the memory management mechanisms identified in upstream tasks (e.g., Garbage Collection strategies).",
+          "The report must conclude with a summary of which subject is more resilient in complex reference scenarios."
+        ],
+        "optionalChecks": [
+          "Include code snippets or pseudo-code illustrating the leak patterns in both subjects.",
+          "Check for mention of specific browser engine behaviors (e.g., V8, SpiderMonkey) if applicable."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_4_2": {
+    "content": {
+      "input": {
+        "description": "Specific identification of the two technologies being compared (likely Python and Node.js based on tool examples) and general production environment constraints.",
+        "artifacts": [
+          "technology_landscape_overview",
+          "memory_leak_mechanisms_analysis"
+        ],
+        "parameters": [
+          "target_technologies",
+          "production_safety_requirements"
+        ]
+      },
+      "output": {
+        "description": "A comparative research report detailing tool maturity and usability for memory leak detection.",
+        "artifact": "memory_tooling_comparison_report",
+        "format": "Markdown document containing a comparison table and tool-specific analysis"
+      },
+      "validation": {
+        "description": "Ensure the comparison covers all required tool categories and dimensions for both technologies.",
+        "criteria": [
+          "The report must compare both technologies across three categories: Monitoring, Heap Snapshots, and Profiling.",
+          "Specific tools mentioned in the task (tracemalloc, heapdump, clinic.js) must be evaluated.",
+          "Each tool must be rated or described in terms of 'Maturity' and 'Ease of Use'.",
+          "Analysis must explicitly address 'production environment' suitability (e.g., overhead, safety)."
+        ],
+        "optionalChecks": [
+          "Check for mention of modern cloud-native or APM integration capabilities.",
+          "Verify if community support or documentation quality is used as a proxy for maturity."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_3_2": {
+    "content": {
+      "input": {
+        "description": "Time-stamped logs of GC pause events and time-series data for P99 request latency within the same observation window.",
+        "artifacts": [
+          "gc_pause_logs",
+          "p99_latency_metrics"
+        ],
+        "parameters": [
+          "analysis_window_start",
+          "analysis_window_end"
+        ]
+      },
+      "output": {
+        "description": "Correlation analysis report quantifying the impact of GC pauses on tail latency.",
+        "artifact": "gc_latency_correlation_report",
+        "format": "JSON: { correlation_coefficient: float, overlapping_events_count: int, conclusion: string, data_points: object[] }"
+      },
+      "validation": {
+        "description": "Ensure the correlation analysis is statistically sound and uses synchronized timeframes.",
+        "criteria": [
+          "The analysis must use data from the same time interval for both GC and latency.",
+          "A correlation coefficient (e.g., Pearson or Spearman) must be explicitly calculated.",
+          "The report must quantify the percentage of P99 spikes that coincide with GC pause events.",
+          "Output must follow the specified JSON structure."
+        ],
+        "optionalChecks": [
+          "Include a scatter plot or time-series overlay chart representing the correlation."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_3_3": {
+    "content": {
+      "input": {
+        "description": "Technical specifications and architectural details of the GC mechanisms for both compared technologies.",
+        "artifacts": [
+          "1_3_3_3_1.gc_implementation_details",
+          "1_3_3_3_2.latency_baseline_data"
+        ],
+        "parameters": [
+          "target_latency_metrics (e.g., P99, P99.9)"
+        ]
+      },
+      "output": {
+        "description": "A comparative analysis report detailing how generational vs. incremental/concurrent GC strategies manage long-tail latency, including a summary of pros and cons.",
+        "artifact": "gc_mechanism_comparison_report",
+        "format": "Markdown document with a summary comparison table"
+      },
+      "validation": {
+        "description": "Verify the depth of the technical comparison and its relevance to tail latency.",
+        "criteria": [
+          "Must explicitly compare at least two specific GC types (e.g., Generational vs. Concurrent/Incremental).",
+          "Must explain the cause-effect relationship between GC pauses (STW) and long-tail latency (P99+).",
+          "Must include a comparison table summarizing pros/cons for each mechanism regarding latency control.",
+          "Technical terms (e.g., write barriers, promotion, marking phases) must be used accurately."
+        ],
+        "optionalChecks": [
+          "Inclusion of theoretical or cited benchmark results to support the comparison."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_2_2_1_1_1": {
+    "content": {
+      "input": {
+        "description": "Access to libuv source code repository and high-level architecture overview from upstream tasks.",
+        "artifacts": [
+          "libuv_architecture_overview",
+          "libuv_source_code_link"
+        ],
+        "parameters": [
+          "target_libuv_version"
+        ]
+      },
+      "output": {
+        "description": "A technical research report detailing the implementation differences between Unix-like (epoll/kqueue) and Windows (IOCP) backends.",
+        "artifact": "libuv_platform_abstraction_report",
+        "format": "Markdown document containing comparative tables and code structure diagrams."
+      },
+      "validation": {
+        "description": "Ensure the research covers code location, abstraction layers, and specific data structure mappings for all three event loops.",
+        "criteria": [
+          "Must explicitly identify file paths for epoll (linux), kqueue (darwin/bsd), and IOCP (win) implementations.",
+          "Must describe how 'uv_loop_t' and 'uv_handle_t' are specialized for each platform.",
+          "Must compare the execution flow difference: readiness-based (epoll/kqueue) vs completion-based (IOCP).",
+          "The report must include a comparison table of internal data structures used for I/O polling."
+        ],
+        "optionalChecks": [
+          "Identification of specific macro-based abstraction patterns used in the codebase."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_2_2_1_1_2": {
+    "content": {
+      "input": {
+        "description": "Architectural overview of libuv and source code references for platform-specific backends (Unix/Windows).",
+        "artifacts": [
+          "libuv_architecture_overview",
+          "platform_backend_mapping"
+        ],
+        "parameters": [
+          "target_version: libuv v1.x"
+        ]
+      },
+      "output": {
+        "description": "Technical analysis report explaining the unification of readiness and completion models within libuv.",
+        "artifact": "libuv_abstraction_analysis_report",
+        "format": "Markdown Document"
+      },
+      "validation": {
+        "description": "Verify the depth and accuracy of the abstraction analysis.",
+        "criteria": [
+          "Must explicitly define how uv_loop_t hides platform-specific state (e.g., epoll fds vs. IOCP handles)",
+          "Must explain the logical mapping of IOCP 'PostQueuedCompletionStatus' vs epoll 'wait' into the uv_run loop phases",
+          "Must identify the specific code paths or abstractions that normalize 'Readiness' (data can be read) and 'Completion' (data has been read)",
+          "Report must include a comparison table or diagram of the event loop iteration for both models"
+        ],
+        "optionalChecks": [
+          "Analysis of performance overhead introduced by this abstraction layer",
+          "Reference to specific lines in src/unix/core.c and src/win/core.c"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_3_1_1": {
+    "content": {
+      "input": {
+        "description": "Selected runtimes and corresponding GC monitoring tools identified in previous environment setup tasks.",
+        "artifacts": [
+          "runtime_specifications",
+          "selected_monitoring_tools"
+        ],
+        "parameters": [
+          "target_monitoring_frequency",
+          "log_output_path"
+        ]
+      },
+      "output": {
+        "description": "Environment configuration scripts and parameter documentation for GC sampling.",
+        "artifact": "gc_monitoring_setup_bundle",
+        "format": "JSON containing shell commands, environment variables, and tool flags."
+      },
+      "validation": {
+        "description": "Ensure all runtimes have working GC hooks and monitoring tools are correctly parameterized.",
+        "criteria": [
+          "Configuration must include specific flags for CPython (e.g., gc module hooks), PyPy (e.g., PYPYLOG), and Node.js (e.g., --trace-gc).",
+          "Setup script must be executable and verify the presence of required profiling binaries (e.g., py-spy, clinic.js, or native flags).",
+          "Output logs must be directed to a consistent, configurable directory path.",
+          "Validation command for each runtime must return a non-zero exit code confirming tool attachment."
+        ],
+        "optionalChecks": [
+          "Check for minimal performance overhead during baseline sampling.",
+          "Verify compatibility with the specific OS kernel version for eBPF-based tools if used."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_3_1_2": {
+    "content": {
+      "input": {
+        "description": "Load test scenarios, stress testing scripts, and target environment configuration including GC logging flags (e.g., -Xlog:gc).",
+        "artifacts": [
+          "load_scenarios",
+          "stress_test_scripts",
+          "environment_config"
+        ],
+        "parameters": [
+          "test_duration_minutes",
+          "target_concurrency"
+        ]
+      },
+      "output": {
+        "description": "Raw GC log files containing pause events and timestamps recorded during the stress test execution.",
+        "artifact": "gc_raw_logs",
+        "format": "Text-based log files (e.g., .log, .gclog, or .vgc)"
+      },
+      "validation": {
+        "description": "Verify that the collected logs are valid, complete, and contain the necessary GC pause metrics.",
+        "criteria": [
+          "Log files must not be empty and must exist for each defined load scenario",
+          "Logs must contain explicit 'Stop-the-World' or 'Pause' events with associated duration values",
+          "The timestamp range in the logs must cover the full duration of the stress test",
+          "GC log format must be consistent with the JVM/runtime version specified in the environment config"
+        ],
+        "optionalChecks": [
+          "Check for log rotation fragments to ensure no data loss during high-frequency GC events"
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "1_3_3_3_1_3": {
+    "content": {
+      "input": {
+        "description": "Raw garbage collection (GC) log files collected from the target system.",
+        "artifacts": [
+          "raw_gc_logs"
+        ],
+        "parameters": [
+          "time_window_unit (e.g., seconds, minutes)"
+        ]
+      },
+      "output": {
+        "description": "Analyzed GC performance metrics including distribution and frequency.",
+        "artifact": "gc_analysis_report",
+        "format": "JSON: { percentiles: { P50: float, P90: float, P99: float, max: float }, frequency: float, unit: string }"
+      },
+      "validation": {
+        "description": "Ensure the GC metrics are correctly calculated and logically sound.",
+        "criteria": [
+          "The report must include P50, P90, P99, and Max pause times in milliseconds.",
+          "Percentile values must follow logical ordering: P99 >= P90 >= P50.",
+          "Frequency must be calculated as events per unit time (e.g., GC/min).",
+          "Analysis must be based on cleaned data (exclude malformed log lines)."
+        ],
+        "optionalChecks": [
+          "Include a breakdown of GC types (e.g., Minor vs Major) if present in logs.",
+          "Check for anomalies like gaps in log timestamps."
+        ]
+      }
+    },
+    "reasoning": "-"
+  },
+  "_default": {
+    "content": {
+      "input": {
+        "description": "-"
+      },
+      "output": {
+        "description": "-"
+      },
+      "validation": {
+        "description": "-"
+      }
+    },
+    "reasoning": "-"
+  }
+}
