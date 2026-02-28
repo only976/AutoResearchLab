@@ -86,7 +86,7 @@
         return true;
     }
 
-    function init() {
+    async function init() {
         const cfg = window.MAARS?.config;
         const plan = window.MAARS?.plan;
         const views = window.MAARS?.views;
@@ -119,14 +119,27 @@
         }
 
         const state = window.MAARS.state || {};
-        if (state.sse) return;
+        if (state.sse && state.sseReady) return state.sseReady;
 
-        state.socket = { connected: true, emit: function () {} };
+        state.socket = state.socket || { connected: false, emit: function () {} };
         window.MAARS.state = state;
+
+        // A promise that resolves once EventSource is open.
+        let readyResolve;
+        let readyReject;
+        state.sseReady = new Promise((resolve, reject) => {
+            readyResolve = resolve;
+            readyReject = reject;
+        });
 
         const eventsUrl = (cfg.API_BASE_URL || '/api/maars') + '/events';
         const es = new EventSource(eventsUrl);
         state.sse = es;
+
+        es.onopen = () => {
+            state.socket.connected = true;
+            try { readyResolve(true); } catch (_) {}
+        };
 
         es.addEventListener('plan-start', () => {
             if (thinking) thinking.clear();
@@ -282,7 +295,18 @@
 
         es.addEventListener('error', () => {
             // Let the browser retry; UI should remain usable.
+            state.socket.connected = false;
+            // If we haven't connected yet, treat as init failure.
+            try { readyReject(new Error('SSE connection failed')); } catch (_) {}
         });
+
+        // If connection doesn't open quickly, still allow caller to proceed.
+        setTimeout(() => {
+            if (state.socket.connected) return;
+            try { readyResolve(false); } catch (_) {}
+        }, 1500);
+
+        return state.sseReady;
     }
 
     window.MAARS.ws = { init };

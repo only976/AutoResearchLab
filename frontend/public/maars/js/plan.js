@@ -22,8 +22,10 @@
         }
         let socket = window.MAARS?.state?.socket;
         if (!socket || !socket.connected) {
-            window.MAARS.ws?.init();
-            await new Promise(resolve => setTimeout(resolve, 500));
+            try {
+                await window.MAARS.ws?.init?.();
+            } catch (_) {}
+            await new Promise(resolve => setTimeout(resolve, 200));
             socket = window.MAARS?.state?.socket;
             if (!socket || !socket.connected) {
                 alert('WebSocket not connected. Please wait and try again.');
@@ -52,8 +54,17 @@
                 signal: planRunAbortController.signal
             });
 
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to generate plan');
+            if (!response.ok) {
+                const msg = await window.MAARS?.utils?.readErrorMessage?.(response, 'Failed to generate plan');
+                throw new Error(msg || 'Failed to generate plan');
+            }
+
+            let data;
+            try {
+                data = await response.json();
+            } catch (_) {
+                throw new Error('Invalid JSON response from server');
+            }
             if (data.planId) cfg.setCurrentPlanId(data.planId);
         } catch (error) {
             if (error.name === 'AbortError') return;

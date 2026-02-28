@@ -6,12 +6,36 @@ from typing import AsyncIterator, Dict, Optional
 import httpx
 import socketio
 from fastapi import APIRouter, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 router = APIRouter()
 
 MAARS_BASE_URL = os.getenv("MAARS_BASE_URL")
-MAARS_SOCKETIO_PATH = os.getenv("MAARS_SOCKETIO_PATH", "/maars/socket.io")
+# python-socketio expects a path without a leading slash, e.g. "maars/socket.io".
+MAARS_SOCKETIO_PATH = os.getenv("MAARS_SOCKETIO_PATH", "maars/socket.io")
+
+
+def _proxy_timeout_seconds(path: str) -> float:
+    """Return proxy timeout in seconds.
+
+    MAARS calls can be long-running (LLM planning/execution). We default to a
+    conservative high timeout and allow tuning via env.
+    """
+    default_timeout = float(os.getenv("MAARS_PROXY_TIMEOUT", "600"))
+    plan_timeout = float(os.getenv("MAARS_PROXY_TIMEOUT_PLAN", str(default_timeout)))
+    exec_timeout = float(os.getenv("MAARS_PROXY_TIMEOUT_EXECUTION", str(default_timeout)))
+    if path.startswith("plan/"):
+        return plan_timeout
+    if path.startswith("execution/"):
+        return exec_timeout
+    return default_timeout
+
+
+def _truncate(s: str, limit: int = 500) -> str:
+    s = s or ""
+    if len(s) <= limit:
+        return s
+    return s[: limit - 3] + "..."
 
 
 def _resolve_base_url(request: Request) -> str:
@@ -54,8 +78,60 @@ async def proxy_maars_api(path: str, request: Request) -> Response:
     params = dict(request.query_params)
     body = await request.body()
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        upstream = await client.request(method, url, headers=headers, params=params, content=body)
+    timeout_s = _proxy_timeout_seconds(path)
+    timeout = httpx.Timeout(timeout_s, connect=10.0)
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            upstream = await client.request(method, url, headers=headers, params=params, content=body)
+    except httpx.ReadTimeout:
+        return JSONResponse(
+            status_code=504,
+            content={
+                "error": f"Upstream timeout after {timeout_s:.0f}s",
+                "upstream": url,
+            },
+        )
+    except httpx.ConnectError as e:
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": f"Upstream connect error: {str(e)}",
+                "upstream": url,
+            },
+        )
+    except httpx.RequestError as e:
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": f"Upstream request error: {str(e)}",
+                "upstream": url,
+            },
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": f"Proxy error: {str(e)}",
+                "upstream": url,
+            },
+        )
+
+    # If upstream failed and didn't return JSON, normalize to JSON {error: ...}
+    content_type = (upstream.headers.get("content-type") or "").lower()
+    if upstream.status_code >= 400 and "application/json" not in content_type:
+        try:
+            text = upstream.text
+        except Exception:
+            text = upstream.content.decode("utf-8", errors="replace") if upstream.content else ""
+        return JSONResponse(
+            status_code=upstream.status_code,
+            content={
+                "error": _truncate(text) or upstream.reason_phrase or "Upstream error",
+                "upstream": url,
+                "status": upstream.status_code,
+            },
+        )
 
     response_headers = {"Content-Type": upstream.headers.get("content-type", "application/json")}
     return Response(content=upstream.content, status_code=upstream.status_code, headers=response_headers)
@@ -84,8 +160,16 @@ async def _sse_event_stream(base_url: str, plan_id: Optional[str] = None) -> Asy
         payload = {"event": event_name, "data": data}
         await queue.put(payload)
 
+    def _make_handler(event_name: str):
+        async def _handler(data=None, *args, **kwargs):
+            # Some Socket.IO events may be emitted without a payload.
+            payload = data if isinstance(data, dict) else ({"value": data} if data is not None else {})
+            await _enqueue(event_name, payload)
+
+        return _handler
+
     for event_name in events:
-        sio.on(event_name, handler=lambda data, name=event_name: asyncio.create_task(_enqueue(name, data)))
+        sio.on(event_name, handler=_make_handler(event_name))
 
     async def _connect() -> None:
         await sio.connect(base_url, socketio_path=MAARS_SOCKETIO_PATH)
@@ -116,18 +200,3 @@ async def _sse_event_stream(base_url: str, plan_id: Optional[str] = None) -> Asy
             await sio.disconnect()
         except Exception:
             pass
-
-
-@router.get("/api/maars/events")
-async def maars_events(request: Request) -> StreamingResponse:
-    plan_id = request.query_params.get("planId")
-    base_url = _resolve_base_url(request)
-    generator = _sse_event_stream(base_url, plan_id)
-    return StreamingResponse(
-        generator,
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    )

@@ -15,8 +15,11 @@
         try {
             const planId = await cfg.resolvePlanId();
             const response = await fetch(`${cfg.API_BASE_URL}/execution?planId=${encodeURIComponent(planId)}`);
+            if (!response.ok) {
+                const msg = await window.MAARS?.utils?.readErrorMessage?.(response, 'Failed to load execution');
+                throw new Error(msg || 'Failed to load execution');
+            }
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to load execution');
             return data.execution || null;
         } catch (error) {
             console.error('Error loading execution:', error);
@@ -72,8 +75,11 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ planId }),
             });
+            if (!genRes.ok) {
+                const msg = await window.MAARS?.utils?.readErrorMessage?.(genRes, 'Failed to generate execution');
+                throw new Error(msg || 'Failed to generate execution');
+            }
             const genData = await genRes.json();
-            if (!genRes.ok) throw new Error(genData.error || 'Failed to generate execution');
             execution = genData.execution;
         }
 
@@ -84,8 +90,8 @@
                 body: JSON.stringify({ execution, planId }),
             });
             if (!layoutRes.ok) {
-                const err = await layoutRes.json();
-                throw new Error(err.error || 'Failed to generate layout');
+                const msg = await window.MAARS?.utils?.readErrorMessage?.(layoutRes, 'Failed to generate layout');
+                throw new Error(msg || 'Failed to generate layout');
             }
             const layoutData = await layoutRes.json();
             const layout = layoutData.layout;
@@ -117,8 +123,11 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ taskId, planId }),
         });
+        if (!response.ok) {
+            const msg = await window.MAARS?.utils?.readErrorMessage?.(response, 'Failed to retry task');
+            throw new Error(msg || 'Failed to retry task');
+        }
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Failed to retry task');
         return data;
     }
 
@@ -129,8 +138,11 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ planId, resumeFromTaskId: taskId }),
         });
+        if (!response.ok) {
+            const msg = await window.MAARS?.utils?.readErrorMessage?.(response, 'Failed to start execution');
+            throw new Error(msg || 'Failed to start execution');
+        }
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Failed to start execution');
         return data;
     }
 

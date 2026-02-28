@@ -87,20 +87,33 @@
     }
 
     async function runExecution() {
-        const execution = await api.loadExecution();
-        if (!execution) {
-            alert('Plan first.');
+        const planId = await cfg.resolvePlanId();
+
+        // Ensure backend runner has both execution map + layout cached.
+        // Without these, /execution/run will start but immediately emit execution-error.
+        let execution = await api.loadExecution();
+        const hasExecution = !!(execution && execution.tasks && execution.tasks.length);
+        const hasLayout = !!(state.executionLayout && state.chainCache && state.chainCache.length);
+        if (!hasExecution || !hasLayout) {
+            await generateExecutionLayout();
+            execution = await api.loadExecution();
+        }
+        const okExecution = !!(execution && execution.tasks && execution.tasks.length);
+        const okLayout = !!(state.executionLayout && state.chainCache && state.chainCache.length);
+        if (!okExecution || !okLayout) {
+            alert('Generate execution layout first.');
             return;
         }
-        const planId = await cfg.resolvePlanId();
         const btn = executionBtn;
         const originalText = btn.textContent;
         startExecutionUI();
         try {
             const socket = window.MAARS?.state?.socket;
             if (!socket || !socket.connected) {
-                window.MAARS.ws?.init();
-                await new Promise(resolve => setTimeout(resolve, 500));
+                try {
+                    await window.MAARS.ws?.init?.();
+                } catch (_) {}
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
             const response = await fetch(`${cfg.API_BASE_URL}/execution/run`, {
                 method: 'POST',
@@ -108,8 +121,8 @@
                 body: JSON.stringify({ planId })
             });
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to start execution');
+                const msg = await window.MAARS?.utils?.readErrorMessage?.(response, 'Failed to start execution');
+                throw new Error(msg || 'Failed to start execution');
             }
             if (stopExecutionBtn) stopExecutionBtn.style.display = '';
         } catch (error) {
@@ -138,8 +151,18 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ planId })
             });
-            const genData = await genRes.json();
-            if (!genRes.ok) throw new Error(genData.error || 'Failed to generate execution from plan');
+
+            if (!genRes.ok) {
+                const msg = await window.MAARS?.utils?.readErrorMessage?.(genRes, 'Failed to generate execution from plan');
+                throw new Error(msg || 'Failed to generate execution from plan');
+            }
+
+            let genData;
+            try {
+                genData = await genRes.json();
+            } catch (_) {
+                throw new Error('Invalid JSON response from server');
+            }
             const execution = genData.execution;
             if (!execution || !execution.tasks?.length) {
                 alert('No atomic tasks. Plan first.');
@@ -151,10 +174,16 @@
                 body: JSON.stringify({ execution, planId })
             });
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to generate layout');
+                const msg = await window.MAARS?.utils?.readErrorMessage?.(response, 'Failed to generate layout');
+                throw new Error(msg || 'Failed to generate layout');
             }
-            const data = await response.json();
+
+            let data;
+            try {
+                data = await response.json();
+            } catch (_) {
+                throw new Error('Invalid JSON response from server');
+            }
             state.executionLayout = data.layout;
             state.previousTaskStates.clear();
             state.chainCache = buildChainCacheFromLayout(state.executionLayout);
