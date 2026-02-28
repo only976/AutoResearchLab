@@ -132,3 +132,17 @@ async def retry_task(body: ExecutionRetryRequest):
 
         asyncio.create_task(run())
         return {"success": True, "message": "Execution started from task"}
+
+
+@router.post("/stop")
+async def stop_execution():
+    """Stop current execution (if any).
+
+    Frontend calls this when the user clicks the Stop button during execution.
+    The runner will broadcast an `execution-error` event with
+    "Execution stopped by user" once it observes `is_running` becomes False.
+    """
+    runner = api_state.runner
+    if runner.is_running:
+        await runner.stop_async()
+    return {"success": True}

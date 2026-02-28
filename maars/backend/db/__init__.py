@@ -9,6 +9,7 @@ import asyncio
 import os
 import re
 import shutil
+import uuid
 from pathlib import Path
 
 import aiofiles
@@ -204,7 +205,8 @@ async def _write_json_file(plan_id: str, filename: str, data: dict) -> dict:
     """Atomic write: write to .tmp then rename to avoid partial/corrupt files on concurrent access."""
     await _ensure_plan_dir(plan_id)
     file_path = _get_file_path(plan_id, filename)
-    tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+    # Use a unique temp name to avoid clobbering when concurrent writes occur.
+    tmp_path = file_path.with_name(file_path.name + f".{uuid.uuid4().hex}.tmp")
     content = orjson.dumps(data, option=orjson.OPT_INDENT_2).decode("utf-8")
     async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
         await f.write(content)
