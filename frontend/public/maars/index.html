@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAARS</title>
+    <script>
+        (function() {
+            document.documentElement.setAttribute('data-theme', 'black');
+        })();
+    </script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <div class="header-title">
+                <h1>MAARS</h1>
+                <p class="subtitle">Multi-Agent Automated Research System</p>
+            </div>
+        </header>
+
+        <div id="settingsModal" class="modal">
+            <div class="modal-content modal-content--settings">
+                <div id="settingsForm" class="settings-form">
+                    <div class="settings-body">
+                        <aside class="settings-sidebar">
+                            <nav class="settings-nav" role="navigation">
+                                <button type="button" class="settings-nav-item" data-item="theme">
+                                    <span class="settings-nav-item-name">Theme</span>
+                                </button>
+                                <button type="button" class="settings-nav-item" data-item="db">
+                                    <span class="settings-nav-item-name">DB Operation</span>
+                                </button>
+                                <button type="button" class="settings-nav-item" data-item="execution">
+                                    <span class="settings-nav-item-name">Execution</span>
+                                </button>
+                                <button type="button" class="settings-nav-item" data-item="mode">
+                                    <span class="settings-nav-item-name">AI Mode</span>
+                                </button>
+                                <button type="button" class="settings-nav-item" data-item="preset">
+                                    <span class="settings-nav-item-name">Preset</span>
+                                </button>
+                            </nav>
+                            <button type="button" class="btn-ghost settings-save-btn" id="settingsSaveBtn">Save</button>
+                        </aside>
+                        <main class="settings-main" id="settingsMain">
+                            <div class="settings-panel" id="settingsPanelTheme" data-panel="theme">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Theme</h3>
+                                    <div class="settings-options">
+                                        <button type="button" class="settings-option" data-theme="light">Light</button>
+                                        <button type="button" class="settings-option" data-theme="dark">Dark</button>
+                                        <button type="button" class="settings-option" data-theme="black">Black</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="settings-panel" id="settingsPanelDb" data-panel="db">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">DB Operation</h3>
+                                    <div class="settings-db-actions">
+                                        <button type="button" class="btn-default" id="settingsRestoreBtn">Restore</button>
+                                        <button type="button" class="btn-danger" id="settingsClearDbBtn">Clear DB</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="settings-panel" id="settingsPanelExecution" data-panel="execution">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Execution</h3>
+                                    <div class="settings-field">
+                                        <label for="maxExecutionConcurrency">Max concurrent tasks</label>
+                                        <input type="number" id="maxExecutionConcurrency" min="1" max="32" value="7" />
+                                        <span class="settings-param-tip">Maximum number of tasks running in parallel during execution</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="settings-panel" id="settingsPanelMode" data-panel="mode">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">AI Mode</h3>
+                                    <div class="settings-options" id="settingsModeOptions">
+                                        <button type="button" class="settings-option" data-item="mock">Mock</button>
+                                        <button type="button" class="settings-option" data-item="llm">LLM</button>
+                                        <button type="button" class="settings-option" data-item="llmagent">LLM+Agent</button>
+                                        <button type="button" class="settings-option" data-item="agent">Agent</button>
+                                    </div>
+                                </div>
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title" id="settingsModeConfigTitle">Config</h3>
+                                    <div class="settings-mode-content" id="settingsModeContent">
+                                        <!-- Rendered by theme.js -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="settings-panel" id="settingsPanelPreset" data-panel="preset">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Preset</h3>
+                                    <div class="settings-preset-row">
+                                        <div class="settings-preset-list" id="settingsPresetList"></div>
+                                        <button type="button" class="settings-preset-add" id="settingsPresetAddBtn">+ New</button>
+                                    </div>
+                                </div>
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title" id="settingsPresetEditTitle">Select preset</h3>
+                                    <div class="settings-fields">
+                                        <div class="settings-field">
+                                            <label for="presetLabel">Name</label>
+                                            <input type="text" id="presetLabel" placeholder="My Config" />
+                                        </div>
+                                        <div class="settings-field">
+                                            <label for="presetBaseUrl">Base URL</label>
+                                            <input type="url" id="presetBaseUrl" placeholder="https://api.openai.com/v1" />
+                                        </div>
+                                        <div class="settings-field">
+                                            <label for="presetApiKey">API Key</label>
+                                            <input type="password" id="presetApiKey" placeholder="sk-..." autocomplete="off" />
+                                        </div>
+                                        <div class="settings-field">
+                                            <label for="presetModel">Model</label>
+                                            <input type="text" id="presetModel" placeholder="gpt-4o" />
+                                        </div>
+                                    </div>
+                                    <div class="settings-phase-section">
+                                        <h4 class="settings-phase-title">Config by phase</h4>
+                                        <div class="settings-phase-grid" id="settingsPhaseCards"></div>
+                                    </div>
+                                    <div class="settings-actions">
+                                        <button type="button" id="settingsPresetDeleteBtn" class="btn-ghost">Delete preset</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <main class="main-content">
+            <div class="idea-input-row">
+                <input type="text" id="ideaInput" class="idea-input" placeholder="Enter your research idea..." />
+                <button id="loadExampleIdeaBtn">Load Idea</button>
+                <button id="generatePlanBtn">Plan</button>
+                <button id="stopPlanBtn" class="stop-btn" style="display: none;">Stop</button>
+                <button id="executionBtn">Execute</button>
+                <button id="stopExecutionBtn" class="stop-btn" style="display: none;">Stop</button>
+            </div>
+            <div class="plan-agent-thinking-tree-row">
+                <div class="plan-agent-tree-area" data-tree-area="plan">
+                    <div class="tree-view-tabs">
+                        <button type="button" class="tree-view-tab active" data-view="decomposition" aria-pressed="true">Decomposition</button>
+                        <button type="button" class="tree-view-tab" data-view="execution" aria-pressed="false">Execution</button>
+                        <button type="button" class="tree-view-tab" data-view="output" aria-pressed="false">Output</button>
+                    </div>
+                    <div class="tree-view-panel view-decomposition active" data-view-panel="decomposition">
+                        <div class="plan-agent-quality-badge" id="planAgentQualityBadge" title="" style="display: none;"></div>
+                        <div class="tree-container">
+                            <div class="tasks-tree plan-agent-tasks-tree"></div>
+                        </div>
+                    </div>
+                    <div class="tree-view-panel view-execution" data-view-panel="execution">
+                        <div class="plan-agent-execution-tree-area" data-tree-area="execution">
+                            <div class="tree-container">
+                                <div class="tasks-tree plan-agent-execution-tree"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tree-view-panel view-output" data-view-panel="output">
+                        <div class="task-agent-output-area plan-agent-output-area" id="taskAgentOutputArea">
+                            <div class="task-agent-output-content markdown-body" id="taskAgentOutputContent"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="plan-agent-thinking-area" id="planAgentThinkingArea">
+                    <div class="plan-agent-thinking-content markdown-body" id="planAgentThinkingContent"></div>
+                    <div class="plan-agent-thinking-placeholder" id="planAgentThinkingPlaceholder">Thinking will appear here when generating plan or executing tasks...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Task Output modal -->
+    <div id="taskAgentOutputModal" class="task-agent-output-modal" aria-hidden="true">
+        <div class="task-agent-output-modal-backdrop"></div>
+        <div class="task-agent-output-modal-dialog">
+            <div class="task-agent-output-modal-header">
+                <span class="task-agent-output-modal-title" id="taskAgentOutputModalTitle">Task Output</span>
+                <span class="task-agent-output-modal-actions">
+                    <button type="button" class="task-agent-output-modal-download" id="taskAgentOutputModalDownload" aria-label="Download" title="Download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16"/><path d="M7 15l5 5 5-5"/></svg></button>
+                    <button type="button" class="task-agent-output-modal-close" id="taskAgentOutputModalClose" aria-label="Close">×</button>
+                </span>
+            </div>
+            <div class="task-agent-output-modal-body markdown-body" id="taskAgentOutputModalBody"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/task-tree.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/plan.js"></script>
+    <script src="js/thinking.js"></script>
+    <script src="js/views.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

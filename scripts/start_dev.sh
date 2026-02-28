@@ -6,8 +6,8 @@ BACKEND_PORT="${BACKEND_PORT:-8010}"
 FRONTEND_PORT="${FRONTEND_PORT:-3030}"
 
 # Define commands
-BACKEND_CMD="source ~/miniconda3/etc/profile.d/conda.sh && conda activate AutoResearchLab && uvicorn backend.main:app --reload --port ${BACKEND_PORT}"
-FRONTEND_CMD="cd \"$ROOT_DIR/frontend\" && API_BASE_URL=\"http://localhost:${BACKEND_PORT}\" npm run dev -- --port ${FRONTEND_PORT}"
+BACKEND_CMD="source ~/miniconda3/etc/profile.d/conda.sh && conda activate AutoResearchLab && uvicorn backend.main:asgi_app --reload --port ${BACKEND_PORT}"
+FRONTEND_CMD="source ~/miniconda3/etc/profile.d/conda.sh && conda activate AutoResearchLab && cd \"$ROOT_DIR/frontend\" && API_BASE_URL=\"http://localhost:${BACKEND_PORT}\" npm run dev -- --port ${FRONTEND_PORT}"
 
 
 # Kill existing processes on ports

@@ -6,6 +6,7 @@ Uses orjson for faster JSON parsing.
 """
 
 import asyncio
+import os
 import re
 import shutil
 from pathlib import Path
@@ -18,6 +19,37 @@ from loguru import logger
 DB_DIR = Path(__file__).parent
 DEFAULT_PLAN_ID = "test"
 SETTINGS_FILE = "settings.json"
+
+
+def _default_settings_from_env() -> dict:
+    """Build a default settings.json payload from environment variables.
+
+    This repo's primary LLM path is Gemini via `google-genai`, so we look for
+    `GOOGLE_API_KEY` first. If a key is present and no settings.json exists yet,
+    default to aiMode=llm (useMock=False).
+    """
+    api_key = (os.getenv("GOOGLE_API_KEY") or os.getenv("LLM_API_KEY") or "").strip()
+    if not api_key:
+        return {}
+
+    model = (os.getenv("LLM_MODEL") or os.getenv("MAARS_LLM_MODEL") or "gemini-3-flash-preview").strip()
+    base_url = (os.getenv("LLM_API_BASE") or os.getenv("MAARS_LLM_API_BASE") or "").strip()
+
+    preset: dict = {
+        "label": "Env",
+        "apiKey": api_key,
+        "model": model,
+    }
+    if base_url:
+        preset["baseUrl"] = base_url
+
+    return {
+        "aiMode": "llm",
+        "presets": {"env": preset},
+        "current": "env",
+        "maxExecutionConcurrency": 7,
+        "modeConfig": {},
+    }
 
 
 def _validate_plan_id(plan_id: str) -> None:
@@ -251,6 +283,27 @@ def _resolve_config(raw: dict) -> dict:
     return cfg
 
 
+def _raw_current_has_api_key(raw: dict) -> bool:
+    """Check if the raw settings' current preset contains a non-empty apiKey."""
+    if not isinstance(raw, dict):
+        return False
+    presets = raw.get("presets")
+    if not isinstance(presets, dict) or not presets:
+        return False
+    current = raw.get("current")
+    preset = presets.get(current) if current in presets else None
+    if not isinstance(preset, dict):
+        # fall back to any preset if current invalid
+        for v in presets.values():
+            if isinstance(v, dict):
+                preset = v
+                break
+    if not isinstance(preset, dict):
+        return False
+    api_key = (preset.get("apiKey") or preset.get("api_key") or "").strip()
+    return bool(api_key)
+
+
 async def get_settings() -> dict:
     """Get full settings from db/settings.json. For frontend and other modules."""
     file_path = DB_DIR / SETTINGS_FILE
@@ -259,7 +312,7 @@ async def get_settings() -> dict:
             data = await f.read()
             return orjson.loads(data)
     except FileNotFoundError:
-        return {}
+        return _default_settings_from_env()
     except orjson.JSONDecodeError as e:
         logger.warning("Invalid JSON in %s: %s", file_path, e)
         return {}
@@ -268,6 +321,22 @@ async def get_settings() -> dict:
 async def get_effective_config() -> dict:
     """Get effective config for LLM/plan/execution (resolves current preset from settings)."""
     raw = await get_settings()
+    env_defaults = _default_settings_from_env()
+
+    # If the user hasn't provided a key in settings (common when they expect env
+    # vars to be used), but an env key exists, automatically use real LLM.
+    if env_defaults and isinstance(raw, dict) and raw:
+        ai_mode = (raw.get("aiMode") or "mock").strip()
+        if ai_mode == "mock" and not _raw_current_has_api_key(raw):
+            merged = dict(raw)
+            merged["aiMode"] = "llm"
+            merged_presets = dict((raw.get("presets") or {}) if isinstance(raw.get("presets"), dict) else {})
+            merged_presets.setdefault("env", (env_defaults.get("presets") or {}).get("env", {}))
+            merged["presets"] = merged_presets
+            merged["current"] = merged.get("current") or "env"
+            raw = merged
+
+    # If settings.json is missing, get_settings() may already return env defaults.
     return _resolve_config(raw)
 
 
