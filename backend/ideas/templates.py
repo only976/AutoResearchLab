@@ -1,91 +1,69 @@
 from typing import Dict, Any, List
 
-# Template Definitions
-
-HEILMEIER_TEMPLATE = {
-    "template_id": "heilmeier_catechism",
-    "description": "Best for engineering projects, applied research, and system building. Focuses on value proposition, risks, and execution plan.",
-    "schema": {
-        "idea_name": "Short identifier",
-        "title": "Project Title",
-        "template_type": "heilmeier_catechism",
-        "content": {
-            "problem_statement": "What specific problem are you solving? articulate the objectives with high precision and no jargon. Explain WHY this is a hard problem.",
-            "state_of_the_art": "Detailed analysis of current approaches. Cite specific types of methods (e.g., 'MCTS variants', 'AlphaZero-style learning'). Explain exactly WHERE they fail or fall short.",
-            "key_insight": "The core technical innovation. What is the 'Secret Sauce'? How does your approach structurally differ from existing ones? Be specific (e.g., 'Replacing the scalar reward with a vector-based ...').",
-            "impact": "If successful, what is the concrete impact? (e.g., 'Reduces inference time by 40%', 'Enables transfer learning to...').",
-            "technical_plan": ["Phase 1: Detailed design of [Component X]...", "Phase 2: Implementation of [Algorithm Y]...", "Phase 3: Evaluation on [Dataset Z]..."],
-            "risks_and_mitigations": [
-                {"risk": "Specific technical risk (e.g., 'Gradient variance too high')", "mitigation": "Concrete solution (e.g., 'Use baseline subtraction')"}
-            ]
-        }
-    }
+# 1. 定义核心 JSON 输出模板
+ADVANCED_REPORT_SCHEMA = """
+{
+  "title": "研究标题",
+  "gap": "现有研究不足及 gap（需带 [Source ID: X] 引用）",
+  "hypothesis": "你的核心假设",
+  "innovation": "核心创新点（需带 [Source ID: X] 引用）",
+  "topology": "模型拓扑结构流程",
+  "components": ["关键组件1", "关键组件2"],
+  "success_metric": ["量化指标1", "量化指标2"],
+  "deliverable": "预期交付产出",
+  "baselines": ["对比基准列表"],
+  "cited_source_ids": [0, 1],
+  "ai_evaluation": {
+      "scores": { 
+          "novelty": 8.5, 
+          "feasibility": 9.0, 
+          "research_value": 8.8, 
+          "writing": 9.2 
+      },
+      "feedback": "评价反馈"
+  }
 }
+"""
 
-SCIENTIFIC_DISCOVERY_TEMPLATE = {
-    "template_id": "scientific_discovery",
-    "description": "Best for theoretical AI research, algorithm development, and empirical studies (e.g., NeurIPS/ICLR style). Focuses on hypothesis, methodology, and experiments.",
-    "schema": {
-        "idea_name": "Short identifier",
-        "title": "Paper Title",
-        "template_type": "scientific_discovery",
-        "content": {
-            "research_question": "The precise scientific question. Must be falsifiable and non-trivial.",
-            "hypothesis": "A formal hypothesis statement (e.g., 'Mechanism X improves generalization by Y because...').",
-            "related_work_gap": "Critical analysis of the literature. Identify the specific 'Gap' that this work fills.",
-            "proposed_method": {
-                "concept": "The core theoretical concept or mathematical formulation.",
-                "details": "Step-by-step algorithmic details, loss functions, or architecture changes."
-            },
-            "experimental_design": {
-                "datasets": ["Specific Dataset (e.g., ImageNet, Mujoco)"],
-                "baselines": ["SOTA Baseline 1", "SOTA Baseline 2"],
-                "metrics": ["Primary Metric (e.g., Accuracy)", "Secondary Metric (e.g., Sample Efficiency)"]
-            },
-            "expected_results": "What outcomes would validate the hypothesis? What would invalidate it?"
-        }
-    }
-}
-
-SYSTEM_OPTIMIZATION_TEMPLATE = {
-    "template_id": "system_optimization",
-    "description": "Best for performance tuning, resource efficiency, and infrastructure projects. Focuses on bottlenecks, optimization techniques, and benchmarks.",
-    "schema": {
-        "idea_name": "Short identifier",
-        "title": "Optimization Title",
-        "template_type": "system_optimization",
-        "content": {
-            "target_system": "The specific system, component, or pipeline being optimized (e.g., 'Transformer Attention Mechanism').",
-            "bottleneck_analysis": "Quantitative or qualitative analysis of the current bottleneck (e.g., 'Memory bandwidth limited during decoding').",
-            "optimization_strategy": "The proposed technical solution. Be specific (e.g., 'Sparse attention with low-rank approximation').",
-            "implementation_steps": ["Step 1: Profiling...", "Step 2: Prototype implementation...", "Step 3: Integration..."],
-            "evaluation_metrics": ["Latency (ms)", "Throughput (tokens/sec)", "Peak Memory (GB)"],
-            "success_criteria": "Specific, measurable goals (e.g., 'Maintain 99% accuracy while reducing memory by 50%')."
-        }
-    }
-}
-
-ALL_TEMPLATES = [HEILMEIER_TEMPLATE, SCIENTIFIC_DISCOVERY_TEMPLATE, SYSTEM_OPTIMIZATION_TEMPLATE]
-
+# 2. 定义主题精炼阶段的 Schema
 RESEARCH_TOPIC_SCHEMA = {
-    "title": "A concise, academic title for the research direction",
-    "keywords": ["Keyword1", "Keyword2", "Keyword3"],
-    "tldr": "A one-sentence hook (e.g., 'If X happens, will Y still work?')",
-    "abstract": "A 150-word abstract describing the specific problem, proposed methodology, and expected outcome. This should serve as the 'Scope' for further ideation.",
-    "refinement_reason": "Why was this topic refined? (e.g., 'Original input was too broad', 'Original input lacked technical specificity')"
+    "is_broad": "boolean",
+    "analysis": "string",
+    "topics": [
+        {
+            "title": "A concise, academic title",
+            "keywords": ["Keyword1", "Keyword2"],
+            "tldr": "A one-sentence hook",
+            "abstract": "A 150-word abstract describing the problem and methodology",
+            "refinement_reason": "Why was this topic refined?"
+        }
+    ]
 }
+
+def get_advanced_instruction(topic: str, vram: int, level: str, lang: str) -> str:
+    """
+    动态生成系统提示词。修复了由于粘贴导致的非法换行问题。
+    """
+    # 使用三引号保持格式整洁，注意不要在单词中间换行
+    return f"""
+You are a Senior Academic Reviewer & Research Architect.
+
+CONTEXT:
+- Primary Topic: {topic}
+- Hardware Constraints: {vram} GB VRAM
+- Academic Target: {level} level (e.g., Master / PhD)
+- Output Language: {lang}
+
+MANDATORY RULES:
+1. GROUNDING: You MUST use [Source ID: X] tags for every technical claim, innovation, or gap.
+2. SCORING: All scores in 'ai_evaluation' must be FLOAT between 1.0 and 10.0.
+3. REALISM: Scores must reflect the actual quality of the idea. DO NOT copy example values.
+4. FORMAT: Output MUST be a single, valid JSON object matching the schema below.
+
+OUTPUT JSON SCHEMA:
+{ADVANCED_REPORT_SCHEMA}
+"""
 
 def get_template_descriptions() -> str:
-    """Returns a formatted string describing available templates AND their schemas for the LLM."""
-    descriptions = []
-    for t in ALL_TEMPLATES:
-        schema_str = str(t['schema'])
-        descriptions.append(f"- ID: {t['template_id']}\n  Description: {t['description']}\n  Schema: {schema_str}")
-    return "\n\n".join(descriptions)
-
-def get_template_schema(template_id: str) -> Dict[str, Any]:
-    """Returns the schema for a specific template ID."""
-    for t in ALL_TEMPLATES:
-        if t['template_id'] == template_id:
-            return t['schema']
-    return SCIENTIFIC_DISCOVERY_TEMPLATE['schema'] # Default
+    """兼容旧接口名称"""
+    return "Advanced RAG Research Template: Focuses on literature-grounded innovation and hardware-aware feasibility."

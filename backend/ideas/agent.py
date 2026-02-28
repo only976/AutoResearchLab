@@ -1,10 +1,12 @@
 import os, json, re, hashlib, requests, io, uuid
 import xml.etree.ElementTree as ET
-from typing import Dict, List
+from typing import Dict, List,Any
 import pypdf
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
+
+
 
 from google.adk.agents import Agent
 from google.adk import Runner
@@ -12,8 +14,13 @@ from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
 from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
-from backend.ideas.templates import get_template_descriptions, RESEARCH_TOPIC_SCHEMA
 from backend.utils.logger import setup_logger
+from backend.ideas.templates import (
+    RESEARCH_TOPIC_SCHEMA,
+    ADVANCED_REPORT_SCHEMA,
+    get_advanced_instruction,
+    get_template_descriptions # 保持兼容
+)
 
 class IdeaAgent:
     def __init__(self):
@@ -79,28 +86,21 @@ Each topic must follow this schema: {RESEARCH_TOPIC_SCHEMA}.
             self.logger.error(f"Topic refinement failed: {e}", exc_info=True)
             return json.dumps({"is_broad": False, "analysis": str(e), "topics": []}, ensure_ascii=False)
 
-    def generate_ideas(self, scope: str) -> str:
-        instruction = f"""
-You are an expert Research Idea Generator.
-Choose the best template and generate 3 research ideas.
-Available templates:
-{get_template_descriptions()}
-Return JSON only with keys: reasoning, ideas.
-reasoning includes: research_domain, selected_template, rationale.
-ideas is a list of 3 items following the selected template schema.
-"""
+    def generate_ideas(self, scope: str, vram: int = 24, level: str = "master", lang: str = "zh") -> str:
+        # --- 修改开始 ---
+        # 调用你新写的指令工厂
+        instruction = get_advanced_instruction(scope, vram, level, lang)
+        # --- 修改结束 ---
+
         agent = Agent(
             model=self._get_model_for_agent(),
             name="idea_generator",
-            instruction=instruction,
+            instruction=instruction,  # 使用新指令
             tools=self.tools
         )
-        runner = Runner(
-            agent=agent,
-            app_name="auto_research",
-            session_service=InMemorySessionService(),
-            auto_create_session=True
-        )
+        # 下面的 runner.run 逻辑完全不动
+        runner = Runner(agent=agent, app_name="auto_research", session_service=InMemorySessionService(),
+                        auto_create_session=True)
         try:
             events = runner.run(
                 user_id="user",
@@ -213,23 +213,50 @@ class ResearchIdeaEngine:
         return "\n\n".join([f"[Source ID: {i}] (Title: {p.payload['title']})\n{p.payload['text']}" for i, p in
                             enumerate(result.points)])
 
-    def run_agent_workflow(self, topic: str, system_instruction: str):
-        self.agent.instruction = system_instruction
-        runner = Runner(agent=self.agent, app_name="auto_research", session_service=InMemorySessionService(),
-                        auto_create_session=True)
-        final_text = ""
-        # 强制增加一个 user 信息，提醒它必须先 query
-        prompt = f"请先通过 query_knowledge_base 检索关于 '{topic}' 的文献，然后根据检索到的 Source ID 给出 JSON 报告。"
-        events = runner.run(user_id="admin", session_id=str(uuid.uuid4()),
-                            new_message=Content(role="user", parts=[Part(text=prompt)]))
+    def run_agent_workflow(self, input_json: Dict[str, Any]):
+        """
+        集成：适配前端输入格式的 RAG 工作流。
+        input_json 包含: broad_topic, depth_level, vram_gb, language 等。
+        """
+        from backend.ideas.templates import get_advanced_instruction
 
+        # 1. 从输入 JSON 中提取参数（设置默认值以防前端漏传）
+        topic = input_json.get("broad_topic", "Unknown Topic")
+        vram = input_json.get("vram_gb", 24)
+        level = input_json.get("depth_level", "master")
+        lang = input_json.get("language", "zh")
+
+        # 2. 动态生成系统指令
+        self.agent.instruction = get_advanced_instruction(topic, vram, level, lang)
+
+        runner = Runner(
+            agent=self.agent,
+            app_name="auto_research",
+            session_service=InMemorySessionService(),
+            auto_create_session=True
+        )
+
+        # 3. 构造任务提示词
+        prompt = f"请先通过 query_knowledge_base 检索关于 '{topic}' 的文献，然后根据检索到的 Source ID 给出 JSON 报告。"
+
+        # 4. 执行 Agent 逻辑
+        events = runner.run(
+            user_id="admin",
+            session_id=str(uuid.uuid4()),
+            new_message=Content(role="user", parts=[Part(text=prompt)])
+        )
+
+        # 5. 文本收集与工具过滤
+        final_text = ""
         for event in events:
             if event.content and event.content.parts:
                 for part in event.content.parts:
                     if part.text:
-                        if any(x in part.text for x in ["<|tool", "<function", "调用工具"]): continue
+                        if any(x in part.text for x in ["<|tool", "<function", "调用工具"]):
+                            continue
                         final_text += part.text
 
+        # 6. JSON 提取与召回率计算
         match = re.search(r'(\{.*\})', final_text, re.DOTALL)
         if match:
             json_str = match.group(1)
@@ -239,23 +266,32 @@ class ResearchIdeaEngine:
                 json_str_fixed = re.sub(r'(?<!\\)\\(?!["\\/bfnrtu])', r'\\\\', json_str)
                 raw_res = json.loads(json_str_fixed)
 
-            # 核心：计算召回
+            # 7. 计算召回（Recall Metrics）
             cited_ids = raw_res.get("cited_source_ids", [])
             cited_map = {}
             for i in cited_ids:
                 try:
                     idx = int(i)
                     if idx < len(self.current_chunks):
-                        title = self.current_chunks[idx]['title']
-                        cited_map[title] = self.current_chunks[idx].get('url', 'N/A')
-                except: continue
+                        chunk = self.current_chunks[idx]
+                        cited_map[chunk['title']] = chunk.get('url', 'N/A')
+                except:
+                    continue
 
+            # 8. 注入召回指标和原始输入元数据
             raw_res["recall_metrics"] = {
-                "recall_score": round(len(cited_map) / 10, 2) if len(self.current_chunks) > 0 else 0, # 以 10 篇为基准参考
+                "recall_score": round(len(cited_map) / 10, 2) if self.current_chunks else 0,
                 "cited_papers": [f"{t} ({u})" for t, u in cited_map.items()],
                 "total_papers": list(set([f"{p['title']} ({p.get('url', 'N/A')})" for p in self.current_chunks]))[:10]
             }
+            # 保留输入参数快照，方便前端展示
+            raw_res["config_snapshot"] = {
+                "vram": f"{vram}GB",
+                "level": level,
+                "topic": topic
+            }
             return raw_res
+
         return {"error": "No JSON found", "raw": final_text}
 
     def _download_and_extract_pdf(self, pdf_url: str) -> List[Dict]:
@@ -269,7 +305,7 @@ class ResearchIdeaEngine:
             if not response.content.startswith(b'%PDF'): return []
             reader = pypdf.PdfReader(io.BytesIO(response.content))
             chunks = [{"content": p.extract_text().replace("\n", " ")[:1000], "page": i + 1} for i, p in
-                      enumerate(reader.pages[:3]) if p.extract_text()] # 只取前 3 页提高速度
+                      enumerate(reader.pages[:10]) if p.extract_text()] # 只取前 10 页提高速度
             if chunks:
                 with open(cache_path, "w", encoding="utf-8") as f: json.dump(chunks, f, ensure_ascii=False)
             return chunks
