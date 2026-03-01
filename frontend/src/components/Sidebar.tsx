@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { apiFetch } from "@/lib/api"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
@@ -8,7 +9,6 @@ import {
   Lightbulb,
   FlaskConical,
   FileText,
-  ScrollText,
   Settings,
   Activity
 } from "lucide-react"
@@ -19,7 +19,6 @@ const navItems = [
   { href: "/ideas", label: "Ideas", icon: Lightbulb },
   { href: "/experiments", label: "Experiments", icon: FlaskConical },
   { href: "/paper", label: "Paper", icon: FileText },
-  { href: "/logs", label: "Logs", icon: ScrollText },
   { href: "/config", label: "Config", icon: Settings },
 ]
 
@@ -28,12 +27,10 @@ export default function Sidebar() {
   const [backendStatus, setBackendStatus] = useState<boolean | null>(null)
 
   useEffect(() => {
-    // Simple polling for backend status
     const checkStatus = async () => {
       try {
-        const res = await fetch("/api/health")
-        if (res.ok) setBackendStatus(true)
-        else setBackendStatus(false)
+        const res = await apiFetch("health")
+        setBackendStatus(res.ok)
       } catch {
         setBackendStatus(false)
       }

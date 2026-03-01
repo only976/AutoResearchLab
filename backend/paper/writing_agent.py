@@ -6,12 +6,10 @@ from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
-from backend.utils.logger import setup_logger
 from backend.config import get_llm_config
 
 class WritingAgent:
     def __init__(self):
-        self.logger = setup_logger(self.__class__.__name__)
         cfg = get_llm_config()
         if cfg.get("api_base"):
             self.model = LiteLlm(
@@ -97,5 +95,4 @@ Please write the full paper.
             return response
             
         except Exception as e:
-            self.logger.error(f"Error generating paper: {e}", exc_info=True)
             return f"Error generating paper: {str(e)}"

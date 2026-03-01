@@ -9,7 +9,6 @@ aiofiles
 networkx
 orjson
 json-repair
-loguru
 PyYAML
 duckduckgo-search
 google-genai

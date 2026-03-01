@@ -13,11 +13,9 @@ from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
 from backend.config import get_llm_config
 from backend.ideas.templates import get_template_descriptions, RESEARCH_TOPIC_SCHEMA
-from backend.utils.logger import setup_logger
 
 class IdeaAgent:
     def __init__(self):
-        self.logger = setup_logger(self.__class__.__name__)
         cfg = get_llm_config()
         if cfg.get("api_base"):
             self.model = LiteLlm(
@@ -76,10 +74,8 @@ Each topic must follow this schema: {RESEARCH_TOPIC_SCHEMA}.
             )
             final_text = self._collect_text(events)
             cleaned = self._clean_json_text(final_text)
-            self.logger.info("[idea_agent.refine] output_chars=%s", len(cleaned))
             return cleaned
         except Exception as e:
-            self.logger.error(f"Topic refinement failed: {e}", exc_info=True)
             return json.dumps({"is_broad": False, "analysis": str(e), "topics": []}, ensure_ascii=False)
 
     def generate_ideas(self, scope: str) -> str:
@@ -112,13 +108,8 @@ ideas is a list of 3 items following the selected template schema.
             )
             final_text = self._collect_text(events)
             cleaned = self._clean_json_text(final_text)
-            if '"ideas"' not in cleaned:
-                self.logger.warning("[idea_agent.generate] response missing ideas key")
-            else:
-                self.logger.info("[idea_agent.generate] output_chars=%s", len(cleaned))
             return cleaned
         except Exception as e:
-            self.logger.error(f"Idea generation failed: {e}", exc_info=True)
             return json.dumps({"reasoning": {}, "ideas": [], "error": str(e)}, ensure_ascii=False)
 
     def generate_snapshot_title(self, refinement_data: Any, results: Any) -> str:
@@ -156,7 +147,6 @@ Rules:
             title = title.replace("\n", " ").strip().strip('"\'')
             return title[:120]
         except Exception as e:
-            self.logger.error(f"Snapshot title generation failed: {e}", exc_info=True)
             return ""
 
     def _collect_text(self, events) -> str:

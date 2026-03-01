@@ -11,9 +11,6 @@ from backend.api.maars_proxy import router as maars_router
 from backend.api.config import router as config_router
 from backend.db import init_db
 from backend.maars_integration import attach_maars
-from backend.utils.logger import configure_logging
-
-configure_logging()
 
 app = FastAPI(title="AutoResearchLab API", version="0.1.0")
 

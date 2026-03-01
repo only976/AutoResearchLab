@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Section from "@/components/Section"
+import { api, apiFetch } from "@/lib/api"
 
 type ExperimentItem = {
   id: string
@@ -55,8 +56,7 @@ export default function PaperPage() {
   const loadExperiments = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/experiments")
-      const data = await res.json()
+      const data = await api<ExperimentItem[]>("experiments")
       setExperiments(data)
       if (!selectedId && data.length > 0) {
         setSelectedId(data[0].id)
@@ -73,9 +73,9 @@ export default function PaperPage() {
     setError(null)
     try {
       const [planRes, conclusionRes, artifactsRes] = await Promise.all([
-        fetch(`/api/experiments/${expId}/plan`),
-        fetch(`/api/experiments/${expId}/conclusion`),
-        fetch(`/api/experiments/${expId}/artifacts`)
+        apiFetch(`experiments/${expId}/plan`),
+        apiFetch(`experiments/${expId}/conclusion`),
+        apiFetch(`experiments/${expId}/artifacts`)
       ])
       setPlan(planRes.ok ? await planRes.json() : null)
       setConclusion(conclusionRes.ok ? await conclusionRes.json() : null)
@@ -99,15 +99,10 @@ export default function PaperPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/experiments/${selectedId}/draft`, {
+      const data = await api<DraftResponse>(`experiments/${selectedId}/draft`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format })
+        body: { format }
       })
-      if (!res.ok) {
-        throw new Error("Draft generation failed")
-      }
-      const data = await res.json()
       setDraft(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error")

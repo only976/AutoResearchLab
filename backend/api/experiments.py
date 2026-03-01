@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.maars_integration import ensure_maars_path
@@ -215,11 +215,6 @@ async def get_status(exp_id: str) -> Dict[str, Any]:
         "step_name": "Execution",
         "details": details,
     }
-
-
-@router.get("/{exp_id}/logs")
-async def get_logs(exp_id: str, lines: int = Query(default=200, ge=1, le=2000)) -> Dict[str, Any]:
-    return {"lines": []}
 
 
 @router.get("/{exp_id}/artifacts")

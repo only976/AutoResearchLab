@@ -1,5 +1,5 @@
 """
-Config module. Uses data/db/config.json as single source of truth.
+Config module. Uses backend/db/config.json as single source of truth.
 No env fallback - all config comes from config.json.
 """
 
@@ -7,8 +7,8 @@ import json
 import uuid
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_DIR = PROJECT_ROOT / "data" / "db"
+# Storage in backend/db (unified)
+DB_DIR = Path(__file__).resolve().parent / "db"
 CONFIG_FILE = "config.json"
 
 
@@ -23,13 +23,12 @@ def _default_config() -> dict:
         "llm_model": "gemini-3-flash-preview",
         "llm_api_base": "",
         "llm_api_key": "",
-        "backend_port": 8010,
         "frontend_port": 3030,
     }
 
 
 def get_config() -> dict:
-    """Read config from data/db/config.json. Sync, for use in agents."""
+    """Read config from backend/db/config.json. Sync, for use in agents."""
     path = _config_path()
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -44,12 +43,14 @@ def get_config() -> dict:
 
 
 def save_config(config: dict) -> dict:
-    """Save config to data/db/config.json. Atomic write."""
+    """Save config to backend/db/config.json. Atomic write."""
     path = _config_path()
     merged = dict(_default_config())
-    int_keys = {"backend_port", "frontend_port"}
+    int_keys = {"frontend_port"}
     if isinstance(config, dict):
         for k, v in config.items():
+            if k == "backend_port":
+                continue  # fixed at 8888, do not persist
             if k in merged:
                 if k in int_keys:
                     try:

@@ -2,17 +2,18 @@
 
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Server, Key, Database, RefreshCw, ShieldCheck, ShieldAlert, Save, Cpu, Monitor } from "lucide-react"
+import { Server, Key, Database, RefreshCw, ShieldCheck, ShieldAlert, Save, Monitor } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { PageHeader } from "@/components/PageHeader"
+import { MaarsSettingsSection } from "@/components/MaarsSettingsSection"
+import { api } from "@/lib/api"
 
 type Config = {
   llm_model?: string
   llm_api_base?: string
   llm_api_key?: string
-  backend_port?: number | string
   frontend_port?: number | string
 }
 
@@ -26,15 +27,12 @@ export default function ConfigPage() {
   const loadConfig = async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/config")
-      if (!res.ok) throw new Error("Failed to fetch config")
-      const data = await res.json()
+      const data = await api<Partial<Config>>("config")
       setConfig({
-        llm_model: data.llm_model ?? "",
-        llm_api_base: data.llm_api_base ?? "",
-        llm_api_key: data.llm_api_key ?? "",
-        backend_port: data.backend_port ?? 8010,
-        frontend_port: data.frontend_port ?? 3030,
+        llm_model: String(data.llm_model ?? ""),
+        llm_api_base: String(data.llm_api_base ?? ""),
+        llm_api_key: String(data.llm_api_key ?? ""),
+        frontend_port: Number(data.frontend_port) || 3030,
       })
       setError(null)
     } catch (err) {
@@ -51,16 +49,10 @@ export default function ConfigPage() {
     setSaved(false)
     const payload = {
       ...config,
-      backend_port: Number(config.backend_port) || 8010,
       frontend_port: Number(config.frontend_port) || 3030,
     }
     try {
-      const res = await fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error("Failed to save config")
+      await api("config", { method: "POST", body: payload })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {
@@ -193,27 +185,6 @@ export default function ConfigPage() {
           <motion.div variants={item}>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Backend Port</CardTitle>
-                <Cpu className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <Input
-                  type="number"
-                  value={String(config?.backend_port ?? 8010)}
-                  onChange={(e) => updateField("backend_port", e.target.value)}
-                  placeholder="8010"
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  后端 API 端口
-                </p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={item}>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Frontend Port</CardTitle>
                 <Monitor className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -232,6 +203,10 @@ export default function ConfigPage() {
             </Card>
           </motion.div>
         </motion.div>
+
+        <div className="mt-12 pt-8 border-t">
+          <MaarsSettingsSection />
+        </div>
       </div>
     </div>
   )

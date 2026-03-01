@@ -37,7 +37,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased font-sans;
     background-image: 
       radial-gradient(circle at 50% 0%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
       radial-gradient(circle at 0% 0%, rgba(76, 29, 149, 0.05) 0%, transparent 50%);
@@ -54,4 +54,19 @@
 }
 ::-webkit-scrollbar-thumb {
   @apply bg-slate-800 rounded-full hover:bg-slate-700 transition-colors;
+}
+
+/* MAARS Task Tree - status colors */
+.task-status-doing {
+  @apply bg-amber-100 dark:bg-amber-900/30 border-amber-400;
+}
+.task-status-validating {
+  @apply bg-blue-100 dark:bg-blue-900/30 border-blue-400;
+}
+.task-status-done {
+  @apply bg-green-100 dark:bg-green-900/30 border-green-400;
+}
+.task-status-validation-failed,
+.task-status-execution-failed {
+  @apply bg-red-100 dark:bg-red-900/30 border-red-400;
 }

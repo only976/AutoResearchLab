@@ -23,19 +23,19 @@ pip install -r requirements.txt
 cd frontend && npm install && cd ..
 ```
 
-**配置**：编辑 `data/db/config.json` 或访问 Config 页面，设置 LLM API Key 及端口。
+**配置**：编辑 `backend/db/config.json` 或访问 Config 页面，设置 LLM API Key 及前端端口。
 
-**启动**：两个终端分别运行，端口从 `data/db/config.json` 读取。
+**启动**：一行命令同时启动后端和前端。
 
 ```bash
-# 终端 1 - 后端
-node scripts/start.js backend
-
-# 终端 2 - 前端
-node scripts/start.js frontend
+node start.js
 ```
 
-访问 `http://localhost:<frontend_port>`（端口见 config.json）
+后端固定端口 8888，前端端口从 config.json 读取（默认 3030）。按 `Ctrl+C` 可同时停止两者。
+
+单独启动：`node start.js backend` 或 `node start.js frontend`
+
+访问 `http://localhost:<frontend_port>`（默认 3030，见 config.json）
 
 ## Docker（仅后端）
 
@@ -44,15 +44,16 @@ docker build -t autoresearchlab .
 docker run -p 8000:8000 -e GOOGLE_API_KEY=xxx autoresearchlab
 ```
 
-前端本地运行，在 config.json 中将 `backend_port` 设为 `8000`。
+前端本地运行，默认连接后端 `http://localhost:8888`（可通过 `API_BASE_URL` 环境变量覆盖）。
 
 ## 项目结构
 
 ```
 ├── backend/       # FastAPI 后端
-├── frontend/      # Next.js
-├── maars/         # 实验规划与执行
-└── data/db/       # config.json、SQLite
+│   ├── db/       # config.json、SQLite、MAARS 数据
+│   └── maars/    # MAARS 实验规划与执行
+└── frontend/     # Next.js
+    └── src/maars/ # MAARS React 组件与 API
 ```
 
 ## 功能

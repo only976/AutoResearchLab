@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { api } from "@/lib/api"
 
 type HealthDetail = {
   backend?: { ok?: boolean }
@@ -19,8 +20,7 @@ export default function HealthPanel() {
 
   const loadHealth = useCallback(async () => {
     try {
-      const res = await fetch("/api/health/detail")
-      const data = await res.json()
+      const data = await api<HealthDetail>("health/detail")
       setHealth(data)
     } catch {
       setHealth(null)
@@ -29,8 +29,7 @@ export default function HealthPanel() {
 
   const loadConfig = useCallback(async () => {
     try {
-      const res = await fetch("/api/config")
-      const data = await res.json()
+      const data = await api<ConfigResponse>("config")
       setConfig(data)
     } catch {
       setConfig(null)

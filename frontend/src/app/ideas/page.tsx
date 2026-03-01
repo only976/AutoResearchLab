@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/Input"
 import { Badge } from "@/components/ui/Badge"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/PageHeader"
-import { logClientEvent } from "@/lib/clientLogger"
+import { api } from "@/lib/api"
 
 // Types
 type Idea = {
@@ -54,24 +54,15 @@ export default function IdeasPage() {
 
   const fetchSnapshots = async () => {
     try {
-      const res = await fetch("/api/ideas/snapshots")
-      if (res.ok) {
-        const data = await res.json()
-        // Handle both old (string[]) and new (object[]) formats
-        const files = data.files || []
-        const parsedSnapshots = files.map((f: any) => {
-          if (typeof f === 'string') {
-             return { filename: f, title: f, timestamp: '' }
-          }
-          return f
-        })
-        setSnapshots(parsedSnapshots)
-      } else {
-        logClientEvent("warn", "snapshots list failed", { status: res.status })
-      }
+      const data = await api<{ files?: (string | Snapshot)[] }>("ideas/snapshots")
+      const files = data.files || []
+      const parsedSnapshots = files.map((f: string | Snapshot) => {
+        if (typeof f === "string") return { filename: f, title: f, timestamp: "" }
+        return f
+      })
+      setSnapshots(parsedSnapshots)
     } catch (e) {
       console.error("Failed to load snapshots", e)
-      logClientEvent("error", "snapshots list error", { error: String(e) })
     }
   }
 
@@ -79,23 +70,17 @@ export default function IdeasPage() {
     if (!scope.trim()) return
     setLoading(true)
     try {
-      const refineRes = await fetch("/api/ideas/refine", {
+      const refined = await api<RefinedTopic>("ideas/refine", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope }),
+        body: { scope },
       })
-
-      const refined = await refineRes.json()
       setRefinedTopic(refined)
 
       const generationScope = JSON.stringify(refined)
-      const generateRes = await fetch("/api/ideas/generate", {
+      const generated = await api<{ ideas?: Idea[] } | Idea[]>("ideas/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: generationScope }),
+        body: { scope: generationScope },
       })
-
-      const generated = await generateRes.json()
       const result: IdeaResult = {
         topic: refined,
         ideas: Array.isArray(generated) ? generated : generated.ideas || []
@@ -115,14 +100,11 @@ export default function IdeasPage() {
     if (!refinedTopic) return
     setLoading(true)
     try {
-      // Use the refined abstract/tldr as the scope for generation
       const generationScope = JSON.stringify(refinedTopic)
-      const res = await fetch("/api/ideas/generate", {
+      const data = await api<{ ideas?: Idea[] } | Idea[]>("ideas/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: generationScope }),
+        body: { scope: generationScope },
       })
-      const data = await res.json()
       // Structure the result
       const result: IdeaResult = {
         topic: refinedTopic,
@@ -144,18 +126,12 @@ export default function IdeasPage() {
     if (!refinedTopic || results.length === 0) return
     setSaving(true)
     try {
-      const res = await fetch("/api/ideas/snapshots", {
+      await api("ideas/snapshots", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          refinement_data: refinedTopic,
-          results: results
-        }),
+        body: { refinement_data: refinedTopic, results },
       })
-      if (res.ok) {
-        fetchSnapshots()
-        alert("Snapshot saved!")
-      }
+      fetchSnapshots()
+      alert("Snapshot saved!")
     } catch (e) {
       console.error(e)
       alert("Failed to save snapshot")
@@ -167,18 +143,14 @@ export default function IdeasPage() {
   const loadSnapshot = async (filename: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/ideas/snapshots/${encodeURIComponent(filename)}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.refinement_data) setRefinedTopic(data.refinement_data)
-        if (data.results) setResults(data.results)
-        setStep(3)
-      } else {
-        logClientEvent("warn", "snapshot load failed", { filename, status: res.status })
-      }
+      const data = await api<{ refinement_data?: RefinedTopic; results?: IdeaResult[] }>(
+        `ideas/snapshots/${encodeURIComponent(filename)}`
+      )
+      if (data.refinement_data) setRefinedTopic(data.refinement_data)
+      if (data.results) setResults(data.results)
+      setStep(3)
     } catch (e) {
       console.error(e)
-      logClientEvent("error", "snapshot load error", { filename, error: String(e) })
     } finally {
       setLoading(false)
     }
@@ -187,25 +159,15 @@ export default function IdeasPage() {
   const [startingExperiment, setStartingExperiment] = useState<string | null>(null)
 
   const handleStartExperiment = async (topic: RefinedTopic, idea: Idea, ideaIndex: number) => {
-    if (startingExperiment !== null) return // Prevent multiple clicks
-    
+    if (startingExperiment !== null) return
+
     setStartingExperiment(String(ideaIndex))
     try {
-      const res = await fetch("/api/experiments", {
+      await api("experiments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic: topic,
-          idea: idea
-        }),
+        body: { topic, idea },
       })
-      if (res.ok) {
-        // Use router.push for smoother navigation instead of window.location
-        // But window.location ensures full reload if state is stale
-        window.location.href = "/experiments"
-      } else {
-        throw new Error("Failed to create experiment")
-      }
+      window.location.href = "/experiments"
     } catch (e) {
       console.error(e)
       alert("Failed to start experiment")
