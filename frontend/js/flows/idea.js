@@ -9,7 +9,6 @@
     if (!cfg || !api) return;
 
     const ideaInput = document.getElementById('ideaInput');
-    const loadExampleIdeaBtn = document.getElementById('loadExampleIdeaBtn');
     const refineIdeaBtn = document.getElementById('refineIdeaBtn');
     const stopRefineBtn = document.getElementById('stopRefineBtn');
 
@@ -79,17 +78,13 @@
     });
 
     function init() {
+        /* 刷新页面时自动填充 example idea；若有 restore 则会被 maars:restore-complete 覆盖 */
+        api.loadExampleIdea();
         refineIdeaBtn?.addEventListener('click', runRefine);
         stopRefineBtn?.addEventListener('click', stopRefine);
         document.addEventListener('maars:idea-complete', onIdeaComplete);
-        if (loadExampleIdeaBtn) {
-            loadExampleIdeaBtn.addEventListener('click', () => {
-                api.loadExampleIdea();
-                updateRefineState();
-            });
-        }
         if (ideaInput) ideaInput.addEventListener('input', updateRefineState);
-        refineIdeaBtn && (refineIdeaBtn.disabled = true);
+        updateRefineState();
     }
 
     window.MAARS.idea = { init, updateRefineState, resetRefineUI };

@@ -14,7 +14,7 @@ python -m uvicorn main:asgi_app --host 0.0.0.0 --port 3001 --loop asyncio --http
 
 在浏览器中访问 **http://localhost:3001**
 
-点击 **Load Example Idea** 可加载示例 idea。**Refine** 可从模糊 idea 提取关键词并检索 arXiv 文献；**Plan** 将 idea 分解为任务树；**Execute** 执行任务。
+刷新页面会自动填充示例 idea。**Refine** 可从模糊 idea 提取关键词并检索 arXiv 文献；**Plan** 将 idea 分解为任务树；**Execute** 执行任务。
 
 ## 核心流程
 
