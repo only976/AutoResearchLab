@@ -1,12 +1,44 @@
 from typing import Any, Dict
 from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
-from backend.ideas.agent import IdeaAgent
+
 from backend.api.common import parse_json_text
-from backend.schemas.request_models import IdeaRefineRequest, IdeaGenerateRequest, SnapshotSaveRequest
-from backend.ideas.snapshots import save_snapshot, list_snapshots, load_snapshot
+from backend.ideas.agent import IdeaAgent
+from backend.ideas.snapshots import load_snapshot, list_snapshots, save_snapshot
+from backend.schemas.request_models import (
+    IdeaGenerateRequest,
+    IdeaRefineRequest,
+    SnapshotSaveRequest,
+)
 
 router = APIRouter(prefix="/api/ideas")
+
+
+def _normalize_generated_ideas(result: Any) -> Dict[str, Any]:
+    """Normalize LLM output to a stable API shape.
+
+    Frontend expects either `Idea[]` or `{ ideas: Idea[] }`.
+    Some prompts/templates return a single idea dict (e.g. {title,gap,...}).
+    We wrap that into `{ ideas: [result] }` for backward compatibility.
+    """
+
+    if isinstance(result, list):
+        return {"ideas": result}
+
+    if isinstance(result, dict):
+        ideas = result.get("ideas")
+        if isinstance(ideas, list):
+            return result
+        # Preserve parse/LLM error fields but ensure ideas exists.
+        if "error" in result and "raw" in result:
+            return {"ideas": [], **result}
+        return {"ideas": [result]}
+
+    if result is None:
+        return {"ideas": []}
+
+    return {"ideas": [{"content": result}]}
 
 
 def _fallback_topic_from_scope(scope: str) -> Dict[str, Any]:
@@ -38,25 +70,18 @@ def refine_ideas(payload: IdeaRefineRequest) -> Dict[str, Any]:
 def generate_ideas(payload: IdeaGenerateRequest) -> Dict[str, Any]:
     agent = IdeaAgent()
     text = agent.generate_ideas(payload.scope)
-    result = parse_json_text(text)
-    # Auto-save the generated ideas
+    parsed = parse_json_text(text)
+    result = _normalize_generated_ideas(parsed)
     try:
         import json
-        # payload.scope is expected to be a JSON string of the refined topic
+
         try:
             refined_topic = json.loads(payload.scope)
         except Exception:
-            # Fallback if scope is just a string
             refined_topic = _fallback_topic_from_scope(payload.scope)
-            
-        ideas_list = result.get("ideas", []) if isinstance(result, dict) else result
-        
-        # Structure matches what frontend expects for results
-        snapshot_results = [{
-            "topic": refined_topic,
-            "ideas": ideas_list
-        }]
 
+        ideas_list = result.get("ideas", [])
+        snapshot_results = [{"topic": refined_topic, "ideas": ideas_list}]
         snapshot_name = _build_snapshot_name_with_llm(agent, refined_topic, snapshot_results)
         save_snapshot(refined_topic, snapshot_results, custom_name=snapshot_name)
     except Exception:
@@ -66,6 +91,7 @@ def generate_ideas(payload: IdeaGenerateRequest) -> Dict[str, Any]:
 
 @router.get("/snapshots")
 def get_snapshots() -> Dict[str, Any]:
+    """获取所有已保存的快照列表"""
     return {"files": list_snapshots()}
 
 
@@ -79,6 +105,7 @@ def save_snapshot_api(payload: SnapshotSaveRequest) -> Dict[str, Any]:
 
 @router.get("/snapshots/{name}")
 def load_snapshot_api(name: str) -> Dict[str, Any]:
+    """加载特定的研究快照"""
     data = load_snapshot(name)
     if not data:
         raise HTTPException(status_code=404, detail="Snapshot not found")

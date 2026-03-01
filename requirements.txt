@@ -18,3 +18,4 @@ sentence-transformers
 pypdf
 numpy
 matplotlib
+pytest
