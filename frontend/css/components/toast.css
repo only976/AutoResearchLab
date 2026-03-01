@@ -1,0 +1,171 @@
+/**
+ * Toast - 轻量通知组件（左下角弹出）
+ * 与 MAARS 设计系统一致：边框、圆角、阴影、关闭按钮风格
+ */
+
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 10px;
+    max-width: min(360px, calc(100vw - 48px));
+    pointer-events: none;
+}
+
+.toast-container > * {
+    pointer-events: auto;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-family: var(--font-family);
+    border: 1px solid;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+    transition: var(--state-transition);
+    animation: toast-slide-in 0.28s ease-out forwards;
+}
+
+.toast.is-exiting {
+    animation: toast-slide-out 0.2s ease-in forwards;
+}
+
+@keyframes toast-slide-in {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes toast-slide-out {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+}
+
+.toast-body {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
+/* 与 btn-close 风格一致 */
+.toast-close {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    line-height: 1;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: var(--btn-radius);
+    transition: var(--btn-transition);
+}
+.toast-close:hover {
+    color: var(--text-color);
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+}
+.toast-close:active {
+    background: var(--btn-active-bg);
+}
+
+/* 各类型使用主题内语义色 */
+.toast--success {
+    background: var(--toast-success-bg);
+    border-color: var(--toast-success-border);
+    color: var(--toast-success-text);
+}
+.toast--success .toast-close {
+    border-color: var(--toast-success-border);
+    color: inherit;
+    opacity: 0.8;
+}
+.toast--success .toast-close:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="dark"] .toast--success .toast-close:hover,
+[data-theme="black"] .toast--success .toast-close:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.toast--error {
+    background: var(--toast-error-bg);
+    border-color: var(--toast-error-border);
+    color: var(--toast-error-text);
+}
+.toast--error .toast-close {
+    border-color: var(--toast-error-border);
+    color: inherit;
+    opacity: 0.8;
+}
+.toast--error .toast-close:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="dark"] .toast--error .toast-close:hover,
+[data-theme="black"] .toast--error .toast-close:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.toast--warning {
+    background: var(--toast-warning-bg);
+    border-color: var(--toast-warning-border);
+    color: var(--toast-warning-text);
+}
+.toast--warning .toast-close {
+    border-color: var(--toast-warning-border);
+    color: inherit;
+    opacity: 0.8;
+}
+.toast--warning .toast-close:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="dark"] .toast--warning .toast-close:hover,
+[data-theme="black"] .toast--warning .toast-close:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.toast--info {
+    background: var(--toast-info-bg);
+    border-color: var(--toast-info-border);
+    color: var(--toast-info-text);
+}
+.toast--info .toast-close {
+    border-color: var(--toast-info-border);
+    color: inherit;
+    opacity: 0.8;
+}
+.toast--info .toast-close:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="dark"] .toast--info .toast-close:hover,
+[data-theme="black"] .toast--info .toast-close:hover {
+    background: rgba(255, 255, 255, 0.06);
+}

@@ -53,4 +53,21 @@ history
 .env.local
 .env.*.local
 
+# Cursor agent skills (local)
+.agents/
+
+# Skills lockfile (local tooling)
+skills-lock.json
+
+# Logs
+*.log
+*.log.*
+
+# JetBrains IDE
+.idea/
+
+# Ruff
+.ruff_cache/
+
+# ARL
 FROM-ARL

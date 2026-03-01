@@ -9,6 +9,8 @@ Socket.io → marked → DOMPurify → highlight.js  (第三方库)
     ↓
 utils.js          # 工具函数 (escapeHtml, escapeHtmlAttr)，无依赖
     ↓
+toast.js          # 轻量通知组件 (toast.success/error/warning/info)，依赖 utils
+    ↓
 config.js         # API/存储配置，创建 window.MAARS
     ↓
 task-tree.js      # 任务树渲染，依赖 utils
@@ -70,6 +72,7 @@ app.js            # 入口，组装各模块
 | `output` | thinking.js | 任务输出渲染 |
 | `plan` | plan.js | 规划器 UI |
 | `taskTree` | task-tree.js | 任务树渲染 |
+| `toast` | toast.js | 轻量通知 API：`toast.success(msg)`、`toast.error(msg)`、`toast.warning(msg)`、`toast.info(msg)` |
 
 ## 注意
 
