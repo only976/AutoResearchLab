@@ -1,113 +1,14 @@
 /**
- * MAARS theme - theme switching and Settings modal.
+ * MAARS Settings - Settings 弹窗主逻辑（Theme、DB、Execution、Mode、Preset）。
  */
 (function () {
     'use strict';
     const cfg = window.MAARS?.config;
-    if (!cfg) return;
-
-    async function initTheme() {
-        try {
-            const raw = await cfg.fetchSettings();
-            const theme = raw.theme && cfg.THEMES.includes(raw.theme) ? raw.theme : 'black';
-            applyTheme(theme);
-        } catch (_) {
-            applyTheme('black');
-        }
-    }
-
-    function applyTheme(theme) {
-        if (theme === 'light') {
-            document.documentElement.removeAttribute('data-theme');
-        } else {
-            document.documentElement.setAttribute('data-theme', theme);
-        }
-    }
-
-    const PHASES = [
-        { key: 'idea', label: 'Idea LLM' },
-        { key: 'atomicity', label: 'Atomicity Check' },
-        { key: 'decompose', label: 'Decompose' },
-        { key: 'format', label: 'Format' },
-        { key: 'quality', label: 'Quality Assess' },
-        { key: 'execute', label: 'Task Execute' },
-        { key: 'validate', label: 'Task Validate' },
-    ];
+    const { PHASES, MODE_DESCRIPTIONS, MODE_PARAMS } = window.MAARS?.settingsModeConfig || {};
+    if (!cfg || !PHASES || !MODE_DESCRIPTIONS || !MODE_PARAMS) return;
 
     let _configState = { aiMode: 'mock', current: '', presets: {} };
     let _activePresetKey = '';
-
-    const MODE_DESCRIPTIONS = {
-        mock: {
-            title: 'Mock LLM config',
-            desc: 'Mock LLM mode: Plan and task use LLM execution path with simulated output. No API key required. Quick flow and UI testing.',
-        },
-        mockagent: {
-            title: 'Mock Agent config',
-            desc: 'Mock Agent mode: Plan uses mock; task uses Agent path with simulated tool calls (ReadArtifact, ReadFile, Finish) and output. No API key required.',
-        },
-        llm: {
-            title: 'LLM config',
-            desc: 'Plan and task execution both use LLM calls (single-turn). Plan decomposes tasks; task execution generates output once and validates. Select or create preset in Preset.',
-            presetNote: true,
-        },
-        llmagent: {
-            title: 'LLM+Agent config',
-            desc: 'Plan uses LLM (single-turn atomicity/decompose/format). Task execution uses Agent mode (ReAct-style with tools): ReadArtifact, ReadFile, WriteFile, Finish, ListSkills, LoadSkill.',
-            presetNote: true,
-        },
-        agent: {
-            title: 'Agent config',
-            desc: 'Plan and task execution both use Agent mode (ReAct-style with tools). Plan: CheckAtomicity, Decompose, FormatTask, AddTasks, etc. Task: ReadArtifact, ReadFile, WriteFile, Finish, ListSkills, LoadSkill.',
-            presetNote: true,
-        },
-    };
-
-    const MODE_PARAMS = {
-        mock: [
-            { key: 'executionPassProbability', label: 'Execution pass rate', type: 'number', min: 0, max: 1, step: 0.05, default: 0.95, section: 'Mock', tip: 'Random pass probability for mock execution' },
-            { key: 'validationPassProbability', label: 'Validation pass rate', type: 'number', min: 0, max: 1, step: 0.05, default: 0.95, section: 'Mock', tip: 'Random pass probability for mock validation' },
-            { key: 'maxFailures', label: 'Max retries', type: 'number', min: 1, max: 10, default: 3, section: 'Mock', tip: 'Max retries after task failure' },
-        ],
-        mockagent: [
-            { key: 'executionPassProbability', label: 'Execution pass rate', type: 'number', min: 0, max: 1, step: 0.05, default: 0.95, section: 'Mock', tip: 'Random pass probability for mock execution' },
-            { key: 'validationPassProbability', label: 'Validation pass rate', type: 'number', min: 0, max: 1, step: 0.05, default: 0.95, section: 'Mock', tip: 'Random pass probability for mock validation' },
-            { key: 'maxFailures', label: 'Max retries', type: 'number', min: 1, max: 10, default: 3, section: 'Mock', tip: 'Max retries after task failure' },
-        ],
-        llm: [
-            { key: 'ideaLlmTemperature', label: 'Temperature', type: 'number', min: 0, max: 2, step: 0.1, default: 0.3, section: 'Idea LLM', tip: 'Temperature for idea LLM keyword extraction' },
-            { key: 'planLlmTemperature', label: 'Temperature', type: 'number', min: 0, max: 2, step: 0.1, default: 0.3, section: 'Plan LLM', tip: 'Temperature for plan LLM (atomicity/decompose/format)' },
-            { key: 'taskLlmTemperature', label: 'Temperature', type: 'number', min: 0, max: 2, step: 0.1, default: 0.3, section: 'Task LLM', tip: 'Temperature for task LLM output' },
-            { key: 'maxFailures', label: 'Max retries', type: 'number', min: 1, max: 10, default: 3, section: 'Task LLM', tip: 'Max retries after execution/validation failure' },
-        ],
-        llmagent: [
-            { key: 'ideaLlmTemperature', label: 'Temperature', type: 'number', min: 0, max: 2, step: 0.1, default: 0.3, section: 'Idea LLM', tip: 'Temperature for idea LLM keyword extraction' },
-            { key: 'planLlmTemperature', label: 'Temperature', type: 'number', min: 0, max: 2, step: 0.1, default: 0.3, section: 'Plan LLM', tip: 'Temperature for plan LLM (atomicity/decompose/format)' },
-            { key: 'taskLlmTemperature', label: 'Temperature', type: 'number', min: 0, max: 2, step: 0.1, default: 0.3, section: 'Task Agent', tip: 'Temperature for task Agent LLM' },
-            { key: 'taskAgentMaxTurns', label: 'Max turns', type: 'number', min: 1, max: 30, default: 15, section: 'Task Agent', tip: 'Max turns for task Agent loop (incl. tool calls)' },
-            { key: 'maxFailures', label: 'Max retries', type: 'number', min: 1, max: 10, default: 3, section: 'Task Agent', tip: 'Max retries after execution/validation failure' },
-        ],
-        agent: [
-            { key: 'planAgentMaxTurns', label: 'Max turns', type: 'number', min: 1, max: 50, default: 30, section: 'Plan Agent', tip: 'Max turns for plan Agent loop' },
-            { key: 'planLlmTemperature', label: 'Temperature', type: 'number', min: 0, max: 2, step: 0.1, default: 0.3, section: 'Plan Agent', tip: 'Temperature for plan Agent LLM' },
-            { key: 'taskLlmTemperature', label: 'Temperature', type: 'number', min: 0, max: 2, step: 0.1, default: 0.3, section: 'Task Agent', tip: 'Temperature for task Agent LLM' },
-            { key: 'taskAgentMaxTurns', label: 'Max turns', type: 'number', min: 1, max: 30, default: 15, section: 'Task Agent', tip: 'Max turns for task Agent loop (incl. tool calls)' },
-            { key: 'maxFailures', label: 'Max retries', type: 'number', min: 1, max: 10, default: 3, section: 'Task Agent', tip: 'Max retries after execution/validation failure' },
-        ],
-    };
-
-    function _generateKey(label) {
-        const base = (label || 'preset').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'preset';
-        let key = base;
-        let i = 2;
-        while (_configState.presets[key]) { key = base + '_' + i++; }
-        return key;
-    }
-
-    function _truncate(str, len) {
-        if (!str) return '';
-        return str.length > len ? str.slice(0, len) + '…' : str;
-    }
 
     const _escapeHtml = (() => {
         const u = window.MAARS?.utils;
@@ -117,6 +18,23 @@
         const u = window.MAARS?.utils;
         return (s) => (u?.escapeHtmlAttr ? u.escapeHtmlAttr(s) : (s ? String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''));
     })();
+
+    function _truncate(str, len) {
+        if (!str) return '';
+        return str.length > len ? str.slice(0, len) + '…' : str;
+    }
+
+    function _generateKey(label) {
+        const base = (label || 'preset').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'preset';
+        let key = base;
+        let i = 2;
+        while (_configState.presets[key]) { key = base + '_' + i++; }
+        return key;
+    }
+
+    function _applyTheme(theme) {
+        window.MAARS?.theme?.applyTheme?.(theme);
+    }
 
     function _renderPresetSelectItems() {
         const container = document.getElementById('settingsPresetList');
@@ -145,9 +63,9 @@
         _configState.modeConfig = _configState.modeConfig || {};
         const defaults = {};
         (MODE_PARAMS[mode] || []).forEach(p => { defaults[p.key] = p.default; });
-        const cfg = { ...defaults, ...(_configState.modeConfig[mode] || {}) };
-        _configState.modeConfig[mode] = cfg;
-        return cfg;
+        const modeCfg = { ...defaults, ...(_configState.modeConfig[mode] || {}) };
+        _configState.modeConfig[mode] = modeCfg;
+        return modeCfg;
     }
 
     function _renderModePanel() {
@@ -159,7 +77,7 @@
         if (titleEl) titleEl.textContent = meta.title;
 
         const params = MODE_PARAMS[mode] || [];
-        const cfg = _getModeConfig(mode);
+        const modeCfg = _getModeConfig(mode);
 
         let html = `<div class="settings-mode-desc">${_escapeHtml(meta.desc)}</div>`;
         if (params.length > 0) {
@@ -176,7 +94,7 @@
             sectionOrder.forEach(sec => {
                 html += `<div class="settings-mode-section"><h4 class="settings-mode-section-title">${_escapeHtml(sec)}</h4><div class="settings-mode-params">`;
                 bySection[sec].forEach(param => {
-                    const val = cfg[param.key] !== undefined ? cfg[param.key] : param.default;
+                    const val = modeCfg[param.key] !== undefined ? modeCfg[param.key] : param.default;
                     const attrs = `data-mode="${_escapeHtmlAttr(mode)}" data-key="${_escapeHtmlAttr(param.key)}"`;
                     const tipAttr = param.tip ? ` title="${_escapeHtmlAttr(param.tip)}"` : '';
                     if (param.type === 'checkbox') {
@@ -241,88 +159,6 @@
                 }
             }
         });
-    }
-
-    function _selectItem(itemId) {
-        _readFormIntoState();
-        const isPreset = itemId.startsWith('preset:');
-        const presetKey = isPreset ? itemId.slice(7) : '';
-        const isTheme = itemId === 'theme';
-        const isDb = itemId === 'db';
-        const isExecution = itemId === 'execution';
-        const isMode = itemId === 'mode';
-        const isPresetNav = itemId === 'preset';
-        const isModeOption = ['mock', 'mockagent', 'llm', 'llmagent', 'agent'].includes(itemId);
-
-        const navItemId = isPreset ? 'preset' : (isModeOption ? 'mode' : itemId);
-        document.querySelectorAll('.settings-nav-item').forEach(el => {
-            el.classList.toggle('active', el.dataset.item === navItemId);
-        });
-
-        if (isTheme) {
-            document.getElementById('settingsPanelTheme')?.classList.add('active');
-            document.getElementById('settingsPanelDb')?.classList.remove('active');
-            document.getElementById('settingsPanelMode')?.classList.remove('active');
-            document.getElementById('settingsPanelPreset')?.classList.remove('active');
-            _syncThemeOptionsActive();
-            _renderPresetSelectItems();
-            return;
-        }
-        if (isDb) {
-            document.getElementById('settingsPanelTheme')?.classList.remove('active');
-            document.getElementById('settingsPanelDb')?.classList.add('active');
-            document.getElementById('settingsPanelExecution')?.classList.remove('active');
-            document.getElementById('settingsPanelMode')?.classList.remove('active');
-            document.getElementById('settingsPanelPreset')?.classList.remove('active');
-            _renderPresetSelectItems();
-            return;
-        }
-        if (isExecution) {
-            document.getElementById('settingsPanelTheme')?.classList.remove('active');
-            document.getElementById('settingsPanelDb')?.classList.remove('active');
-            document.getElementById('settingsPanelExecution')?.classList.add('active');
-            document.getElementById('settingsPanelMode')?.classList.remove('active');
-            document.getElementById('settingsPanelPreset')?.classList.remove('active');
-            const inp = document.getElementById('maxExecutionConcurrency');
-            if (inp) inp.value = String(_configState.maxExecutionConcurrency ?? 7);
-            return;
-        }
-        if (isMode) {
-            document.getElementById('settingsPanelTheme')?.classList.remove('active');
-            document.getElementById('settingsPanelDb')?.classList.remove('active');
-            document.getElementById('settingsPanelExecution')?.classList.remove('active');
-            document.getElementById('settingsPanelMode')?.classList.add('active');
-            document.getElementById('settingsPanelPreset')?.classList.remove('active');
-            _syncModeActive();
-            _renderModePanel();
-            _renderPresetSelectItems();
-            return;
-        }
-        if (isPresetNav) {
-            document.getElementById('settingsPanelTheme')?.classList.remove('active');
-            document.getElementById('settingsPanelDb')?.classList.remove('active');
-            document.getElementById('settingsPanelExecution')?.classList.remove('active');
-            document.getElementById('settingsPanelMode')?.classList.remove('active');
-            document.getElementById('settingsPanelPreset')?.classList.add('active');
-            _populatePresetForm();
-            _updateEditPanelVisibility();
-            _renderPresetSelectItems();
-            return;
-        }
-        if (isPreset) {
-            _activePresetKey = presetKey;
-            _configState.current = presetKey;
-            _populatePresetForm();
-            _updateEditPanelVisibility();
-            _renderPresetSelectItems();
-            return;
-        }
-        if (isModeOption) {
-            _configState.aiMode = itemId;
-            _syncModeActive();
-            _renderModePanel();
-            return;
-        }
     }
 
     function _syncThemeOptionsActive() {
@@ -424,6 +260,88 @@
         _activePresetKey = current || Object.keys(presets)[0];
     }
 
+    function _selectItem(itemId) {
+        _readFormIntoState();
+        const isPreset = itemId.startsWith('preset:');
+        const presetKey = isPreset ? itemId.slice(7) : '';
+        const isTheme = itemId === 'theme';
+        const isDb = itemId === 'db';
+        const isExecution = itemId === 'execution';
+        const isMode = itemId === 'mode';
+        const isPresetNav = itemId === 'preset';
+        const isModeOption = ['mock', 'mockagent', 'llm', 'llmagent', 'agent'].includes(itemId);
+
+        const navItemId = isPreset ? 'preset' : (isModeOption ? 'mode' : itemId);
+        document.querySelectorAll('.settings-nav-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.item === navItemId);
+        });
+
+        if (isTheme) {
+            document.getElementById('settingsPanelTheme')?.classList.add('active');
+            document.getElementById('settingsPanelDb')?.classList.remove('active');
+            document.getElementById('settingsPanelMode')?.classList.remove('active');
+            document.getElementById('settingsPanelPreset')?.classList.remove('active');
+            _syncThemeOptionsActive();
+            _renderPresetSelectItems();
+            return;
+        }
+        if (isDb) {
+            document.getElementById('settingsPanelTheme')?.classList.remove('active');
+            document.getElementById('settingsPanelDb')?.classList.add('active');
+            document.getElementById('settingsPanelExecution')?.classList.remove('active');
+            document.getElementById('settingsPanelMode')?.classList.remove('active');
+            document.getElementById('settingsPanelPreset')?.classList.remove('active');
+            _renderPresetSelectItems();
+            return;
+        }
+        if (isExecution) {
+            document.getElementById('settingsPanelTheme')?.classList.remove('active');
+            document.getElementById('settingsPanelDb')?.classList.remove('active');
+            document.getElementById('settingsPanelExecution')?.classList.add('active');
+            document.getElementById('settingsPanelMode')?.classList.remove('active');
+            document.getElementById('settingsPanelPreset')?.classList.remove('active');
+            const inp = document.getElementById('maxExecutionConcurrency');
+            if (inp) inp.value = String(_configState.maxExecutionConcurrency ?? 7);
+            return;
+        }
+        if (isMode) {
+            document.getElementById('settingsPanelTheme')?.classList.remove('active');
+            document.getElementById('settingsPanelDb')?.classList.remove('active');
+            document.getElementById('settingsPanelExecution')?.classList.remove('active');
+            document.getElementById('settingsPanelMode')?.classList.add('active');
+            document.getElementById('settingsPanelPreset')?.classList.remove('active');
+            _syncModeActive();
+            _renderModePanel();
+            _renderPresetSelectItems();
+            return;
+        }
+        if (isPresetNav) {
+            document.getElementById('settingsPanelTheme')?.classList.remove('active');
+            document.getElementById('settingsPanelDb')?.classList.remove('active');
+            document.getElementById('settingsPanelExecution')?.classList.remove('active');
+            document.getElementById('settingsPanelMode')?.classList.remove('active');
+            document.getElementById('settingsPanelPreset')?.classList.add('active');
+            _populatePresetForm();
+            _updateEditPanelVisibility();
+            _renderPresetSelectItems();
+            return;
+        }
+        if (isPreset) {
+            _activePresetKey = presetKey;
+            _configState.current = presetKey;
+            _populatePresetForm();
+            _updateEditPanelVisibility();
+            _renderPresetSelectItems();
+            return;
+        }
+        if (isModeOption) {
+            _configState.aiMode = itemId;
+            _syncModeActive();
+            _renderModePanel();
+            return;
+        }
+    }
+
     function initSettingsModal() {
         const modal = document.getElementById('settingsModal');
         const deleteBtn = document.getElementById('settingsPresetDeleteBtn');
@@ -497,7 +415,7 @@
             btn.addEventListener('click', () => {
                 const theme = btn.dataset.theme;
                 if (!theme || !cfg.THEMES.includes(theme)) return;
-                applyTheme(theme);
+                _applyTheme(theme);
                 _configState.theme = theme;
                 _syncThemeOptionsActive();
             });
@@ -512,6 +430,8 @@
             try {
                 await api.restoreRecentPlan();
                 if (btn) { btn.textContent = 'Restored'; }
+                document.dispatchEvent(new CustomEvent('maars:idea-complete'));
+                document.dispatchEvent(new CustomEvent('maars:plan-complete'));
                 setTimeout(() => {
                     if (btn) { btn.disabled = false; btn.textContent = origText || 'Restore'; }
                 }, 1500);
@@ -578,5 +498,5 @@
         });
     }
 
-    window.MAARS.theme = { initTheme, applyTheme, initSettingsModal };
+    window.MAARS.settings = { initSettingsModal };
 })();

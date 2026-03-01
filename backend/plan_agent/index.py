@@ -27,6 +27,7 @@ async def _atomicity_and_decompose_recursive(
     idea: Optional[str] = None,
     use_mock: bool = False,
     api_config: Optional[Dict] = None,
+    idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
 ) -> None:
     if check_aborted and check_aborted():
@@ -40,11 +41,11 @@ async def _atomicity_and_decompose_recursive(
         "idea": idea or "",
         "siblings": siblings,
     }
-    v = await check_atomicity(task, on_thinking, abort_event, atomicity_context, use_mock, api_config, plan_id)
+    v = await check_atomicity(task, on_thinking, abort_event, atomicity_context, use_mock, api_config, idea_id, plan_id)
     atomic = v["atomic"]
 
     if atomic:
-        io_result = await format_task(task, on_thinking, abort_event, use_mock, api_config, plan_id)
+        io_result = await format_task(task, on_thinking, abort_event, use_mock, api_config, idea_id, plan_id)
         if not io_result:
             raise ValueError(f"Format failed for atomic task {task['task_id']}: missing input/output")
         idx = _find_task_idx(all_tasks, task["task_id"])
@@ -52,7 +53,7 @@ async def _atomicity_and_decompose_recursive(
             all_tasks[idx] = {**all_tasks[idx], **io_result}
         return
 
-    children = await decompose_task(task, on_thinking, abort_event, all_tasks, idea, depth, use_mock, api_config, plan_id)
+    children = await decompose_task(task, on_thinking, abort_event, all_tasks, idea, depth, use_mock, api_config, idea_id, plan_id)
     if not children:
         raise ValueError(f"Decompose returned no children for task {task['task_id']}")
 
@@ -66,7 +67,7 @@ async def _atomicity_and_decompose_recursive(
     await asyncio.gather(*[
         _atomicity_and_decompose_recursive(
             child, all_tasks, on_task, on_thinking, depth + 1, check_aborted, abort_event, on_tasks_batch,
-            idea, use_mock, api_config, plan_id,
+            idea, use_mock, api_config, idea_id, plan_id,
         )
         for child in children
     ])
@@ -81,6 +82,7 @@ async def run_plan(
     use_mock: bool = False,
     api_config: Optional[Dict] = None,
     skip_quality_assessment: bool = False,
+    idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
 ) -> Dict:
     """Run atomicity->decompose->format from root task, top-down to all atomic tasks. When planAgentMode=True, uses Plan Agent loop instead."""
@@ -105,12 +107,12 @@ async def run_plan(
     if api_config and api_config.get("planAgentMode"):
         await run_plan_agent(
             plan, on_thinking_fn, abort_event, on_tasks_batch,
-            use_mock=use_mock, api_config=api_config, plan_id=plan_id,
+            use_mock=use_mock, api_config=api_config, idea_id=idea_id, plan_id=plan_id,
         )
     else:
         await _atomicity_and_decompose_recursive(
             root_task, all_tasks, on_task, on_thinking_fn, 0, check_aborted, abort_event, on_tasks_batch,
-            idea=idea, use_mock=use_mock, api_config=api_config, plan_id=plan_id,
+            idea=idea, use_mock=use_mock, api_config=api_config, idea_id=idea_id, plan_id=plan_id,
         )
         plan["tasks"] = all_tasks
     if not skip_quality_assessment:

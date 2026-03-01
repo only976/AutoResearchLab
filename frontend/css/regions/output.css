@@ -1,53 +1,6 @@
 /**
- * Execution - Stats, chips, output blocks, modal
+ * Output - 执行统计、状态芯片、产出展示、输出弹窗
  */
-
-.task-agent-output-block {
-    height: 140px;
-    min-height: 140px;
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 10px;
-    background: var(--bg-area-tertiary);
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-    cursor: pointer;
-    transition: var(--state-transition);
-}
-.task-agent-output-block.is-focused {
-    border-color: var(--text-muted, #6b7280);
-    box-shadow: 0 0 0 1px var(--text-muted, #6b7280);
-}
-.task-agent-output-block:last-child {
-    margin-bottom: 0;
-}
-
-.task-agent-output-block-header {
-    flex-shrink: 0;
-    padding: 6px 10px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-    background: var(--bg-area-secondary);
-    border-bottom: 1px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-}
-.task-agent-output-block-body {
-    flex: 1;
-    min-height: 0;
-    overflow-y: hidden;
-    overflow-x: hidden;
-    padding: 8px 10px;
-    cursor: pointer;
-}
-.task-agent-output-block.is-focused .task-agent-output-block-body {
-    overflow-y: auto;
-    cursor: default;
-}
 
 .task-agent-stats {
     display: flex;
@@ -57,16 +10,8 @@
     margin-bottom: var(--gap);
 }
 
-
-.task-agent-stats-items {
-    display: flex;
-    gap: 20px;
-}
-
-.task-agent-chips {
-    display: flex;
-    gap: 6px;
-}
+.task-agent-stats-items { display: flex; gap: 20px; }
+.task-agent-chips { display: flex; gap: 6px; }
 
 .task-agent-chip {
     width: 28px;
@@ -82,67 +27,41 @@
     background: var(--bg-area-secondary);
     transition: var(--state-transition);
 }
-
 .task-agent-chip.task-agent-idle {
     background: var(--task-agent-idle-bg);
     border-color: var(--task-agent-idle-border);
     color: var(--task-agent-idle-text);
 }
-
 .task-agent-chip.task-agent-busy {
     background: var(--task-agent-busy-bg);
     border-color: var(--task-agent-busy-border);
     color: var(--task-agent-busy-text);
 }
-
 .task-agent-chip.task-agent-validating {
     background: var(--task-agent-validating-bg);
     border-color: var(--task-agent-validating-border);
     color: var(--task-agent-validating-text);
 }
-
 .task-agent-chip.task-agent-failed {
     background: var(--failure-bg);
     border-color: var(--failure-border);
     color: var(--failure-text);
 }
 
-.stat-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.stat-label {
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-
+.stat-item { display: flex; align-items: center; gap: 8px; }
+.stat-label { font-size: 14px; color: var(--text-secondary); }
 .stat-value {
     font-size: 16px;
     font-weight: 500;
     color: var(--text-color);
     transition: var(--state-transition);
 }
+.stat-sep { font-size: 14px; color: var(--text-muted); }
+.stat-value.stat-busy { color: var(--task-agent-busy-text); }
+.stat-value.stat-validating { color: var(--task-agent-validating-text); }
+.stat-value.stat-idle { color: var(--task-agent-idle-text); }
 
-.stat-sep {
-    font-size: 14px;
-    color: var(--text-muted);
-}
-
-.stat-value.stat-busy {
-    color: var(--task-agent-busy-text);
-}
-
-.stat-value.stat-validating {
-    color: var(--task-agent-validating-text);
-}
-
-.stat-value.stat-idle {
-    color: var(--task-agent-idle-text);
-}
-
-/* Execution Task Output fullscreen modal */
+/* Output modal */
 .task-agent-output-modal {
     display: none;
     position: fixed;
@@ -155,9 +74,7 @@
     padding: 24px 16px 48px;
     background: transparent;
 }
-.task-agent-output-modal.is-open {
-    display: flex;
-}
+.task-agent-output-modal.is-open { display: flex; }
 .task-agent-output-modal-backdrop {
     position: fixed;
     inset: 0;

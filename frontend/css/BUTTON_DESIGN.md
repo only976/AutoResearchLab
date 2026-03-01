@@ -8,7 +8,7 @@
 4. **统一 hover 逻辑**：hover 时背景与边框使用统一变量，无缩放/位移效果
 5. **无 focus 外圈**：移除 `outline`，避免点击时出现外圈边框
 
-## 设计变量（base.css）
+## 设计变量（core/variables.css）
 
 | 变量 | 值 | 说明 |
 |------|-----|------|
@@ -98,5 +98,5 @@
 
 ## 实现位置
 
-- 变量：`frontend/css/base.css`
-- 样式：`frontend/css/components.css`（按钮系统区块）
+- 变量：`frontend/css/core/variables.css`
+- 样式：`frontend/css/components/buttons.css`

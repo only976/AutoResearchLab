@@ -1,0 +1,175 @@
+/**
+ * Modal - 弹窗、Popover 通用样式
+ */
+
+.modal, .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px 16px 48px;
+    background-color: var(--shadow-overlay);
+    backdrop-filter: blur(var(--modal-backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--modal-backdrop-blur));
+}
+.modal.is-open, .modal-overlay.is-open { display: flex; }
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: var(--shadow-overlay);
+    backdrop-filter: blur(var(--modal-backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--modal-backdrop-blur));
+    z-index: -1;
+}
+
+.modal-dialog, .modal-content, .task-agent-output-modal-dialog {
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--modal-radius);
+    box-shadow: var(--shadow-modal-dialog);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-top: 24px;
+    flex-shrink: 0;
+}
+
+.modal-header, .modal-dialog-header, .task-agent-output-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-area-secondary);
+    flex-shrink: 0;
+}
+
+.modal-title, .modal-header h2, .modal-dialog-header .modal-title, .task-agent-output-modal-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-color);
+    letter-spacing: -0.02em;
+}
+
+.modal-body, .modal-dialog-body, .task-agent-output-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    padding: 16px 20px;
+}
+
+.modal .modal-content:not(.modal-content--settings) {
+    margin: 0 auto;
+    padding: 0;
+    width: 500px;
+    max-width: 90%;
+}
+
+/* Task detail popover */
+.task-detail-popover {
+    position: fixed;
+    z-index: 1100;
+    min-width: 220px;
+    max-width: 320px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-xl);
+    padding: 0;
+    font-size: 13px;
+    overflow: hidden;
+}
+
+.task-detail-popover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-area-secondary);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.task-detail-popover-header-tabs { flex-wrap: wrap; gap: 4px; }
+
+.task-detail-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.task-detail-popover-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-color);
+}
+
+.task-detail-popover-body {
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.task-detail-row {
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.task-detail-row:last-child { margin-bottom: 0; }
+
+.task-detail-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.task-detail-value {
+    font-size: 13px;
+    color: var(--text-color);
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+    transition: var(--state-transition);
+}
+.task-detail-value.task-status-done { color: var(--status-done); }
+.task-detail-value.task-status-doing { color: var(--status-doing-accent); }
+.task-detail-value.task-status-validating { color: var(--status-validating-accent); }
+
+.task-detail-validation .task-detail-value {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.task-detail-validation .validation-desc { font-size: 12px; }
+.task-detail-validation .validation-criteria, .task-detail-validation .validation-optional {
+    margin: 0;
+    padding-left: 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.task-detail-validation .validation-optional { font-style: italic; }
+
+.task-detail-actions {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+.task-detail-actions .btn-default { font-size: 12px; padding: 4px 10px; }

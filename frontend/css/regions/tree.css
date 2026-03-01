@@ -1,8 +1,7 @@
 /**
- * Task Tree - Tree nodes, connection lines
+ * Tree - 任务树（Decomposition / Execution）、视图切换
  */
 
-/* Tasks tree area */
 .plan-agent-execution-tree-area {
     overflow: hidden;
     border: 1px solid var(--border-color);
@@ -11,10 +10,7 @@
     box-shadow: var(--shadow-inset);
 }
 
-.plan-agent-tree-area {
-    overflow: hidden;
-    background: var(--bg-area-secondary);
-}
+.plan-agent-tree-area { overflow: hidden; background: var(--bg-area-secondary); }
 
 .plan-agent-thinking-tree-row .plan-agent-tree-area {
     flex: 0 0 30%;
@@ -30,7 +26,6 @@
     border-radius: 0;
 }
 
-/* View tabs - fixed size, content-based width */
 .tree-view-tabs {
     display: flex;
     gap: 2px;
@@ -55,13 +50,11 @@
     transition: var(--state-transition);
     white-space: nowrap;
 }
-
 .tree-view-tab:hover {
     color: var(--text-color);
     background: var(--interactive-hover);
     border-color: var(--interactive-border-hover);
 }
-
 .tree-view-tab.active {
     color: var(--text-color);
     background: var(--bg-area-secondary);
@@ -76,10 +69,7 @@
     overflow: hidden;
     flex-direction: column;
 }
-
-.tree-view-panel.active {
-    display: flex;
-}
+.tree-view-panel.active { display: flex; }
 
 .tree-view-panel .plan-agent-execution-tree-area {
     flex: 1;
@@ -99,16 +89,9 @@
     border-radius: 0;
 }
 
-.tree-view-panel.view-decomposition {
-    position: relative;
-}
+.tree-view-panel.view-decomposition { position: relative; }
+.tree-view-panel.view-output { flex-direction: column; overflow: hidden; }
 
-.tree-view-panel.view-output {
-    flex-direction: column;
-    overflow: hidden;
-}
-
-/* Output area: match tree-container structure (same as Decomposition/Execution) */
 .tree-view-panel.view-output .plan-agent-output-area {
     flex: 1;
     min-height: 0;
@@ -146,18 +129,9 @@
     font-size: 13px;
     font-weight: 600;
 }
-
-.plan-agent-quality-badge.quality-high {
-    color: var(--success-color, #22c55e);
-}
-
-.plan-agent-quality-badge.quality-mid {
-    color: var(--warning-color, #eab308);
-}
-
-.plan-agent-quality-badge.quality-low {
-    color: var(--error-color, #ef4444);
-}
+.plan-agent-quality-badge.quality-high { color: var(--success-color, #22c55e); }
+.plan-agent-quality-badge.quality-mid { color: var(--warning-color, #eab308); }
+.plan-agent-quality-badge.quality-low { color: var(--error-color, #ef4444); }
 
 .tree-container {
     width: 100%;
@@ -174,7 +148,6 @@
     background: var(--bg-area-primary);
 }
 
-/* Tasks Tree */
 .tasks-tree {
     position: relative;
     min-height: 150px;
@@ -190,12 +163,8 @@
     left: 0;
     pointer-events: none;
 }
+.tree-nodes-container .tree-task { pointer-events: auto; }
 
-.tree-nodes-container .tree-task {
-    pointer-events: auto;
-}
-
-/* Connection lines */
 .tree-connection-lines {
     position: absolute;
     top: 0;
@@ -205,15 +174,8 @@
     overflow: visible;
 }
 
-.tree-task-count {
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--text-muted);
-}
-
-.tree-task-merged {
-    position: relative;
-}
+.tree-task-count { font-size: 10px; font-weight: 500; color: var(--text-muted); }
+.tree-task-merged { position: relative; }
 
 .tree-connection-lines path {
     stroke: var(--tree-line-stroke);
@@ -221,47 +183,23 @@
     stroke-linejoin: round;
     transition: stroke 0.3s ease, stroke-width 0.3s ease;
 }
-
 .connection-line.connection-line-cross-layer {
     stroke-dasharray: 4 4;
     stroke-opacity: 0.25;
 }
 
 @keyframes yellowGlowTopToBottom {
-    0%, 100% {
-        stroke: var(--tree-line-stroke);
-        stroke-width: 1.5;
-        filter: drop-shadow(0 0 0 transparent);
-    }
-    50% {
-        stroke: var(--tree-status-doing-border);
-        stroke-width: 2.5;
-        filter: drop-shadow(var(--shadow-glow-doing));
-    }
+    0%, 100% { stroke: var(--tree-line-stroke); stroke-width: 1.5; filter: drop-shadow(0 0 0 transparent); }
+    50% { stroke: var(--tree-status-doing-border); stroke-width: 2.5; filter: drop-shadow(var(--shadow-glow-doing)); }
 }
-
 @keyframes redGlowBottomToTop {
-    0%, 100% {
-        stroke: var(--tree-line-stroke);
-        stroke-width: 1.5;
-        filter: drop-shadow(0 0 0 transparent);
-    }
-    50% {
-        stroke: var(--status-failed-border);
-        stroke-width: 2.5;
-        filter: drop-shadow(var(--shadow-glow-failure));
-    }
+    0%, 100% { stroke: var(--tree-line-stroke); stroke-width: 1.5; filter: drop-shadow(0 0 0 transparent); }
+    50% { stroke: var(--status-failed-border); stroke-width: 2.5; filter: drop-shadow(var(--shadow-glow-failure)); }
 }
+.tree-connection-lines path.animate-yellow-glow { animation: yellowGlowTopToBottom 1s ease-out; }
+.tree-connection-lines path.animate-red-glow { animation: redGlowBottomToTop 1s ease-out; }
 
-.tree-connection-lines path.animate-yellow-glow {
-    animation: yellowGlowTopToBottom 1s ease-out;
-}
-
-.tree-connection-lines path.animate-red-glow {
-    animation: redGlowBottomToTop 1s ease-out;
-}
-
-/* Task Tree Node - unified design (decomposition & execution) */
+/* Task node */
 .tree-task {
     --node-bg: var(--bg-area-secondary);
     --node-border: var(--border-color);
@@ -283,17 +221,13 @@
     z-index: 1;
     box-shadow: var(--tree-node-shadow);
 }
-
 .tree-task:hover {
     background: var(--interactive-hover);
     border-color: var(--interactive-border-hover);
     box-shadow: var(--tree-node-shadow-hover);
 }
 
-.tree-task-leaf {
-    border-width: 2px;
-    border-color: var(--text-light);
-}
+.tree-task-leaf { border-width: 2px; border-color: var(--text-light); }
 
 .tree-task.task-status-doing {
     --node-bg: var(--status-doing);
@@ -301,7 +235,6 @@
     background: var(--node-bg);
     border-color: var(--node-border);
 }
-
 .tree-task.task-status-doing:hover {
     background: var(--status-doing-hover);
     border-color: var(--tree-status-doing-border);
@@ -313,7 +246,6 @@
     background: var(--node-bg);
     border-color: var(--node-border);
 }
-
 .tree-task.task-status-validating:hover {
     background: var(--status-validating-hover);
     border-color: var(--tree-status-validating-border);
@@ -325,7 +257,6 @@
     background: var(--node-bg);
     border-color: var(--node-border);
 }
-
 .tree-task.task-status-done:hover {
     background: var(--status-done-hover);
     border-color: var(--tree-status-done-border);
@@ -338,7 +269,6 @@
     background: var(--node-bg);
     border-color: var(--node-border);
 }
-
 .tree-task.task-status-validation-failed:hover,
 .tree-task.task-status-execution-failed:hover {
     background: var(--failure-bg-hover);

@@ -14,8 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from api import PlanRunState, register_routes
-from task_agent import ExecutionRunner, worker_manager
+from api import PlanRunState, IdeaRunState, register_routes
+from task_agent import ExecutionRunner
 
 # Socket.io
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
@@ -36,15 +36,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Plan run state (abort event, run task, lock)
+# Plan Agent run state (abort event, run task, lock)
 plan_run_state = PlanRunState()
 plan_run_state.lock = asyncio.Lock()
 
-# Execution runner instance
+# Idea Agent run state
+idea_run_state = IdeaRunState()
+
+# Task Agent Execution 阶段 runner
 runner = ExecutionRunner(sio)
 
-# Register API routes (db, plan, plans, execution, settings)
-register_routes(app, sio, runner, plan_run_state)
+# Register API routes (Idea, Plan, Task Execution, ...)
+register_routes(app, sio, runner, plan_run_state, idea_run_state)
 
 
 # Disable cache for static files (dev: always fetch latest)
@@ -89,8 +92,6 @@ if FRONTEND_DIR.exists():
 @sio.event
 async def connect(sid, environ, auth):
     logger.info("Client connected: %s", sid)
-    stats = worker_manager["get_worker_stats"]()
-    await sio.emit("execution-stats-update", {"stats": stats}, to=sid)
 
 
 @sio.event

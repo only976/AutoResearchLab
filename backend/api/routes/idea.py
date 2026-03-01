@@ -1,17 +1,25 @@
-"""Idea Agent API - 文献收集。"""
+"""Idea Agent API - 文献收集（Refine）。三个 Agent 之一，与 Plan/Task 统一：HTTP 仅触发，数据由 WebSocket 回传。"""
 
+import asyncio
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from db import get_effective_config, save_plan
+from db import get_effective_config, get_idea, save_idea
 from idea_agent import collect_literature
 
 from .. import state as api_state
 from ..schemas import IdeaCollectRequest
 
 router = APIRouter()
+
+
+@router.get("")
+async def get_idea_route(idea_id: str = Query("test", alias="ideaId")):
+    """Get idea data (idea text, keywords, papers, etc.)."""
+    idea_data = await get_idea(idea_id)
+    return {"idea": idea_data}
 
 
 def _make_on_thinking(sio):
@@ -46,32 +54,96 @@ def _make_on_thinking(sio):
     return on_thinking
 
 
-@router.post("/collect")
-async def collect_literature_route(body: IdeaCollectRequest):
-    """Collect arXiv literature from fuzzy idea. Creates new plan (db standard). Flow: LLM keywords -> arXiv -> plan."""
-    if not body.idea or not body.idea.strip():
-        return JSONResponse(status_code=400, content={"error": "idea is required"})
-    idea = body.idea.strip()
+async def _run_collect_inner(idea_id: str, idea: str, limit: int, abort_event=None):
+    """后台执行文献收集，通过 WebSocket 回传数据。"""
     config = await get_effective_config()
     sio = getattr(api_state, "sio", None)
     on_thinking = _make_on_thinking(sio) if sio else None
     try:
+        if sio:
+            await sio.emit("idea-start", {})
         result = await collect_literature(
             idea=idea,
             api_config=config,
-            limit=body.limit,
+            limit=limit,
             on_thinking=on_thinking,
+            abort_event=abort_event,
         )
-        plan_id = f"plan_{int(time.time() * 1000)}"
-        plan = {
-            "tasks": [{"task_id": "0", "description": idea, "dependencies": []}],
+        idea_data = {
             "idea": idea,
+            "keywords": result.get("keywords", []),
+            "papers": result.get("papers", []),
+            "refined_idea": result.get("refined_idea"),
         }
-        await save_plan(plan, plan_id)
-        result["planId"] = plan_id
-        return result
+        await save_idea(idea_data, idea_id)
+        if sio:
+            await sio.emit(
+                "idea-complete",
+                {
+                    "ideaId": idea_id,
+                    "keywords": result.get("keywords", []),
+                    "papers": result.get("papers", []),
+                    "refined_idea": result.get("refined_idea"),
+                },
+            )
+    except asyncio.CancelledError:
+        try:
+            if sio:
+                await sio.emit("idea-error", {"error": "Idea Agent stopped by user", "ideaId": idea_id})
+        except Exception:
+            pass
+        raise
     except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Literature collection failed: {e}"},
+        try:
+            if sio:
+                await sio.emit("idea-error", {"error": str(e), "ideaId": idea_id})
+        except Exception:
+            pass
+        raise
+    finally:
+        state = getattr(api_state, "idea_run_state", None)
+        if state:
+            state.run_task = None
+            state.abort_event = None
+
+
+@router.post("/collect")
+async def collect_literature_route(body: IdeaCollectRequest):
+    """Collect arXiv literature from fuzzy idea. 立即返回，数据由 WebSocket idea-complete 回传。"""
+    state = getattr(api_state, "idea_run_state", None)
+    if state and state.run_task and not state.run_task.done():
+        return JSONResponse(status_code=409, content={"error": "Idea Agent already in progress"})
+
+    idea_id = f"idea_{int(time.time() * 1000)}"
+    idea = (body.idea or "").strip()
+    await save_idea({"idea": idea, "keywords": [], "papers": []}, idea_id)
+
+    if not idea:
+        return JSONResponse(status_code=400, content={"error": "idea is required", "ideaId": idea_id})
+
+    state = getattr(api_state, "idea_run_state", None)
+    if state:
+        state.abort_event = asyncio.Event()
+        state.abort_event.clear()
+        state.run_task = asyncio.create_task(
+            _run_collect_inner(idea_id, idea, body.limit or 10, abort_event=state.abort_event)
         )
+
+    return {"success": True, "ideaId": idea_id}
+
+
+@router.post("/stop")
+async def stop_idea():
+    """停止 Idea Agent：发送中止信号，取消任务，立即推送 idea-error。"""
+    state = getattr(api_state, "idea_run_state", None)
+    if state and state.abort_event:
+        state.abort_event.set()
+    if state and state.run_task and not state.run_task.done():
+        state.run_task.cancel()
+        try:
+            sio = getattr(api_state, "sio", None)
+            if sio:
+                await sio.emit("idea-error", {"error": "Idea Agent stopped by user"})
+        except Exception:
+            pass
+    return {"success": True}

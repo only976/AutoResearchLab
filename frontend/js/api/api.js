@@ -13,14 +13,25 @@
 
     async function loadExecution() {
         try {
-            const planId = await cfg.resolvePlanId();
-            const response = await fetch(`${cfg.API_BASE_URL}/execution?planId=${encodeURIComponent(planId)}`);
+            const { ideaId, planId } = await cfg.resolvePlanIds();
+            const response = await fetch(`${cfg.API_BASE_URL}/execution?ideaId=${encodeURIComponent(ideaId)}&planId=${encodeURIComponent(planId)}`);
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to load execution');
             return data.execution || null;
         } catch (error) {
             console.error('Error loading execution:', error);
             return null;
+        }
+    }
+
+    async function fetchStatus() {
+        try {
+            const res = await fetch(`${cfg.API_BASE_URL}/status`);
+            if (!res.ok) return { hasIdea: false, hasPlan: false };
+            const data = await res.json();
+            return { hasIdea: !!data.hasIdea, hasPlan: !!data.hasPlan };
+        } catch (_) {
+            return { hasIdea: false, hasPlan: false };
         }
     }
 
@@ -31,96 +42,103 @@
     }
 
     async function restoreRecentPlan() {
-        if (window.MAARS?.thinking?.clear) window.MAARS.thinking.clear();
+        document.dispatchEvent(new CustomEvent('maars:restore-start'));
 
         const plansRes = await fetch(`${cfg.API_BASE_URL}/plans`);
         const plansData = await plansRes.json();
-        const ids = plansData.planIds || [];
-        if (ids.length === 0) {
+        const items = plansData.items || [];
+        if (items.length === 0) {
             throw new Error('No task to restore');
         }
-        const planId = ids[0];
+        const { ideaId, planId } = items[0];
+        cfg.setCurrentIdeaId(ideaId);
         cfg.setCurrentPlanId(planId);
 
-        const [planRes, treeRes, execRes] = await Promise.all([
-            fetch(`${cfg.API_BASE_URL}/plan?planId=${encodeURIComponent(planId)}`),
-            fetch(`${cfg.API_BASE_URL}/plan/tree?planId=${encodeURIComponent(planId)}`),
-            fetch(`${cfg.API_BASE_URL}/execution?planId=${encodeURIComponent(planId)}`),
+        const [planRes, treeRes, execRes, ideaRes] = await Promise.all([
+            fetch(`${cfg.API_BASE_URL}/plan?ideaId=${encodeURIComponent(ideaId)}&planId=${encodeURIComponent(planId)}`),
+            fetch(`${cfg.API_BASE_URL}/plan/tree?ideaId=${encodeURIComponent(ideaId)}&planId=${encodeURIComponent(planId)}`),
+            fetch(`${cfg.API_BASE_URL}/execution?ideaId=${encodeURIComponent(ideaId)}&planId=${encodeURIComponent(planId)}`),
+            fetch(`${cfg.API_BASE_URL}/idea?ideaId=${encodeURIComponent(ideaId)}`),
         ]);
         const planData = await planRes.json();
         const treeData = await treeRes.json();
         const execData = await execRes.json();
+        const ideaData = await ideaRes.json();
 
         const plan = planData.plan;
+        const ideaObj = ideaData.idea;
         const treePayload = { treeData: treeData.treeData || [], layout: treeData.layout };
         let execution = execData.execution;
-
-        if (plan && plan.idea) {
-            const ideaInput = document.getElementById('ideaInput');
-            if (ideaInput) ideaInput.value = plan.idea;
-        }
-
-        if (treePayload.treeData.length) {
-            const taskTree = window.MAARS?.taskTree;
-            if (taskTree?.renderPlanAgentTree) taskTree.renderPlanAgentTree(treePayload.treeData, treePayload.layout);
-            if (plan?.qualityScore != null && taskTree?.updatePlanAgentQualityBadge) taskTree.updatePlanAgentQualityBadge(plan.qualityScore, plan.qualityComment);
-        }
 
         if (!execution || !execution.tasks?.length) {
             const genRes = await fetch(`${cfg.API_BASE_URL}/execution/generate-from-plan`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ planId }),
+                body: JSON.stringify({ ideaId, planId }),
             });
             const genData = await genRes.json();
             if (!genRes.ok) throw new Error(genData.error || 'Failed to generate execution');
             execution = genData.execution;
         }
 
+        let layout = null;
         if (execution?.tasks?.length) {
             const layoutRes = await fetch(`${cfg.API_BASE_URL}/plan/layout`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ execution, planId }),
+                body: JSON.stringify({ execution, ideaId, planId }),
             });
             if (!layoutRes.ok) {
                 const err = await layoutRes.json();
                 throw new Error(err.error || 'Failed to generate layout');
             }
             const layoutData = await layoutRes.json();
-            const layout = layoutData.layout;
-            if (layout && window.MAARS?.views?.restoreExecution) {
-                window.MAARS.views.restoreExecution(layout, execution);
-                const socket = window.MAARS?.state?.socket;
-                if (socket?.connected) socket.emit('execution-layout', { layout });
-            }
+            layout = layoutData.layout;
         }
 
-        const outRes = await fetch(`${cfg.API_BASE_URL}/plan/outputs?planId=${encodeURIComponent(planId)}`);
+        const outRes = await fetch(`${cfg.API_BASE_URL}/plan/outputs?ideaId=${encodeURIComponent(ideaId)}&planId=${encodeURIComponent(planId)}`);
         const outData = await outRes.json();
         const outputs = outData.outputs || {};
-        if (Object.keys(outputs).length && window.MAARS?.output?.setTaskOutput) {
-            Object.entries(outputs).forEach(([taskId, out]) => {
-                const val = out && typeof out === 'object' && 'content' in out ? out.content : out;
-                const key = taskId === 'idea' ? 'idea' : 'task_' + taskId;
-                window.MAARS.output.setTaskOutput(key, val);
-            });
-            window.MAARS.output.applyOutputHighlight?.();
-        }
 
-        return { planId };
+        document.dispatchEvent(new CustomEvent('maars:restore-complete', {
+            detail: {
+                ideaId,
+                planId,
+                treePayload,
+                plan,
+                layout,
+                execution,
+                outputs,
+                ideaText: ideaObj?.idea || '',
+            },
+        }));
+
+        return { ideaId, planId };
     }
 
     async function retryTask(taskId) {
-        const planId = await cfg.resolvePlanId();
+        const { ideaId, planId } = await cfg.resolvePlanIds();
         const response = await fetch(`${cfg.API_BASE_URL}/execution/retry-task`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId, planId }),
+            body: JSON.stringify({ taskId, ideaId, planId }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to retry task');
         return data;
+    }
+
+    /**
+     * 统一终止函数：停止指定 agent 的运行。
+     * @param {'idea'|'plan'|'task'} agent - idea=Refine, plan=Plan, task=Execution
+     */
+    async function stopAgent(agent) {
+        const routes = { idea: '/idea/stop', plan: '/plan/stop', task: '/execution/stop' };
+        const path = routes[agent];
+        if (!path) return;
+        const res = await fetch(`${cfg.API_BASE_URL}${path}`, { method: 'POST' });
+        if (!res.ok) throw new Error('Failed to stop');
+        return res.json();
     }
 
     async function refineIdea(idea, limit) {
@@ -130,21 +148,24 @@
             body: JSON.stringify({ idea: idea || '', limit: limit || 10 }),
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Refine failed');
+        if (!response.ok) {
+            if (data.ideaId) cfg.setCurrentIdeaId(data.ideaId);
+            throw new Error(data.error || 'Refine failed');
+        }
         return data;
     }
 
     async function resumeFromTask(taskId) {
-        const planId = await cfg.resolvePlanId();
+        const { ideaId, planId } = await cfg.resolvePlanIds();
         const response = await fetch(`${cfg.API_BASE_URL}/execution/run`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ planId, resumeFromTaskId: taskId }),
+            body: JSON.stringify({ ideaId, planId, resumeFromTaskId: taskId }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Failed to start execution');
         return data;
     }
 
-    window.MAARS.api = { loadExampleIdea, loadExecution, clearDb, restoreRecentPlan, retryTask, resumeFromTask, refineIdea };
+    window.MAARS.api = { loadExampleIdea, loadExecution, clearDb, fetchStatus, restoreRecentPlan, retryTask, resumeFromTask, refineIdea, stopAgent };
 })();

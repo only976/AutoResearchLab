@@ -44,7 +44,8 @@ async def run_plan_agent(
     on_tasks_batch: Optional[Callable[[List[Dict], Dict, List[Dict]], None]],
     use_mock: bool,
     api_config: Optional[Dict],
-    plan_id: Optional[str],
+    idea_id: Optional[str] = None,
+    plan_id: Optional[str] = None,
 ) -> Dict:
     """ReAct-style Agent loop for Plan Agent. Uses CheckAtomicity, Decompose, FormatTask, AddTasks, UpdateTask, GetPlan, GetNextTask, FinishPlan."""
     tasks = plan.get("tasks") or []
@@ -178,6 +179,7 @@ async def run_plan_agent(
                         abort_event=abort_event,
                         use_mock=use_mock,
                         api_config=api_config,
+                        idea_id=idea_id,
                         plan_id=plan_id,
                     )
                 except Exception as e:

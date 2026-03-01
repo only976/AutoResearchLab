@@ -1,0 +1,29 @@
+/**
+ * Idea Input - 输入行
+ */
+
+.idea-input-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: var(--gap);
+    align-items: center;
+}
+
+.idea-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 14px;
+    font-family: var(--font-family);
+    background: var(--bg-input);
+    color: var(--text-color);
+}
+
+.idea-input:focus {
+    outline: none;
+    border-color: var(--accent-primary-border);
+    box-shadow: 0 0 0 2px var(--accent-primary-soft);
+}
+
+.idea-input::placeholder { color: var(--text-muted); }

@@ -1,5 +1,6 @@
 /**
- * MAARS views - tree (decomposition/execution), output, execution stats.
+ * MAARS Task 流程 - run/stop execution、layout、stats。
+ * 独立模块，不依赖 idea/plan。派发 maars:task-start / 监听 idea-start、plan-start 清空，plan-complete 更新按钮。
  */
 (function () {
     'use strict';
@@ -15,6 +16,21 @@
     state.executionLayout = state.executionLayout ?? null;
     state.chainCache = state.chainCache ?? [];
     state.previousTaskStates = state.previousTaskStates ?? new Map();
+
+    function clear() {
+        state.executionLayout = null;
+        state.chainCache = [];
+        state.previousTaskStates.clear();
+        window.MAARS.taskTree?.clearExecutionTree();
+    }
+
+    /** 仅更新 Execute 按钮状态：需同时有合法 ideaId 和 planId。 */
+    async function updateButtonState() {
+        const status = await api.fetchStatus?.() || { hasIdea: false, hasPlan: false };
+        const executing = executionBtn?.textContent === 'Executing...';
+        const canExecute = status.hasIdea && status.hasPlan;
+        if (executionBtn) executionBtn.disabled = !canExecute || executing;
+    }
 
     function buildChainCacheFromLayout(layout) {
         const cache = [];
@@ -87,14 +103,10 @@
     }
 
     async function runExecution() {
-        const execution = await api.loadExecution();
-        if (!execution) {
-            alert('Plan first.');
-            return;
-        }
-        const planId = await cfg.resolvePlanId();
+        const { ideaId, planId } = await cfg.resolvePlanIds();
         const btn = executionBtn;
         const originalText = btn.textContent;
+        document.dispatchEvent(new CustomEvent('maars:task-start'));
         startExecutionUI();
         try {
             const socket = window.MAARS?.state?.socket;
@@ -105,7 +117,7 @@
             const response = await fetch(`${cfg.API_BASE_URL}/execution/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ planId })
+                body: JSON.stringify({ ideaId, planId })
             });
             if (!response.ok) {
                 const error = await response.json();
@@ -122,7 +134,8 @@
     }
 
     function stopExecution() {
-        fetch(`${cfg.API_BASE_URL}/execution/stop`, { method: 'POST' }).catch(() => {});
+        resetExecutionButtons(); /* 立即恢复按钮，不等待后端 */
+        api.stopAgent('task').catch(() => {});
     }
 
     function resetExecutionButtons() {
@@ -132,23 +145,23 @@
 
     async function generateExecutionLayout() {
         try {
-            const planId = await cfg.resolvePlanId();
+            const { ideaId, planId } = await cfg.resolvePlanIds();
             const genRes = await fetch(`${cfg.API_BASE_URL}/execution/generate-from-plan`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ planId })
+                body: JSON.stringify({ ideaId, planId })
             });
             const genData = await genRes.json();
             if (!genRes.ok) throw new Error(genData.error || 'Failed to generate execution from plan');
-            const execution = genData.execution;
-            if (!execution || !execution.tasks?.length) {
+            const execData = genData.execution;
+            if (!execData || !execData.tasks?.length) {
                 alert('No atomic tasks. Plan first.');
                 return;
             }
             const response = await fetch(`${cfg.API_BASE_URL}/plan/layout`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ execution, planId })
+                body: JSON.stringify({ execution: execData, ideaId, planId })
             });
             if (!response.ok) {
                 const error = await response.json();
@@ -184,14 +197,144 @@
         renderExecutionDiagram();
     }
 
+    /** 应用任务状态到 chainCache、previousTaskStates，并触发连线动画 */
+    function applyTaskStates(tasks) {
+        if (!tasks || !Array.isArray(tasks)) return;
+        tasks.forEach((taskState) => {
+            const cacheNode = state.chainCache.find((node) => node.task_id === taskState.task_id);
+            const previousStatus = state.previousTaskStates.get(taskState.task_id);
+            if (cacheNode) cacheNode.status = taskState.status;
+            if (previousStatus !== undefined && previousStatus !== taskState.status) {
+                if (taskState.status === 'doing' && (previousStatus === 'undone' || previousStatus === 'validating')) {
+                    setTimeout(() => animateConnectionLines(taskState.task_id, 'yellow', 'upstream'), 50);
+                } else if (taskState.status === 'undone' && previousStatus === 'done') {
+                    setTimeout(() => animateConnectionLines(taskState.task_id, 'red', 'downstream'), 50);
+                }
+            }
+            state.previousTaskStates.set(taskState.task_id, taskState.status);
+        });
+    }
+
+    /** 连接时同步执行状态（chainCache、stats、按钮） */
+    function handleExecutionSync(data) {
+        if (!data?.tasks?.length) return;
+        renderExecutionStats({ stats: data.stats });
+        data.tasks.forEach((taskState) => {
+            const cacheNode = state.chainCache.find((node) => node.task_id === taskState.task_id);
+            if (cacheNode) cacheNode.status = taskState.status;
+            state.previousTaskStates.set(taskState.task_id, taskState.status);
+        });
+        if (data.running) {
+            if (executionBtn) { executionBtn.disabled = true; executionBtn.textContent = 'Executing...'; }
+            if (stopExecutionBtn) stopExecutionBtn.style.display = '';
+        }
+    }
+
+    function onIdeaStart() {
+        clear();
+    }
+
+    function onPlanStart() {
+        clear();
+    }
+
+    function onPlanComplete() {
+        updateButtonState();
+    }
+
+    function onExecutionComplete() {
+        if (stopExecutionBtn) stopExecutionBtn.style.display = 'none';
+        if (executionBtn) {
+            executionBtn.disabled = false;
+            executionBtn.textContent = 'Execution Complete!';
+            setTimeout(() => { executionBtn.textContent = 'Execution'; }, 2000);
+        }
+    }
+
+    function onRestoreComplete(e) {
+        const { layout, execution } = e.detail || {};
+        if (layout && execution?.tasks?.length) {
+            restoreExecution(layout, execution);
+            const socket = window.MAARS?.state?.socket;
+            if (socket?.connected) socket.emit('execution-layout', { layout });
+        }
+        updateButtonState();
+    }
+
+    function onExecutionLayout(e) {
+        const data = e?.detail;
+        if (data?.layout) setExecutionLayout(data);
+    }
+
+    function onTaskStatesUpdate(e) {
+        const data = e?.detail;
+        if (data?.tasks && Array.isArray(data.tasks)) {
+            applyTaskStates(data.tasks);
+        }
+    }
+
+    function onTaskError(e) {
+        const data = e?.detail || {};
+        const isStoppedByUser = (data.error || '').includes('stopped by user');
+        if (!isStoppedByUser) {
+            console.error('Execution error:', data.error);
+            alert('Execution error: ' + data.error);
+        }
+        resetExecutionButtons();
+    }
+
+    function onExecutionSync(e) {
+        const data = e?.detail;
+        if (!data?.tasks?.length) return;
+        handleExecutionSync(data);
+    }
+
+    function onPlanCompleteForLayout(e) {
+        const data = e?.detail;
+        if (data && generateExecutionLayout) generateExecutionLayout();
+    }
+
+    function onTaskRetry(e) {
+        const taskId = e?.detail?.taskId;
+        if (!taskId || !api) return;
+        api.retryTask(taskId).then(() => startExecutionUI()).catch((err) => {
+            console.error('Retry failed:', err);
+            alert('Failed: ' + (err.message || err));
+        });
+    }
+
+    function onTaskResume(e) {
+        const taskId = e?.detail?.taskId;
+        if (!taskId || !api) return;
+        api.resumeFromTask(taskId).then(() => startExecutionUI()).catch((err) => {
+            console.error('Resume failed:', err);
+            alert('Failed: ' + (err.message || err));
+        });
+    }
+
     function init() {
         if (executionBtn) executionBtn.addEventListener('click', runExecution);
         if (stopExecutionBtn) stopExecutionBtn.addEventListener('click', stopExecution);
+        document.addEventListener('maars:idea-start', onIdeaStart);
+        document.addEventListener('maars:plan-start', onPlanStart);
+        document.addEventListener('maars:plan-complete', onPlanComplete);
+        document.addEventListener('maars:plan-complete', onPlanCompleteForLayout);
+        document.addEventListener('maars:task-complete', onExecutionComplete);
+        document.addEventListener('maars:restore-complete', onRestoreComplete);
+        document.addEventListener('maars:execution-layout', onExecutionLayout);
+        document.addEventListener('maars:task-states-update', onTaskStatesUpdate);
+        document.addEventListener('maars:task-error', onTaskError);
+        document.addEventListener('maars:execution-sync', onExecutionSync);
+        document.addEventListener('maars:task-retry', onTaskRetry);
+        document.addEventListener('maars:task-resume', onTaskResume);
+        executionBtn && (executionBtn.disabled = true);
+        updateButtonState();
     }
 
-    window.MAARS.views = {
+    window.MAARS.task = {
         init,
         state,
+        clear,
         setExecutionLayout,
         restoreExecution,
         animateConnectionLines,
@@ -199,5 +342,8 @@
         resetExecutionButtons,
         generateExecutionLayout,
         startExecutionUI,
+        updateButtonState,
+        applyTaskStates,
+        handleExecutionSync,
     };
 })();

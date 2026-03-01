@@ -192,6 +192,7 @@
   "_default": {
     "content": {
       "atomic": true
-    }
+    },
+    "reasoning": "Evaluating whether this task is atomic: a single clear deliverable with no need for further decomposition. Considering scope, dependencies, and granularity."
   }
 }

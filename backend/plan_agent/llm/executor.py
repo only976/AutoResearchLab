@@ -55,7 +55,7 @@ def _get_mock_cached(response_type: str) -> Dict:
 
 
 async def _load_mock_response(response_type: str, task_id: str) -> Optional[Dict]:
-    """Load mock from test/mock-ai/."""
+    """Load mock from test/mock-ai/. 若 entry 无 reasoning，回退到 _default 的 reasoning。"""
     data = _get_mock_cached(response_type)
     entry = data.get(task_id) or data.get("_default")
     if not entry:
@@ -65,7 +65,11 @@ async def _load_mock_response(response_type: str, task_id: str) -> Optional[Dict
         content_str = content
     else:
         content_str = orjson.dumps(content).decode("utf-8")
-    return {"content": content_str, "reasoning": entry.get("reasoning", "")}
+    default_entry = data.get("_default") or {}
+    reasoning = entry.get("reasoning")
+    if reasoning is None or (isinstance(reasoning, str) and not reasoning.strip()):
+        reasoning = default_entry.get("reasoning", "")
+    return {"content": content_str, "reasoning": reasoning or ""}
 
 
 _OP_LABELS = {
@@ -135,16 +139,15 @@ async def _call_chat_completion(
     use_mock: bool = False,
     api_config: Optional[Dict] = None,
     temperature: Optional[float] = None,
-    plan_id: Optional[str] = None,
 ) -> str:
     response_type = context["type"]
     task_id = context["taskId"]
     task = context.get("task", {})
+    op_label = _OP_LABELS.get(response_type, response_type.capitalize())
 
     def stream_chunk(chunk: str):
         """转发 chunk 到 on_thinking，若为 async 则返回 coroutine 供 mock_chat/chat_completion await。"""
         if on_thinking and chunk:
-            op_label = _OP_LABELS.get(response_type, response_type.capitalize())
             return on_thinking(chunk, task_id=task_id, operation=op_label)
 
     if use_mock:
@@ -190,17 +193,16 @@ async def _call_chat_completion(
         phase = "format"
     cfg = merge_phase_config(api_config, phase)
     effective_on_chunk = stream_chunk if (stream and on_thinking) else None
-    response_format = {"type": "json_object"} if response_type in ("atomicity", "quality") else None
     async with _get_call_semaphore():
-        return await real_chat_completion(
+        content = await real_chat_completion(
             messages,
             cfg,
             on_chunk=effective_on_chunk,
             abort_event=abort_event,
             stream=stream,
             temperature=temperature,
-            response_format=response_format,
         )
+    return content or ""
 
 
 def _parse_json_response(text: str) -> Any:
@@ -277,6 +279,7 @@ async def check_atomicity(
     atomicity_context: Optional[Dict] = None,
     use_mock: bool = False,
     api_config: Optional[Dict] = None,
+    idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
 ) -> Dict:
     """Check if task is atomic. Plan Agent LLM single-turn."""
@@ -296,15 +299,14 @@ async def check_atomicity(
                 use_mock=use_mock,
                 api_config=api_config,
                 temperature=0.0 if attempt == 0 else RETRY_TEMPERATURE,
-                plan_id=plan_id,
             )
             result = _parse_json_response(content)
             if not _validate_atomicity_response(result):
                 raise ValueError("Atomicity response invalid: missing or invalid atomic field")
             out = {"atomic": bool(result.get("atomic"))}
-            if plan_id:
+            if idea_id and plan_id:
                 asyncio.create_task(save_ai_response(
-                    plan_id, "atomicity", task["task_id"],
+                    idea_id, plan_id, "atomicity", task["task_id"],
                     {"content": {"atomic": out["atomic"]}, "reasoning": ""},
                 ))
             return out
@@ -324,6 +326,7 @@ async def decompose_task(
     depth: int = 0,
     use_mock: bool = False,
     api_config: Optional[Dict] = None,
+    idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
 ) -> List[Dict]:
     """Decompose non-atomic task into children. Plan Agent LLM single-turn."""
@@ -349,7 +352,6 @@ async def decompose_task(
                 use_mock=use_mock,
                 api_config=api_config,
                 temperature=RETRY_TEMPERATURE if attempt > 0 else None,
-                plan_id=plan_id,
             )
             result = _parse_json_response(content)
             valid, err_msg = _validate_decompose_response(result, pid)
@@ -361,9 +363,9 @@ async def decompose_task(
                 for t in tasks
                 if t.get("task_id") and t.get("description") and isinstance(t.get("dependencies"), list)
             ]
-            if plan_id:
+            if idea_id and plan_id:
                 asyncio.create_task(save_ai_response(
-                    plan_id, "decompose", pid,
+                    idea_id, plan_id, "decompose", pid,
                     {"content": {"tasks": tasks}, "reasoning": ""},
                 ))
             return out
@@ -380,6 +382,7 @@ async def format_task(
     abort_event: Optional[Any],
     use_mock: bool = False,
     api_config: Optional[Dict] = None,
+    idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
 ) -> Optional[Dict]:
     """Generate input/output spec for atomic task. Plan Agent LLM single-turn."""
@@ -391,7 +394,6 @@ async def format_task(
         stream=True,
         use_mock=use_mock,
         api_config=api_config,
-        plan_id=plan_id,
     )
     result = _parse_json_response(content)
     if not result.get("input") or not result.get("output"):
@@ -402,9 +404,9 @@ async def format_task(
         "output": result["output"],
         **({"validation": validation} if validation else {}),
     }
-    if plan_id:
+    if idea_id and plan_id:
         asyncio.create_task(save_ai_response(
-            plan_id, "format", task.get("task_id", ""),
+            idea_id, plan_id, "format", task.get("task_id", ""),
             {"content": {"input": result["input"], "output": result["output"], "validation": validation or {}}, "reasoning": ""},
         ))
     return out
@@ -419,8 +421,6 @@ async def assess_quality(
 ) -> Dict[str, Any]:
     """Assess plan quality. Plan Agent LLM single-turn. Returns {score, comment}."""
     raise_if_aborted(abort_event)
-    if use_mock:
-        return {"score": 85, "comment": "Mock assessment"}
     idea = plan.get("idea", "")
     tasks = plan.get("tasks") or []
     lines = []

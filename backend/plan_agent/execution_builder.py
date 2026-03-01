@@ -1,6 +1,6 @@
 """
-Generate execution from plan: extract atomic tasks, resolve dependencies, recompute stages.
-Business logic: plan → execution for db storage.
+Task Agent Execution 阶段：从 Plan 生成 execution。
+提取原子任务、解析依赖、计算阶段。供 /api/execution/generate-from-plan 使用。
 """
 
 from typing import Dict, List, Set

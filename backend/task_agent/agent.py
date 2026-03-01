@@ -82,8 +82,8 @@ def _build_task_agent_messages(
 Rules:
 1. Use only the provided input artifacts and task description.
 2. Output must strictly conform to the specified format.
-3. For JSON: output valid JSON only, no extra text or markdown fences.
-4. For Markdown: output the document content directly.{validation_rule}
+3. You may reason first in your response; this will be shown as your thinking process.
+4. For JSON: output valid JSON when calling Finish; for Markdown, pass the document content.{validation_rule}
 
 You have tools: ReadArtifact (read dependency task output), ReadFile (read files; use 'sandbox/X' for this task's sandbox), WriteFile (write to sandbox only), ListSkills, LoadSkill, ReadSkillFile (read skill's scripts/references), RunSkillScript (execute skill scripts, use {{sandbox}}/file for sandbox paths), WebSearch (search the web for research—use for benchmarks, docs, current data), WebFetch (fetch URL content for citations), Finish (submit final output).
 Use ListSkills to discover skills, LoadSkill when relevant. ReadSkillFile and RunSkillScript let you use skill capabilities (e.g. docx validate, pptx convert). When your output satisfies the output spec, you MUST call Finish with the result—do not output inline. For JSON format pass a valid JSON string; for Markdown pass the content string. All file I/O is scoped to the plan dir and this task's sandbox."""
@@ -121,7 +121,7 @@ Use ListSkills to discover skills, LoadSkill when relevant. ReadSkillFile and Ru
 **Output format:** {output_format}
 {validation_block}
 
-Produce the output now. Output ONLY the result, no explanation."""
+Produce the output now. You may reason first; when ready, call Finish with the result."""
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -139,6 +139,7 @@ async def run_task_agent(
     api_config: Dict[str, Any],
     abort_event: Optional[Any],
     on_thinking: Optional[Callable[[str, Optional[str], Optional[str]], None]],
+    idea_id: str,
     plan_id: str,
     validation_spec: Optional[Dict[str, Any]] = None,
 ) -> Any:
@@ -165,8 +166,8 @@ async def run_task_agent(
             await asyncio.sleep(0.03)
         return await _run_mock_execute(task_id, output_format, on_thinking)
 
-    if plan_id and task_id:
-        await ensure_sandbox_dir(plan_id, task_id)
+    if idea_id and plan_id and task_id:
+        await ensure_sandbox_dir(idea_id, plan_id, task_id)
     messages, output_format = _build_task_agent_messages(
         task_id, description, input_spec, output_spec, resolved_inputs, validation_spec
     )
@@ -257,7 +258,7 @@ async def run_task_agent(
                     if asyncio.iscoroutine(r):
                         await r
                 try:
-                    out, tool_result = await execute_tool(name, args, plan_id, task_id)
+                    out, tool_result = await execute_tool(name, args, idea_id, plan_id, task_id)
                 except Exception as e:
                     tool_result = f"Error: {e}"
 

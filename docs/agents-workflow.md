@@ -2,6 +2,17 @@
 
 本文档描述 MAARS 中 **Idea Agent**、**Plan Agent**、**Task Agent** 的工作流、LLM 行为统一规范及与 Thinking/Output 区域的对接方式。
 
+## 叙事口径（统一术语）
+
+| 层级 | 术语 | 说明 |
+|------|------|------|
+| **Agent** | Idea、Plan、Task | 三个独立 Agent，对应 Refine、Plan、Execute 按钮 |
+| **Task 阶段** | Execution、Validation | Task Agent 的两个阶段：Execution 执行原子任务产出 artifact，Validation 验证产出是否符合规格 |
+
+- **Idea Agent**：文献收集（Refine）
+- **Plan Agent**：任务分解（Plan）
+- **Task Agent**：执行 + 验证。Execution 为执行阶段，Validation 为验证阶段。API 路由 `/api/execution` 即 Task Agent 的执行阶段入口。
+
 ## 一、概览
 
 | Agent | 职责 | 触发入口 | 模式 |
@@ -12,7 +23,8 @@
 
 ### 1.1 按钮 Clear 逻辑
 
-- **Refine / Plan**：清空所有区域，创建新 plan
+- **Refine**：清空所有区域（Thinking、Output、Plan 树、Execution 树）；Idea Agent 不创建 plan
+- **Plan**：清空所有区域，创建新 plan
 - **Execute**：清空 Thinking、任务状态与 Output，相当于重新执行
 
 ### 1.2 整体数据流
@@ -72,13 +84,13 @@ flowchart LR
 
 | 层级 | Idea | Plan | Task |
 |------|------|------|------|
-| **LLM** | `extract_keywords_stream` | `_run_chat_with_on_thinking`（atomicity/decompose/format/quality） | `execute_task`、`validate_task_output_with_llm` |
-| **Mock** | `mock_chat_completion`（test/mock_stream + mock-ai/refine.json） | `mock_chat_completion`（test/mock_stream + mock-ai JSON） | `mock_chat_completion`（test/mock_stream + mock-ai/execute.json） |
+| **LLM** | `extract_keywords_stream`（Keywords）、`refine_idea_from_papers_stream`（Refine） | `_run_chat_with_on_thinking`（atomicity/decompose/format/quality） | `execute_task`、`validate_task_output_with_llm` |
+| **Mock** | `mock_chat_completion`（refine.json + refine-idea.json） | `mock_chat_completion`（test/mock_stream + mock-ai JSON） | `mock_chat_completion`（test/mock_stream + mock-ai/execute.json） |
 | **Emit** | `async on_thinking` → `await sio.emit("idea-thinking")` | `async on_thinking` → `await sio.emit("plan-thinking")` | `async _on_thinking` → `await _emit_await("task-thinking")` |
 
 **Emit 对齐要点**：三个 Agent 均使用 `await emit` 保证 thinking chunk 顺序与送达，不再使用 `create_task`。
 
-**Mock 数据文件**（`test/mock-ai/`）：`refine.json`（Idea）、`atomicity.json` / `decompose.json` / `format.json` / `quality.json`（Plan）、`execute.json`（Task）。结构：`{ "task_id" | "_default": { "content": ..., "reasoning": "流式输出内容" } }`。
+**Mock 数据文件**（`test/mock-ai/`）：`refine.json`（Idea Keywords）、`refine-idea.json`（Idea Refine）、`atomicity.json` / `decompose.json` / `format.json` / `quality.json`（Plan）、`execute.json`（Task）。结构：`{ "task_id" | "_default": { "content": ..., "reasoning": "流式输出内容" } }`。
 
 ---
 
@@ -113,13 +125,13 @@ async def on_thinking(
 
 | Agent | operations |
 |-------|------------|
-| Idea | `Refine` |
+| Idea | `Keywords`, `Refine` |
 | Plan | `Plan`, `Atomicity`, `Decompose`, `Format`, `Quality` |
 | Task | `Execute`, `Validate` |
 
 ### 3.3 流式 Thinking
 
-- **Idea**：`extract_keywords_stream` 流式输出，每 token 调用 `on_chunk`
+- **Idea**：`extract_keywords_stream`（Keywords）、`refine_idea_from_papers_stream`（Refine）两阶段流式输出
 - **Plan**：`check_atomicity`、`decompose_task`、`format_task`、`assess_quality` 均 `stream=True`
 - **Task**：`execute_task` 流式输出；`validate_task_output_with_llm` 支持 `on_thinking` 时真实流式
 
@@ -141,25 +153,26 @@ interface ThinkingPayload {
 ### 4.1 流程
 
 ```
-用户 idea → Refine → POST /api/idea/collect → LLM 关键词提取(流式) → arXiv 检索 → 创建新 plan → 200 JSON
+用户 idea → Refine → POST /api/idea/collect → Keywords(流式) → arXiv 检索 → Refine(流式) → 保存 idea → WebSocket idea-complete 回传
 ```
 
-Refine 为比 Plan 更高层级：点击时清空 Thinking、Output、Plan 树、Execution 树（与 Plan 对齐），并创建新 plan（db 标准）。
+Refine 为比 Plan 更高层级：点击时清空 Thinking、Output、Plan 树、Execution 树（与 Plan 对齐）。Idea Agent 不创建 plan，仅创建/更新 idea_id；plan 由 Plan Agent 创建。
 
 ### 4.2 实现位置
 
 | 步骤 | 文件 |
 |------|------|
-| 关键词提取（流式） | `idea_agent/llm/executor.py` - `extract_keywords_stream` |
+| 关键词提取（流式，operation: Keywords） | `idea_agent/llm/executor.py` - `extract_keywords_stream` |
 | 文献收集 | `idea_agent/__init__.py` - `collect_literature` |
 | arXiv 检索 | `idea_agent/arxiv.py` |
-| 创建新 plan | `api/routes/idea.py` - `save_plan` |
+| Refined Idea 生成（流式，operation: Refine） | `idea_agent/llm/executor.py` - `refine_idea_from_papers_stream` |
+| 保存 idea | `api/routes/idea.py` - `save_idea` |
 | API 路由 | `api/routes/idea.py` |
 
 ### 4.3 数据流
 
 - **Thinking**：`idea-thinking`（关键词提取阶段流式 chunk）
-- **Output**：HTTP 200 返回 `{keywords, papers, planId}`，前端 `setTaskOutput('idea', ...)`，`setCurrentPlanId(planId)`
+- **Output**：WebSocket `idea-complete` 回传 `{ideaId, keywords, papers, refined_idea}`，前端 `setTaskOutput('idea', ...)`，`setCurrentIdeaId(ideaId)`
 
 ### 4.4 Mock 模式
 
@@ -266,8 +279,8 @@ LLM 模式下，`validate_task_output_with_llm` 支持 `on_thinking` 时使用 `
 
 | 按钮 | 行为 |
 |------|------|
-| **Refine** | 清空所有区域（Thinking、Output、Plan 树、Execution 树），创建新 plan |
+| **Refine** | 清空所有区域（Thinking、Output、Plan 树、Execution 树）；不创建 plan |
 | **Plan** | 清空所有区域，创建新 plan |
 | **Execute** | 清空 Thinking、任务状态与 Output，相当于重新执行 |
 
-**层级关系**：Refine 与 Plan 同级（均创建新 plan）；Execute 在 Plan 之下，对当前 plan 重新执行。
+**层级关系**：Refine 与 Plan 同级（Refine 清空区域并创建 idea_id；Plan 清空区域并创建 plan）；Execute 在 Plan 之下，对当前 plan 重新执行。

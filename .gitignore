@@ -8,8 +8,9 @@ __pycache__/
 venv/
 env/
 
-# Plan data folders (generated at runtime)
+# Plan and idea data folders (generated at runtime)
 backend/db/plan_*/
+backend/db/idea_*/
 
 # Vendor / upstream clones (skills are copied to backend/skills/)
 backend/vendor/

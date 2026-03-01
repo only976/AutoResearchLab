@@ -18,6 +18,8 @@
 
 **不展示**：最终产出（树结构、任务 artifact、文献列表等）。
 
+详细设计见 [Thinking 区域设计说明](thinking-area-design.md)。
+
 ### 1.2 Output 区域
 
 **职责**：展示各 Agent 的最终产出（artifact），不包含推理过程。
@@ -70,8 +72,8 @@ flowchart TB
     subgraph IdeaAgent [Idea Agent]
         I1[HTTP /idea/collect] --> IdeaBackend[idea backend]
         IdeaBackend -->|idea-thinking WS| T1
-        IdeaBackend -->|200 JSON| PlanJS[plan.js]
-        PlanJS -->|setTaskOutput idea| O1
+        IdeaBackend -->|idea-complete WS| OutputJS[output.js]
+        OutputJS -->|setTaskOutput idea| O1
     end
 ```
 
@@ -81,7 +83,7 @@ flowchart TB
 |-------|---------------|-------------|
 | **Plan Agent** | `plan-thinking`（WebSocket） | 树结构 → Decomposition / Execution 视图 |
 | **Task Agent** | `task-thinking`（WebSocket） | `task-output` → Output 区域 |
-| **Idea Agent** | `idea-thinking`（WebSocket，关键词提取阶段） | HTTP 响应 → `setTaskOutput('idea', ...)` |
+| **Idea Agent** | `idea-thinking`（WebSocket，关键词提取阶段） | `idea-complete`（WebSocket）→ `setTaskOutput('idea', ...)` |
 
 ### 2.3 两种推理过程
 
@@ -104,7 +106,7 @@ interface ThinkingPayload {
   chunk: string;           // 推理内容，空字符串时仅表示调度
   source: 'plan' | 'task' | 'idea';  // 明确来源
   taskId?: string;        // Task 时必填；Plan/Idea 为 null
-  operation?: string;     // 如 Plan, Execute, Refine, Atomicity, Decompose, Validate
+  operation?: string;     // 如 Plan, Execute, Keywords, Refine, Atomicity, Decompose, Validate
   scheduleInfo?: {        // Agent 模式可选（Idea 无 scheduleInfo）
     turn?: number;
     max_turns?: number;
@@ -156,7 +158,7 @@ interface OutputPayload {
 
 ### 4.3 实现细节
 
-- **Clear 策略**：Refine/Plan 点击清空所有区域并创建新 plan；Execute 点击清空 Thinking、任务状态与 Output，相当于重新执行
+- **Clear 策略**：Refine 点击清空所有区域（Idea Agent 不创建 plan）；Plan 点击清空所有区域并创建新 plan；Execute 点击清空 Thinking、任务状态与 Output，相当于重新执行
 - **Output 排序**：按 `source` 分组，idea 置顶，task 按 task_id 排序
 - **Header 文案**：Thinking block 使用 Plan / Execute / Refine，对应前端按钮
 - **Plan 全流式**：atomicity、quality 也使用 `stream=True`，统一展示 thinking

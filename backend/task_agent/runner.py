@@ -1,6 +1,6 @@
 """
-Task Agent 实现 - Execution Runner，编排 worker pool。
-Each task: Execute → Validate (validation is fixed behavior). Task status persisted to execution.json in real-time.
+Task Agent 实现 - Execution 阶段编排器，管理 worker pool。
+Task Agent 含两阶段：Execution（执行原子任务）→ Validation（验证产出）。每个 task 依次经历两阶段。
 单轮 LLM 在 task_agent/llm/。
 """
 
@@ -53,6 +53,7 @@ class ExecutionRunner:
         self.VALIDATION_PASS_PROBABILITY = _RUNNER_VALIDATION_PASS_PROBABILITY
         self.MAX_FAILURES = _RUNNER_MAX_FAILURES
         self.execution_layout = None
+        self.idea_id: Optional[str] = None
         self.plan_id: Optional[str] = None
         self.api_config: Optional[Dict] = None
         self.abort_event: Optional[asyncio.Event] = None
@@ -61,7 +62,7 @@ class ExecutionRunner:
 
     def _persist_execution(self) -> None:
         """Persist chain_cache to execution.json. Serialized via _persist_lock to avoid concurrent write races."""
-        if self.plan_id and self.chain_cache:
+        if self.idea_id and self.plan_id and self.chain_cache:
             try:
                 asyncio.create_task(self._persist_execution_async())
             except RuntimeError:
@@ -70,9 +71,9 @@ class ExecutionRunner:
     async def _persist_execution_async(self) -> None:
         """Serialized persist: prevents multiple save_execution from overwriting each other with stale data."""
         async with self._persist_lock:
-            if self.plan_id and self.chain_cache:
+            if self.idea_id and self.plan_id and self.chain_cache:
                 try:
-                    await save_execution({"tasks": list(self.chain_cache)}, self.plan_id)
+                    await save_execution({"tasks": list(self.chain_cache)}, self.idea_id, self.plan_id)
                 except Exception as e:
                     logger.warning("Failed to persist execution: %s", e)
 
@@ -176,8 +177,8 @@ class ExecutionRunner:
                 for task in self.chain_cache:
                     if task["task_id"] in to_reset:
                         task["status"] = "undone"
-                        if self.plan_id:
-                            await delete_task_artifact(self.plan_id, task["task_id"])
+                        if self.idea_id and self.plan_id:
+                            await delete_task_artifact(self.idea_id, self.plan_id, task["task_id"])
                         self.pending_tasks.add(task["task_id"])
                         self.completed_tasks.discard(task["task_id"])
                         self.task_failure_count.pop(task["task_id"], None)
@@ -187,16 +188,16 @@ class ExecutionRunner:
             else:
                 for task in self.chain_cache:
                     task["status"] = "undone"
-            if self.plan_id and self.chain_cache:
-                await save_execution({"tasks": self.chain_cache}, self.plan_id)
+            if self.idea_id and self.plan_id and self.chain_cache:
+                await save_execution({"tasks": self.chain_cache}, self.idea_id, self.plan_id)
 
-            self._emit("execution-start", {})
+            self._emit("task-start", {})
             self._emit("execution-layout", {"layout": execution_layout})
             self._broadcast_task_states()
             await self._execute_tasks()
         except Exception as e:
             logger.exception("Error in execution")
-            self._emit("execution-error", {"error": str(e)})
+            self._emit("task-error", {"error": str(e)})
             raise
         finally:
             self.is_running = False
@@ -232,9 +233,9 @@ class ExecutionRunner:
 
         logger.info("Final state: %d/%d tasks completed", len(self.completed_tasks), len(self.chain_cache))
         if self.is_running:
-            self._emit("execution-complete", {"completed": len(self.completed_tasks), "total": len(self.chain_cache)})
+            self._emit("task-complete", {"completed": len(self.completed_tasks), "total": len(self.chain_cache)})
         else:
-            self._emit("execution-error", {"error": "Execution stopped by user"})
+            self._emit("task-error", {"error": "Task execution stopped by user"})
 
     async def _execute_task(self, task: Dict) -> None:
         if not self.is_running:
@@ -272,7 +273,7 @@ class ExecutionRunner:
             if not output_spec:
                 raise ValueError(f"Task {task['task_id']} has no output spec")
             try:
-                resolved_inputs = await resolve_artifacts(task, self.task_map, self.plan_id or "")
+                resolved_inputs = await resolve_artifacts(task, self.task_map, self.idea_id or "", self.plan_id or "")
 
                 async def _on_thinking(chunk: str, task_id: Optional[str] = None, operation: Optional[str] = None, schedule_info: Optional[dict] = None) -> None:
                     payload: dict = {"chunk": chunk, "source": "task", "taskId": task_id, "operation": operation or "Execute"}
@@ -291,6 +292,7 @@ class ExecutionRunner:
                         api_config=api_cfg,
                         abort_event=self.abort_event,
                         on_thinking=_on_thinking,
+                        idea_id=self.idea_id or "",
                         plan_id=self.plan_id or "",
                         validation_spec=task.get("validation"),
                     )
@@ -304,10 +306,11 @@ class ExecutionRunner:
                         api_config=api_cfg,
                         abort_event=self.abort_event,
                         on_thinking=_on_thinking,
+                        idea_id=self.idea_id or "",
                         plan_id=self.plan_id or "",
                     )
                 to_save = result if isinstance(result, dict) else {"content": result}
-                await save_task_artifact(self.plan_id or "", task["task_id"], to_save)
+                await save_task_artifact(self.idea_id or "", self.plan_id or "", task["task_id"], to_save)
                 self._emit("task-output", {"taskId": task["task_id"], "output": result})
                 execution_passed = True
             except Exception as exec_err:
@@ -379,8 +382,9 @@ class ExecutionRunner:
                     await self._emit_await("task-thinking", {"chunk": chunk, "source": "task", "taskId": task_id, "operation": "Validate"})
                     await asyncio.sleep(_MOCK_VALIDATOR_CHUNK_DELAY)
 
-            if self.plan_id:
+            if self.idea_id and self.plan_id:
                 await save_validation_report(
+                    self.idea_id,
                     self.plan_id,
                     task_id,
                     {"passed": validation_passed, "report": report},
@@ -487,9 +491,7 @@ class ExecutionRunner:
         self._emit("task-states-update", {"tasks": task_states})
 
     def _broadcast_worker_states(self) -> None:
-        """Broadcast execution concurrency stats."""
-        stats = worker_manager["get_worker_stats"]()
-        self._emit("execution-stats-update", {"stats": stats})
+        """Broadcast execution concurrency stats. (Frontend uses syncExecutionStateOnConnect for stats.)"""
 
     async def _rollback_task(self, task: Dict) -> None:
         """Rollback task and all affected: upstream deps + downstream dependents.
@@ -527,8 +529,8 @@ class ExecutionRunner:
                     self.task_tasks.pop(task_id, None)
                     worker_manager["release_worker_by_task_id"](task_id)
                 # P0: Clean artifact so downstream re-runs read fresh data
-                if self.plan_id:
-                    await delete_task_artifact(self.plan_id, task_id)
+                if self.idea_id and self.plan_id:
+                    await delete_task_artifact(self.idea_id, self.plan_id, task_id)
 
         self._broadcast_worker_states()
 
@@ -545,12 +547,14 @@ class ExecutionRunner:
     def set_layout(
         self,
         layout: Dict,
+        idea_id: Optional[str] = None,
         plan_id: Optional[str] = None,
         execution: Optional[Dict] = None,
     ) -> None:
         if self.is_running:
             raise ValueError("Cannot set layout while execution is running")
         self.execution_layout = layout
+        self.idea_id = idea_id
         self.plan_id = plan_id
         self.chain_cache = []
         task_by_id = {}
@@ -593,8 +597,8 @@ class ExecutionRunner:
             self.task_failure_count.pop(task_id, None)
             self.task_tasks.pop(task_id, None)
             task["status"] = "undone"
-            if self.plan_id:
-                await delete_task_artifact(self.plan_id, task_id)
+            if self.idea_id and self.plan_id:
+                await delete_task_artifact(self.idea_id, self.plan_id, task_id)
             self._persist_execution()
             self._broadcast_task_states()
             self._schedule_ready_tasks([task])
@@ -602,10 +606,11 @@ class ExecutionRunner:
         return False
 
     async def stop_async(self) -> None:
-        """Stop execution: signal abort (stops API calls/token use), cancel tasks, release workers."""
+        """停止 Task Agent Execution 阶段：发送中止信号，取消任务，释放 worker，立即推送 task-error。"""
         self.is_running = False
         if self.abort_event:
             self.abort_event.set()
+        self._emit("task-error", {"error": "Task execution stopped by user"})
         task_ids = list(self.task_tasks.keys())
         for task_id in task_ids:
             asyncio_task = self.task_tasks.get(task_id)

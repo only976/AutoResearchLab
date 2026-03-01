@@ -21,8 +21,8 @@ A task is **not atomic** (atomic: false) only when you can **clearly name 2+ dis
 - **siblings**: Other tasks at the same level — ensure no overlap in responsibility with siblings.
 
 ### OUTPUT
-Return ONLY valid JSON, no markdown:
-{"atomic": true|false}
+1. **First**, briefly explain your atomicity reasoning (1-2 sentences). This will be shown as your thinking process.
+2. **Then**, output the JSON in a ```json``` code block: {"atomic": true|false}
 
 ### RULES
 - atomic: true = no further decomposition

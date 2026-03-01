@@ -1,35 +1,6 @@
 /**
- * Plan - Idea input, AI thinking area, task tree layout
+ * Thinking - Plan/idea/task 推理过程展示区
  */
-
-/* Idea input row */
-.idea-input-row {
-    display: flex;
-    gap: 12px;
-    margin-bottom: var(--gap);
-    align-items: center;
-}
-
-.idea-input {
-    flex: 1;
-    padding: 10px 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    font-size: 14px;
-    font-family: var(--font-family);
-    background: var(--bg-input);
-    color: var(--text-color);
-}
-
-.idea-input:focus {
-    outline: none;
-    border-color: var(--accent-primary-border);
-    box-shadow: 0 0 0 2px var(--accent-primary-soft);
-}
-
-.idea-input::placeholder {
-    color: var(--text-muted);
-}
 
 .plan-agent-thinking-tree-row {
     display: flex;
@@ -71,7 +42,9 @@
     overflow-anchor: none;
 }
 
-.plan-agent-thinking-block {
+/* 内容块：thinking-block 与 output-block 共用基础样式 */
+.plan-agent-thinking-block,
+.task-agent-output-block {
     height: 140px;
     min-height: 140px;
     display: flex;
@@ -84,48 +57,16 @@
     cursor: pointer;
     transition: var(--state-transition);
 }
-.plan-agent-thinking-block.is-focused {
+.plan-agent-thinking-block.is-focused,
+.task-agent-output-block.is-focused {
     border-color: var(--text-muted, #6b7280);
     box-shadow: 0 0 0 1px var(--text-muted, #6b7280);
 }
-.plan-agent-thinking-block:last-child {
-    margin-bottom: 0;
-}
+.plan-agent-thinking-block:last-child,
+.task-agent-output-block:last-child { margin-bottom: 0; }
 
-/* Consecutive schedule blocks - scrollable container with height limit */
-.plan-agent-schedule-group {
-    max-height: 120px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    margin-bottom: 8px;
-    padding-right: 4px;
-    scrollbar-gutter: stable;
-}
-.plan-agent-schedule-group::-webkit-scrollbar {
-    width: 6px;
-}
-.plan-agent-schedule-group::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 3px;
-}
-
-/* Schedule message - simple text line, no border, no click */
-.plan-agent-thinking-block--schedule {
-    height: auto;
-    min-height: 0;
-    margin-bottom: 4px;
-    padding: 4px 0;
-    background: transparent;
-    border: none;
-    cursor: default;
-}
-.plan-agent-thinking-block--schedule .plan-agent-thinking-block-schedule-text {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-family: var(--font-family);
-}
-
-.plan-agent-thinking-block-header {
+.plan-agent-thinking-block-header,
+.task-agent-output-block-header {
     flex-shrink: 0;
     padding: 6px 10px;
     font-size: 11px;
@@ -134,7 +75,15 @@
     background: var(--bg-area-secondary);
     border-bottom: 1px solid var(--border-color);
 }
-.plan-agent-thinking-block-body {
+.task-agent-output-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.plan-agent-thinking-block-body,
+.task-agent-output-block-body {
     flex: 1;
     min-height: 0;
     overflow-y: hidden;
@@ -142,9 +91,28 @@
     padding: 8px 10px;
     cursor: pointer;
 }
-.plan-agent-thinking-block.is-focused .plan-agent-thinking-block-body {
+.plan-agent-thinking-block.is-focused .plan-agent-thinking-block-body,
+.task-agent-output-block.is-focused .task-agent-output-block-body {
     overflow-y: auto;
     cursor: default;
+}
+
+/* 调度信息 / 纯 JSON：与 thinking 块相同结构，仅展示 header，body 隐藏 */
+.plan-agent-thinking-block--header-only {
+    height: auto;
+    min-height: 0;
+    margin-bottom: 2px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: default;
+}
+.plan-agent-thinking-block--header-only .plan-agent-thinking-block-header {
+    padding: 2px 0;
+    border: none;
+    border-bottom: none;
+    background: transparent;
+    font-size: 10px;
 }
 
 .plan-agent-thinking-placeholder {
@@ -158,6 +126,4 @@
     font-style: italic;
     pointer-events: none;
 }
-.plan-agent-thinking-area.has-content .plan-agent-thinking-placeholder {
-    display: none;
-}
+.plan-agent-thinking-area.has-content .plan-agent-thinking-placeholder { display: none; }

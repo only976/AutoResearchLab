@@ -1,5 +1,5 @@
 /**
- * Layout - Page header, sections, typography, theme toggle
+ * Layout - 页面头部、主内容区、排版
  */
 
 .page-header {
@@ -11,19 +11,9 @@
     gap: 12px;
 }
 
-.header-title {
-    flex: 1;
-    min-width: 0;
-}
-
-.header-title h1,
-.header-title .subtitle {
-    text-align: center;
-}
-
-.header-title .subtitle {
-    margin-bottom: 0;
-}
+.header-title { flex: 1; min-width: 0; }
+.header-title h1, .header-title .subtitle { text-align: center; }
+.header-title .subtitle { margin-bottom: 0; }
 
 h1 {
     font-size: 32px;
@@ -52,7 +42,6 @@ h2 {
     letter-spacing: 0.2px;
 }
 
-/* Main content area - below MAARS header */
 .main-content {
     padding: var(--padding);
     background: var(--bg-white);

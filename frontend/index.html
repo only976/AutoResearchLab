@@ -142,6 +142,7 @@
                 <input type="text" id="ideaInput" class="idea-input" placeholder="Enter your research idea..." />
                 <button id="loadExampleIdeaBtn">Load Idea</button>
                 <button id="refineIdeaBtn">Refine</button>
+                <button id="stopRefineBtn" class="stop-btn" style="display: none;">Stop</button>
                 <button id="generatePlanBtn">Plan</button>
                 <button id="stopPlanBtn" class="stop-btn" style="display: none;">Stop</button>
                 <button id="executionBtn">Execute</button>
@@ -200,15 +201,21 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/config.js"></script>
-    <script src="js/task-tree.js"></script>
-    <script src="js/theme.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/plan.js"></script>
-    <script src="js/thinking.js"></script>
-    <script src="js/views.js"></script>
-    <script src="js/websocket.js"></script>
+    <script src="js/core/utils.js"></script>
+    <script src="js/core/config.js"></script>
+    <script src="js/core/state.js"></script>
+    <script src="js/regions/tree/task-tree.js"></script>
+    <script src="js/ui/theme.js"></script>
+    <script src="js/ui/settings-mode-config.js"></script>
+    <script src="js/api/api.js"></script>
+    <script src="js/flows/idea.js"></script>
+    <script src="js/flows/plan.js"></script>
+    <script src="js/flows/task.js"></script>
+    <script src="js/regions/output.js"></script>
+    <script src="js/regions/thinking.js"></script>
+    <script src="js/ws/handlers/thinking-handler.js"></script>
+    <script src="js/ws/websocket.js"></script>
+    <script src="js/ui/settings.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

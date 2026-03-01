@@ -11,7 +11,7 @@ from typing import Any, List, Optional, Tuple
 
 import orjson
 
-from db import DB_DIR, _validate_plan_id, get_sandbox_dir, get_task_artifact
+from db import DB_DIR, _validate_idea_id, _validate_plan_id, get_sandbox_dir, get_task_artifact
 from shared.skill_utils import parse_skill_frontmatter
 
 from . import web_tools
@@ -29,10 +29,11 @@ SKILLS_ROOT = (
 )
 
 
-def _get_plan_dir_path(plan_id: str) -> Path:
-    """Return absolute path to db/{plan_id}/. Validates plan_id, prevents path traversal."""
+def _get_plan_dir_path(idea_id: str, plan_id: str) -> Path:
+    """Return absolute path to db/{idea_id}/{plan_id}/. Validates idea_id and plan_id, prevents path traversal."""
+    _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
-    return (DB_DIR / plan_id).resolve()
+    return (DB_DIR / idea_id / plan_id).resolve()
 
 
 # OpenAI function-calling tool definitions
@@ -223,14 +224,14 @@ TOOLS = [
 ]
 
 
-async def run_read_artifact(plan_id: str, task_id: str) -> str:
+async def run_read_artifact(idea_id: str, plan_id: str, task_id: str) -> str:
     """Execute ReadArtifact. Returns content string or error message."""
     try:
         if not task_id or not isinstance(task_id, str):
             return "Error: task_id must be a non-empty string"
         if ".." in task_id or "/" in task_id or "\\" in task_id:
             return "Error: task_id must not contain path separators"
-        value = await get_task_artifact(plan_id, task_id)
+        value = await get_task_artifact(idea_id, plan_id, task_id)
         if value is None:
             return f"Error: Task '{task_id}' has no output yet (not completed or does not exist)."
         try:
@@ -241,7 +242,7 @@ async def run_read_artifact(plan_id: str, task_id: str) -> str:
         return f"Error reading artifact: {e}"
 
 
-async def run_read_file(plan_id: str, path: str, task_id: str = "") -> str:
+async def run_read_file(idea_id: str, plan_id: str, path: str, task_id: str = "") -> str:
     """Execute ReadFile. Path: 'sandbox/X' for sandbox, or 'X' for plan dir. Returns content or error."""
     try:
         if not path or not isinstance(path, str):
@@ -249,11 +250,11 @@ async def run_read_file(plan_id: str, path: str, task_id: str = "") -> str:
         path = path.replace("\\", "/").strip()
         if ".." in path:
             return "Error: path traversal not allowed"
-        plan_dir = _get_plan_dir_path(plan_id)
+        plan_dir = _get_plan_dir_path(idea_id, plan_id)
         if path.startswith("sandbox/"):
             if not task_id:
                 return "Error: sandbox path requires task context"
-            sandbox_dir = get_sandbox_dir(plan_id, task_id)
+            sandbox_dir = get_sandbox_dir(idea_id, plan_id, task_id)
             subpath = path[7:].lstrip("/")  # after "sandbox/"
             if not subpath:
                 return "Error: sandbox path must include filename"
@@ -278,7 +279,7 @@ async def run_read_file(plan_id: str, path: str, task_id: str = "") -> str:
         return f"Error reading file: {e}"
 
 
-async def run_write_file(plan_id: str, path: str, content: str, task_id: str = "") -> str:
+async def run_write_file(idea_id: str, plan_id: str, path: str, content: str, task_id: str = "") -> str:
     """Execute WriteFile. Path must be under sandbox. Returns success or error."""
     try:
         if not task_id:
@@ -288,7 +289,7 @@ async def run_write_file(plan_id: str, path: str, content: str, task_id: str = "
         path = path.replace("\\", "/").strip()
         if ".." in path or not path.startswith("sandbox/"):
             return "Error: path must be under sandbox (e.g. sandbox/notes.txt)"
-        sandbox_dir = get_sandbox_dir(plan_id, task_id)
+        sandbox_dir = get_sandbox_dir(idea_id, plan_id, task_id)
         subpath = path[7:].lstrip("/")
         if not subpath:
             return "Error: path must include filename"
@@ -390,7 +391,7 @@ def run_read_skill_file(skill: str, path: str) -> str:
 
 
 async def run_run_skill_script(
-    skill: str, script: str, args: List[str], plan_id: str, task_id: str
+    skill: str, script: str, args: List[str], idea_id: str, plan_id: str, task_id: str
 ) -> str:
     """Execute RunSkillScript. Runs script from skill dir. {{sandbox}} in args replaced with sandbox path."""
     try:
@@ -411,7 +412,7 @@ async def run_run_skill_script(
         if ext not in _RUN_SCRIPT_ALLOWED_EXT:
             return f"Error: Script extension .{ext} not allowed (use .py, .sh, .js)"
 
-        sandbox_dir = get_sandbox_dir(plan_id, task_id)
+        sandbox_dir = get_sandbox_dir(idea_id, plan_id, task_id)
         sandbox_str = str(sandbox_dir.resolve())
         resolved_args = [
             a.replace("{{sandbox}}", sandbox_str) if isinstance(a, str) else str(a)
@@ -472,7 +473,7 @@ def run_finish(output: str) -> Tuple[bool, Any]:
 
 
 async def execute_tool(
-    name: str, arguments: str, plan_id: str, task_id: str
+    name: str, arguments: str, idea_id: str, plan_id: str, task_id: str
 ) -> Tuple[Optional[Any], str]:
     """
     Execute a tool by name. Returns (finished_output, tool_result_str).
@@ -486,18 +487,18 @@ async def execute_tool(
 
     if name == "ReadArtifact":
         tid = args.get("task_id", "")
-        result = await run_read_artifact(plan_id, tid)
+        result = await run_read_artifact(idea_id, plan_id, tid)
         return None, result
 
     if name == "ReadFile":
         path = args.get("path", "")
-        result = await run_read_file(plan_id, path, task_id)
+        result = await run_read_file(idea_id, plan_id, path, task_id)
         return None, result
 
     if name == "WriteFile":
         path = args.get("path", "")
         content = args.get("content", "")
-        result = await run_write_file(plan_id, path, content, task_id)
+        result = await run_write_file(idea_id, plan_id, path, content, task_id)
         return None, result
 
     if name == "ListSkills":
@@ -524,7 +525,7 @@ async def execute_tool(
                 script_args = json.loads(script_args) if script_args else []
             except json.JSONDecodeError:
                 script_args = [script_args]
-        result = await run_run_skill_script(skill, script, script_args, plan_id, task_id)
+        result = await run_run_skill_script(skill, script, script_args, idea_id, plan_id, task_id)
         return None, result
 
     if name == "Finish":

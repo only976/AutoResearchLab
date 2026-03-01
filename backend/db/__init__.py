@@ -1,7 +1,7 @@
 """
 Database Module
-File-based storage: db/{plan_id}/ contains plan.json, execution.json, {task_id}/output.json.
-Plan generates a new plan_id folder on each new plan; all reads/writes use plan_id.
+File-based storage: db/{idea_id}/idea.json, db/{idea_id}/{plan_id}/plan.json, execution.json, {task_id}/output.json.
+Idea Agent(Refine) 创建 idea_id；Plan Agent 创建 plan_id；Task Agent Execution 阶段创建 task 产出。
 Uses orjson for faster JSON parsing.
 """
 
@@ -16,8 +16,17 @@ import orjson
 from loguru import logger
 
 DB_DIR = Path(__file__).parent
+DEFAULT_IDEA_ID = "test"
 DEFAULT_PLAN_ID = "test"
 SETTINGS_FILE = "settings.json"
+
+
+def _validate_idea_id(idea_id: str) -> None:
+    """Reject path traversal and invalid idea_id."""
+    if not idea_id or not isinstance(idea_id, str):
+        raise ValueError("idea_id must be a non-empty string")
+    if ".." in idea_id or "/" in idea_id or "\\" in idea_id:
+        raise ValueError("idea_id must not contain path separators")
 
 
 def _validate_plan_id(plan_id: str) -> None:
@@ -38,38 +47,46 @@ def _validate_task_id(task_id: str) -> None:
         raise ValueError("task_id must contain only letters, digits, and underscores")
 
 
-def _get_plan_dir(plan_id: str = DEFAULT_PLAN_ID) -> Path:
-    return DB_DIR / plan_id
+def _get_idea_dir(idea_id: str) -> Path:
+    """Return db/{idea_id}/."""
+    return DB_DIR / idea_id
 
 
-def _get_file_path(plan_id: str, filename: str) -> Path:
-    return _get_plan_dir(plan_id) / filename
+def _get_plan_dir(idea_id: str, plan_id: str) -> Path:
+    """Return db/{idea_id}/{plan_id}/."""
+    return _get_idea_dir(idea_id) / plan_id
 
 
-def _get_task_dir(plan_id: str, task_id: str) -> Path:
-    """Return db/{plan_id}/{task_id}/."""
+def _get_file_path(idea_id: str, plan_id: str, filename: str) -> Path:
+    return _get_plan_dir(idea_id, plan_id) / filename
+
+
+def _get_task_dir(idea_id: str, plan_id: str, task_id: str) -> Path:
+    """Return db/{idea_id}/{plan_id}/{task_id}/."""
+    _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
     _validate_task_id(task_id)
-    return _get_plan_dir(plan_id) / task_id
+    return _get_plan_dir(idea_id, plan_id) / task_id
 
 
-def get_sandbox_dir(plan_id: str, task_id: str) -> Path:
-    """Return db/{plan_id}/{task_id}/sandbox/ for isolated task execution."""
-    return _get_task_dir(plan_id, task_id) / "sandbox"
+def get_sandbox_dir(idea_id: str, plan_id: str, task_id: str) -> Path:
+    """Return db/{idea_id}/{plan_id}/{task_id}/sandbox/ for isolated task execution."""
+    return _get_task_dir(idea_id, plan_id, task_id) / "sandbox"
 
 
-async def ensure_sandbox_dir(plan_id: str, task_id: str) -> Path:
+async def ensure_sandbox_dir(idea_id: str, plan_id: str, task_id: str) -> Path:
     """Create sandbox dir if not exists. Returns the sandbox path."""
-    sandbox = get_sandbox_dir(plan_id, task_id)
+    sandbox = get_sandbox_dir(idea_id, plan_id, task_id)
     sandbox.mkdir(parents=True, exist_ok=True)
     return sandbox
 
 
-async def get_task_artifact(plan_id: str, task_id: str):
-    """Read artifact from db/{plan_id}/{task_id}/output.json. Returns dict or None."""
+async def get_task_artifact(idea_id: str, plan_id: str, task_id: str):
+    """Read artifact from db/{idea_id}/{plan_id}/{task_id}/output.json. Returns dict or None."""
+    _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
     _validate_task_id(task_id)
-    task_dir = _get_task_dir(plan_id, task_id)
+    task_dir = _get_task_dir(idea_id, plan_id, task_id)
     file_path = task_dir / "output.json"
     try:
         async with aiofiles.open(file_path, "rb") as f:
@@ -82,10 +99,11 @@ async def get_task_artifact(plan_id: str, task_id: str):
         return None
 
 
-async def list_plan_outputs(plan_id: str) -> dict:
+async def list_plan_outputs(idea_id: str, plan_id: str) -> dict:
     """Load all task outputs for a plan. Returns {task_id: output_dict}."""
+    _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
-    plan_dir = _get_plan_dir(plan_id)
+    plan_dir = _get_plan_dir(idea_id, plan_id)
     if not plan_dir.exists():
         return {}
     result = {}
@@ -93,7 +111,7 @@ async def list_plan_outputs(plan_id: str) -> dict:
         if not p.is_dir() or p.name.startswith("."):
             continue
         try:
-            artifact = await get_task_artifact(plan_id, p.name)
+            artifact = await get_task_artifact(idea_id, plan_id, p.name)
             if artifact is not None:
                 result[p.name] = artifact
         except ValueError:
@@ -101,13 +119,14 @@ async def list_plan_outputs(plan_id: str) -> dict:
     return result
 
 
-async def save_task_artifact(plan_id: str, task_id: str, value) -> dict:
-    """Write artifact to db/{plan_id}/{task_id}/output.json. Atomic write. Accepts dict or str (wrapped as {"content": ...})."""
+async def save_task_artifact(idea_id: str, plan_id: str, task_id: str, value) -> dict:
+    """Write artifact to db/{idea_id}/{plan_id}/{task_id}/output.json. Atomic write. Accepts dict or str (wrapped as {"content": ...})."""
+    _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
     _validate_task_id(task_id)
     if isinstance(value, str):
         value = {"content": value}
-    task_dir = _get_task_dir(plan_id, task_id)
+    task_dir = _get_task_dir(idea_id, plan_id, task_id)
     task_dir.mkdir(parents=True, exist_ok=True)
     file_path = task_dir / "output.json"
     tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
@@ -118,11 +137,12 @@ async def save_task_artifact(plan_id: str, task_id: str, value) -> dict:
     return {"success": True}
 
 
-async def delete_task_artifact(plan_id: str, task_id: str) -> bool:
-    """Remove artifact at db/{plan_id}/{task_id}/output.json. Returns True if deleted."""
+async def delete_task_artifact(idea_id: str, plan_id: str, task_id: str) -> bool:
+    """Remove artifact at db/{idea_id}/{plan_id}/{task_id}/output.json. Returns True if deleted."""
+    _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
     _validate_task_id(task_id)
-    task_dir = _get_task_dir(plan_id, task_id)
+    task_dir = _get_task_dir(idea_id, plan_id, task_id)
     file_path = task_dir / "output.json"
     try:
         if file_path.exists():
@@ -133,11 +153,12 @@ async def delete_task_artifact(plan_id: str, task_id: str) -> bool:
     return False
 
 
-async def save_validation_report(plan_id: str, task_id: str, report: dict) -> dict:
-    """Save validation report to db/{plan_id}/{task_id}/validation.json."""
+async def save_validation_report(idea_id: str, plan_id: str, task_id: str, report: dict) -> dict:
+    """Save validation report to db/{idea_id}/{plan_id}/{task_id}/validation.json."""
+    _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
     _validate_task_id(task_id)
-    task_dir = _get_task_dir(plan_id, task_id)
+    task_dir = _get_task_dir(idea_id, plan_id, task_id)
     task_dir.mkdir(parents=True, exist_ok=True)
     file_path = task_dir / "validation.json"
     tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
@@ -148,15 +169,22 @@ async def save_validation_report(plan_id: str, task_id: str, report: dict) -> di
     return {"success": True}
 
 
-async def _ensure_plan_dir(plan_id: str = DEFAULT_PLAN_ID) -> None:
+async def _ensure_idea_dir(idea_id: str = DEFAULT_IDEA_ID) -> None:
+    _validate_idea_id(idea_id)
+    idea_dir = _get_idea_dir(idea_id)
+    idea_dir.mkdir(parents=True, exist_ok=True)
+
+
+async def _ensure_plan_dir(idea_id: str, plan_id: str) -> None:
+    _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
-    plan_dir = _get_plan_dir(plan_id)
+    plan_dir = _get_plan_dir(idea_id, plan_id)
     plan_dir.mkdir(parents=True, exist_ok=True)
 
 
-async def _read_json_file(plan_id: str, filename: str):
-    await _ensure_plan_dir(plan_id)
-    file_path = _get_file_path(plan_id, filename)
+async def _read_json_file(idea_id: str, plan_id: str, filename: str):
+    await _ensure_plan_dir(idea_id, plan_id)
+    file_path = _get_file_path(idea_id, plan_id, filename)
     try:
         async with aiofiles.open(file_path, "rb") as f:
             data = await f.read()
@@ -168,10 +196,10 @@ async def _read_json_file(plan_id: str, filename: str):
         return None
 
 
-async def _write_json_file(plan_id: str, filename: str, data: dict) -> dict:
+async def _write_json_file(idea_id: str, plan_id: str, filename: str, data: dict) -> dict:
     """Atomic write: write to .tmp then rename to avoid partial/corrupt files on concurrent access."""
-    await _ensure_plan_dir(plan_id)
-    file_path = _get_file_path(plan_id, filename)
+    await _ensure_plan_dir(idea_id, plan_id)
+    file_path = _get_file_path(idea_id, plan_id, filename)
     tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
     content = orjson.dumps(data, option=orjson.OPT_INDENT_2).decode("utf-8")
     async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
@@ -180,23 +208,76 @@ async def _write_json_file(plan_id: str, filename: str, data: dict) -> dict:
     return {"success": True}
 
 
-async def get_execution(plan_id: str = DEFAULT_PLAN_ID):
+# Idea persistence
+
+async def get_idea(idea_id: str = DEFAULT_IDEA_ID):
+    """Get idea (Refine output: idea, keywords, papers, etc.)."""
+    _validate_idea_id(idea_id)
+    file_path = _get_idea_dir(idea_id) / "idea.json"
+    try:
+        async with aiofiles.open(file_path, "rb") as f:
+            data = await f.read()
+            return orjson.loads(data)
+    except FileNotFoundError:
+        return None
+    except orjson.JSONDecodeError as e:
+        logger.warning("Invalid JSON in %s: %s", file_path, e)
+        return None
+
+
+async def save_idea(idea_data: dict, idea_id: str = DEFAULT_IDEA_ID) -> dict:
+    """Save idea to db/{idea_id}/idea.json."""
+    _validate_idea_id(idea_id)
+    idea_dir = _get_idea_dir(idea_id)
+    idea_dir.mkdir(parents=True, exist_ok=True)
+    file_path = idea_dir / "idea.json"
+    tmp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+    content = orjson.dumps(idea_data, option=orjson.OPT_INDENT_2).decode("utf-8")
+    async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
+        await f.write(content)
+    tmp_path.replace(file_path)
+    return {"success": True, "idea": idea_data}
+
+
+# Plan and execution
+
+async def get_execution(idea_id: str, plan_id: str):
     """Get execution."""
-    return await _read_json_file(plan_id, "execution.json")
+    return await _read_json_file(idea_id, plan_id, "execution.json")
 
 
-async def save_execution(execution: dict, plan_id: str = DEFAULT_PLAN_ID) -> dict:
+async def save_execution(execution: dict, idea_id: str, plan_id: str) -> dict:
     """Save execution."""
-    await _write_json_file(plan_id, "execution.json", execution)
+    await _write_json_file(idea_id, plan_id, "execution.json", execution)
     return {"success": True, "execution": execution}
 
 
-async def list_plan_ids() -> list:
-    """List plan IDs from db/, sorted by plan.json mtime (newest first)."""
+async def list_idea_ids() -> list:
+    """List idea IDs from db/, sorted by idea.json mtime (newest first)."""
     if not DB_DIR.exists():
         return []
     result = []
     for p in DB_DIR.iterdir():
+        if p.is_dir() and not p.name.startswith("."):
+            idea_file = p / "idea.json"
+            if idea_file.exists():
+                try:
+                    mtime = idea_file.stat().st_mtime
+                    result.append((p.name, mtime))
+                except OSError:
+                    result.append((p.name, 0))
+    result.sort(key=lambda x: x[1], reverse=True)
+    return [pid for pid, _ in result]
+
+
+async def list_plan_ids(idea_id: str) -> list:
+    """List plan IDs under an idea, sorted by plan.json mtime (newest first)."""
+    _validate_idea_id(idea_id)
+    idea_dir = _get_idea_dir(idea_id)
+    if not idea_dir.exists():
+        return []
+    result = []
+    for p in idea_dir.iterdir():
         if p.is_dir() and not p.name.startswith("."):
             plan_file = p / "plan.json"
             if plan_file.exists():
@@ -207,6 +288,29 @@ async def list_plan_ids() -> list:
                     result.append((p.name, 0))
     result.sort(key=lambda x: x[1], reverse=True)
     return [pid for pid, _ in result]
+
+
+async def list_recent_plans() -> list:
+    """List (ideaId, planId) pairs from db/, sorted by plan.json mtime (newest first)."""
+    if not DB_DIR.exists():
+        return []
+    result = []
+    for idea_dir in DB_DIR.iterdir():
+        if not idea_dir.is_dir() or idea_dir.name.startswith("."):
+            continue
+        idea_id = idea_dir.name
+        for plan_dir in idea_dir.iterdir():
+            if not plan_dir.is_dir() or plan_dir.name.startswith("."):
+                continue
+            plan_file = plan_dir / "plan.json"
+            if plan_file.exists():
+                try:
+                    mtime = plan_file.stat().st_mtime
+                    result.append((idea_id, plan_dir.name, mtime))
+                except OSError:
+                    result.append((idea_id, plan_dir.name, 0))
+    result.sort(key=lambda x: x[2], reverse=True)
+    return [{"ideaId": r[0], "planId": r[1]} for r in result]
 
 
 def _ai_mode_to_flags(ai_mode: str) -> tuple:
@@ -284,33 +388,33 @@ async def save_settings(settings: dict) -> dict:
     return {"success": True}
 
 
-async def get_plan(plan_id: str = DEFAULT_PLAN_ID):
-    """Get plan (AI-refined idea with tasks)."""
-    return await _read_json_file(plan_id, "plan.json")
+async def get_plan(idea_id: str, plan_id: str):
+    """Get plan (tasks only, no idea)."""
+    return await _read_json_file(idea_id, plan_id, "plan.json")
 
 
-async def save_plan(plan: dict, plan_id: str = DEFAULT_PLAN_ID) -> dict:
+async def save_plan(plan: dict, idea_id: str, plan_id: str) -> dict:
     """Save plan."""
-    await _write_json_file(plan_id, "plan.json", plan)
+    await _write_json_file(idea_id, plan_id, "plan.json", plan)
     return {"success": True, "plan": plan}
 
 
-# AI response persistence (atomicity, decompose, format) - per plan_id
+# AI response persistence (atomicity, decompose, format) - per idea_id + plan_id
 
 _ai_save_locks: dict = {}
 
 
-def _get_ai_save_lock(plan_id: str, response_type: str) -> asyncio.Lock:
-    key = (plan_id, response_type)
+def _get_ai_save_lock(idea_id: str, plan_id: str, response_type: str) -> asyncio.Lock:
+    key = (idea_id, plan_id, response_type)
     if key not in _ai_save_locks:
         _ai_save_locks[key] = asyncio.Lock()
     return _ai_save_locks[key]
 
 
-async def _read_ai_response_file(plan_id: str, response_type: str) -> dict:
+async def _read_ai_response_file(idea_id: str, plan_id: str, response_type: str) -> dict:
     """Read AI response file with json_repair fallback for corrupted files."""
-    await _ensure_plan_dir(plan_id)
-    file_path = _get_file_path(plan_id, f"{response_type}.json")
+    await _ensure_plan_dir(idea_id, plan_id)
+    file_path = _get_file_path(idea_id, plan_id, f"{response_type}.json")
     try:
         async with aiofiles.open(file_path, "rb") as f:
             raw = await f.read()
@@ -326,37 +430,37 @@ async def _read_ai_response_file(plan_id: str, response_type: str) -> dict:
         return {}
 
 
-async def get_ai_responses(plan_id: str, response_type: str) -> dict:
+async def get_ai_responses(idea_id: str, plan_id: str, response_type: str) -> dict:
     """Read AI responses for a plan. response_type: atomicity, decompose, format."""
     if response_type not in ("atomicity", "decompose", "format"):
         return {}
-    return await _read_ai_response_file(plan_id, response_type)
+    return await _read_ai_response_file(idea_id, plan_id, response_type)
 
 
-async def _write_ai_response_file(plan_id: str, response_type: str, data: dict) -> None:
-    """Atomic write: write to .tmp then rename."""
-    await _ensure_plan_dir(plan_id)
-    file_path = _get_file_path(plan_id, f"{response_type}.json")
+async def _write_ai_response_file(idea_id: str, plan_id: str, response_type: str, data: dict) -> None:
+    """Atomic write: write to .tmp then replace (overwrites target on Windows)."""
+    await _ensure_plan_dir(idea_id, plan_id)
+    file_path = _get_file_path(idea_id, plan_id, f"{response_type}.json")
     tmp_path = file_path.with_suffix(".json.tmp")
     content = orjson.dumps(data, option=orjson.OPT_INDENT_2).decode("utf-8")
     async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
         await f.write(content)
-    tmp_path.rename(file_path)
+    tmp_path.replace(file_path)
 
 
-async def save_ai_response(plan_id: str, response_type: str, key: str, entry: dict) -> None:
+async def save_ai_response(idea_id: str, plan_id: str, response_type: str, key: str, entry: dict) -> None:
     """Incrementally save one AI response. entry = {content: ..., reasoning: ...}. Serialized per file."""
     if response_type not in ("atomicity", "decompose", "format"):
         return
-    lock = _get_ai_save_lock(plan_id, response_type)
+    lock = _get_ai_save_lock(idea_id, plan_id, response_type)
     async with lock:
-        data = await get_ai_responses(plan_id, response_type)
+        data = await get_ai_responses(idea_id, plan_id, response_type)
         data[key] = entry
-        await _write_ai_response_file(plan_id, response_type, data)
+        await _write_ai_response_file(idea_id, plan_id, response_type, data)
 
 
 async def clear_db() -> dict:
-    """Clear DB: remove all plan folders."""
+    """Clear DB: remove all idea folders (and their plans). Keeps settings.json."""
     if not DB_DIR.exists():
         return {"success": True, "removed": []}
     removed = []

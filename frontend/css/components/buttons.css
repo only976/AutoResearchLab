@@ -1,0 +1,142 @@
+/**
+ * Buttons - 统一按钮系统
+ */
+
+.button-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: var(--gap);
+}
+
+button, .btn {
+    border-radius: var(--btn-radius);
+    transition: var(--btn-transition);
+    cursor: pointer;
+    font-weight: var(--button-font-weight);
+    box-sizing: border-box;
+}
+button:focus, .btn:focus { outline: none; }
+button:hover:not(:disabled), .btn:hover:not(:disabled) {
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+}
+button:active:not(:disabled), .btn:active:not(:disabled) {
+    background: var(--btn-active-bg);
+    border-color: var(--btn-hover-border);
+}
+button:disabled, .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Default */
+button:not([class]), .btn-default {
+    padding: var(--button-padding-y) var(--button-padding-x);
+    border: 1px solid var(--border-color);
+    background: var(--bg-white);
+    color: var(--text-color);
+    font-size: var(--button-font-size);
+    box-shadow: var(--shadow-sm);
+}
+button:not([class]):hover:not(:disabled), .btn-default:hover:not(:disabled) { box-shadow: var(--shadow-lg); }
+button:disabled:not([class]), .btn-default:disabled { background: var(--bg-white); color: var(--text-muted); box-shadow: none; }
+
+/* Icon */
+.icon-btn, .btn-icon {
+    width: 40px; height: 40px;
+    padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border-color);
+    background: var(--bg-area-secondary);
+    color: var(--text-secondary);
+    font-size: 18px;
+}
+
+/* Close / Expand */
+.task-agent-output-modal-close, .task-agent-output-modal-download,
+.task-detail-popover-close, .btn-close {
+    width: 32px; height: 32px;
+    padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; line-height: 1;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-muted);
+}
+.task-detail-popover-close { width: auto; height: auto; padding: 0 4px; }
+
+.task-agent-output-block-expand, .btn-expand {
+    flex-shrink: 0;
+    padding: 2px 6px;
+    font-size: 12px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.task-agent-output-modal-actions { display: flex; align-items: center; gap: 8px; }
+
+.task-agent-output-modal-close:hover, .task-agent-output-modal-download:hover,
+.task-detail-popover-close:hover, .btn-close:hover,
+.task-agent-output-block-expand:hover, .btn-expand:hover {
+    color: var(--text-color);
+    background: var(--btn-hover-bg);
+}
+.task-agent-output-modal-close:active, .task-agent-output-modal-download:active,
+.task-detail-popover-close:active, .btn-close:active,
+.task-agent-output-block-expand:active, .btn-expand:active {
+    color: var(--text-color);
+    background: var(--btn-active-bg);
+}
+
+/* Ghost */
+.btn-ghost {
+    padding: 9px 20px;
+    font-size: 13px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+}
+.btn-ghost:hover { color: var(--text-color); }
+
+/* Tab */
+.task-detail-tab, .btn-tab {
+    padding: 4px 8px;
+    font-size: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--status-undone);
+    color: var(--text-color);
+}
+.task-detail-tab:hover, .btn-tab:hover { background: var(--btn-hover-bg); }
+.task-detail-tab:active, .btn-tab:active { background: var(--btn-active-bg); }
+.task-detail-tab[aria-pressed="true"], .btn-tab[aria-pressed="true"] {
+    border-color: var(--accent-primary-border);
+    background: var(--accent-primary-soft);
+}
+.task-detail-tab.task-status-doing, .task-detail-tab.task-status-validating,
+.task-detail-tab.task-status-done, .task-detail-tab.task-status-validation-failed,
+.task-detail-tab.task-status-execution-failed { color: var(--text-on-dark); }
+.task-detail-tab.task-status-doing { background: var(--status-doing); }
+.task-detail-tab.task-status-doing:hover { background: var(--status-doing-hover); }
+.task-detail-tab.task-status-doing:active { background: var(--status-doing-active); }
+.task-detail-tab.task-status-validating { background: var(--status-validating); }
+.task-detail-tab.task-status-validating:hover { background: var(--status-validating-hover); }
+.task-detail-tab.task-status-validating:active { background: var(--status-validating-active); }
+.task-detail-tab.task-status-done { background: var(--status-done); }
+.task-detail-tab.task-status-done:hover { background: var(--status-done-hover); }
+.task-detail-tab.task-status-done:active { background: var(--status-done-active); }
+.task-detail-tab.task-status-validation-failed, .task-detail-tab.task-status-execution-failed { background: var(--failure-bg); }
+.task-detail-tab.task-status-validation-failed:hover, .task-detail-tab.task-status-execution-failed:hover { background: var(--failure-bg-hover); }
+.task-detail-tab.task-status-validation-failed:active, .task-detail-tab.task-status-execution-failed:active { background: var(--failure-bg-active); }
+
+/* Danger */
+.stop-btn, .btn-danger {
+    padding: var(--button-padding-y) var(--button-padding-x);
+    border: 1px solid var(--failure-border);
+    background: var(--failure-bg);
+    color: var(--failure-text);
+    font-size: var(--button-font-size);
+    box-shadow: var(--shadow-sm);
+}
+.stop-btn:hover:not(:disabled), .btn-danger:hover:not(:disabled) { background: var(--failure-bg-hover); box-shadow: var(--shadow-lg); }
+.stop-btn:active:not(:disabled), .btn-danger:active:not(:disabled) { background: var(--failure-bg-active); box-shadow: var(--shadow-lg); }
+
+.modal-content--settings button { box-shadow: none; }

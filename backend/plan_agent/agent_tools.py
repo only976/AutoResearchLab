@@ -285,6 +285,7 @@ async def execute_plan_agent_tool(
     abort_event: Optional[Any] = None,
     use_mock: bool = False,
     api_config: Optional[Dict] = None,
+    idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
 ) -> Tuple[bool, str]:
     """
@@ -384,7 +385,7 @@ async def execute_plan_agent_tool(
         }
         try:
             result = await check_atomicity_fn(
-                task, on_thinking, abort_event, atomicity_context, use_mock, api_config, plan_id
+                task, on_thinking, abort_event, atomicity_context, use_mock, api_config, idea_id, plan_id
             )
             return False, orjson.dumps({"atomic": result.get("atomic", False)}).decode("utf-8")
         except Exception as e:
@@ -400,7 +401,7 @@ async def execute_plan_agent_tool(
         try:
             children = await decompose_fn(
                 parent_task, on_thinking, abort_event, all_tasks,
-                idea=idea, depth=depth, use_mock=use_mock, api_config=api_config, plan_id=plan_id,
+                idea=idea, depth=depth, use_mock=use_mock, api_config=api_config, idea_id=idea_id, plan_id=plan_id,
             )
             return False, orjson.dumps({"tasks": children}).decode("utf-8")
         except Exception as e:
@@ -412,7 +413,7 @@ async def execute_plan_agent_tool(
         task = {"task_id": task_id, "description": description, "dependencies": []}
         try:
             result = await format_fn(
-                task, on_thinking, abort_event, use_mock=use_mock, api_config=api_config, plan_id=plan_id,
+                task, on_thinking, abort_event, use_mock=use_mock, api_config=api_config, idea_id=idea_id, plan_id=plan_id,
             )
             if not result:
                 return False, "Error: FormatTask returned no input/output"

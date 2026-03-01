@@ -28,7 +28,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1": {
     "content": {
@@ -59,7 +59,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_2": {
     "content": {
@@ -84,7 +84,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_2_2": {
     "content": {
@@ -110,7 +110,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_2_2_1": {
     "content": {
@@ -127,7 +127,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_2_2_1_1": {
     "content": {
@@ -146,7 +146,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_3": {
     "content": {
@@ -171,7 +171,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_3_3": {
     "content": {
@@ -204,7 +204,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_3_3_3": {
     "content": {
@@ -230,7 +230,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_3_3_3_1": {
     "content": {
@@ -256,7 +256,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "1_3_3_4": {
     "content": {
@@ -273,7 +273,7 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "2": {
     "content": {
@@ -304,12 +304,12 @@
         }
       ]
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   },
   "_default": {
     "content": {
       "tasks": []
     },
-    "reasoning": "-"
+    "reasoning": "Decomposing the task into mutually exclusive, collectively exhaustive subtasks. Ensuring logical dependency structure and appropriate granularity for each child."
   }
 }

@@ -1,4 +1,4 @@
-"""Plan API - get, tree, run, stop, layout (execution graph)."""
+"""Plan Agent API - 任务分解（Plan）。三个 Agent 之一，与 Idea/Task 统一：HTTP 仅触发，数据由 WebSocket 回传。"""
 
 import asyncio
 import time
@@ -8,7 +8,9 @@ from loguru import logger
 from fastapi.responses import JSONResponse
 
 from db import (
+    DEFAULT_IDEA_ID,
     get_effective_config,
+    get_idea,
     get_plan,
     list_plan_outputs,
     save_plan,
@@ -29,33 +31,34 @@ def _tree_update_payload(plan):
 
 @router.post("/layout")
 async def set_plan_layout(body: PlanLayoutRequest):
-    """Set execution layout for plan execution graph."""
+    """设置 Task Agent Execution 阶段的可视化布局（execution graph）。"""
     execution = body.execution
+    idea_id = body.idea_id or DEFAULT_IDEA_ID
     plan_id = body.plan_id
     layout = build_layout_from_execution(execution)
     try:
-        api_state.runner.set_layout(layout, plan_id=plan_id, execution=execution)
+        api_state.runner.set_layout(layout, idea_id=idea_id, plan_id=plan_id, execution=execution)
     except ValueError as e:
         return JSONResponse(status_code=409, content={"error": str(e)})
     return {"layout": layout}
 
 
 @router.get("")
-async def get_plan_route(plan_id: str = Query("test", alias="planId")):
-    plan = await get_plan(plan_id)
+async def get_plan_route(idea_id: str = Query("test", alias="ideaId"), plan_id: str = Query("test", alias="planId")):
+    plan = await get_plan(idea_id, plan_id)
     return {"plan": plan}
 
 
 @router.get("/outputs")
-async def get_plan_outputs(plan_id: str = Query("test", alias="planId")):
+async def get_plan_outputs(idea_id: str = Query("test", alias="ideaId"), plan_id: str = Query("test", alias="planId")):
     """Load all task outputs for a plan. Used when restoring recent task."""
-    outputs = await list_plan_outputs(plan_id)
+    outputs = await list_plan_outputs(idea_id, plan_id)
     return {"outputs": outputs}
 
 
 @router.get("/tree")
-async def get_plan_tree(plan_id: str = Query("test", alias="planId")):
-    plan = await get_plan(plan_id)
+async def get_plan_tree(idea_id: str = Query("test", alias="ideaId"), plan_id: str = Query("test", alias="planId")):
+    plan = await get_plan(idea_id, plan_id)
     if not plan or not plan.get("tasks") or len(plan["tasks"]) == 0:
         return {"treeData": [], "layout": None}
     return _tree_update_payload(plan)
@@ -63,17 +66,26 @@ async def get_plan_tree(plan_id: str = Query("test", alias="planId")):
 
 @router.post("/stop")
 async def stop_plan():
-    """Stop plan: signal abort, cancel task."""
+    """停止 Plan Agent：发送中止信号，取消任务，立即推送 plan-error 以便前端恢复 UI。"""
     state = api_state.plan_run_state
     if state and state.abort_event:
         state.abort_event.set()
     if state and state.run_task and not state.run_task.done():
         state.run_task.cancel()
+    _emit_plan_error("Plan Agent stopped by user")
     return {"success": True}
 
 
-async def _run_plan_inner(body: PlanRunRequest):
-    """Inner plan run logic. Runs in a cancellable task."""
+def _emit_plan_error(err_msg: str) -> None:
+    """统一发送 plan-error，供 Plan Agent 停止或异常时使用。"""
+    try:
+        api_state.sio.emit("plan-error", {"error": err_msg})
+    except Exception:
+        pass
+
+
+async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str):
+    """后台执行 plan 生成，通过 WebSocket 回传数据。与 idea/task 统一：HTTP 仅触发。"""
     state = api_state.plan_run_state
     async with state.lock:
         if state.abort_event:
@@ -83,19 +95,22 @@ async def _run_plan_inner(body: PlanRunRequest):
         abort_event = state.abort_event
 
     try:
-        idea = body.idea
-        if not idea or not isinstance(idea, str) or not idea.strip():
-            raise ValueError("Idea is required for plan generation.")
+        idea_data = await get_idea(idea_id)
+        if not idea_data or not idea_data.get("idea"):
+            raise ValueError("Idea not found. Please Refine first to create an idea.")
+        raw_idea = idea_data["idea"].strip() if isinstance(idea_data.get("idea"), str) else ""
+        # Plan 分解使用 refined_idea.description，若无则回退到原始 idea
+        refined = idea_data.get("refined_idea") or {}
+        idea = (refined.get("description") or "").strip() or raw_idea
 
         config = await get_effective_config()
         use_mock = config.get("useMock", True)
 
-        plan_id = f"plan_{int(time.time() * 1000)}"
         plan = {
-            "tasks": [{"task_id": "0", "description": idea.strip(), "dependencies": []}],
-            "idea": idea.strip(),
+            "tasks": [{"task_id": "0", "description": idea, "dependencies": []}],
+            "idea": idea,
         }
-        await save_plan(plan, plan_id)
+        await save_plan(plan, idea_id, plan_id)
 
         await api_state.sio.emit("plan-start")
 
@@ -128,45 +143,51 @@ async def _run_plan_inner(body: PlanRunRequest):
             plan, None, on_thinking, abort_event, on_tasks_batch,
             use_mock=use_mock, api_config=config,
             skip_quality_assessment=body.skip_quality_assessment,
+            idea_id=idea_id,
             plan_id=plan_id,
         )
         plan["tasks"] = result["tasks"]
-        await save_plan(plan, plan_id)
+        plan_to_save = {"tasks": plan["tasks"], "qualityScore": plan.get("qualityScore"), "qualityComment": plan.get("qualityComment")}
+        await save_plan(plan_to_save, idea_id, plan_id)
         await api_state.sio.emit("plan-complete", {
             **_tree_update_payload(plan),
+            "ideaId": idea_id,
             "planId": plan_id,
             "qualityScore": plan.get("qualityScore"),
             "qualityComment": plan.get("qualityComment"),
         })
-        return {"success": True, "planId": plan_id}
+    except asyncio.CancelledError:
+        _emit_plan_error("Plan Agent stopped by user")
+    except Exception as e:
+        err_msg = str(e)
+        logger.warning("Plan run error: %s", err_msg)
+        _emit_plan_error("Plan Agent stopped by user" if "Aborted" in err_msg else err_msg)
     finally:
         async with state.lock:
             if state.abort_event is abort_event:
                 state.abort_event = None
+        if state:
+            state.run_task = None
 
 
 @router.post("/run")
 async def run_plan_route(body: PlanRunRequest):
+    """立即返回，数据由 WebSocket plan-complete 回传。与 idea/task 统一。"""
     state = api_state.plan_run_state
     if state is None:
         return JSONResponse(status_code=503, content={"error": "API not initialized"})
     if state.run_task and not state.run_task.done():
         return JSONResponse(status_code=409, content={"error": "Plan run already in progress"})
-    state.run_task = asyncio.create_task(_run_plan_inner(body))
-    try:
-        result = await state.run_task
-        return result
-    except asyncio.CancelledError:
-        await api_state.sio.emit("plan-error", {"error": "Plan generation stopped by user"})
-        return JSONResponse(status_code=499, content={"error": "Plan generation stopped by user"})
-    except Exception as e:
-        is_aborted = "Aborted" in str(e) or (e.__class__.__name__ == "CancelledError")
-        err_msg = str(e)
-        logger.warning("Plan run error: %s", err_msg)
-        await api_state.sio.emit("plan-error", {"error": "Plan generation stopped by user" if is_aborted else err_msg})
-        if "No decomposable task" in err_msg or "Idea is required" in err_msg or "Provide idea" in err_msg:
-            return JSONResponse(status_code=400, content={"error": err_msg})
-        return JSONResponse(status_code=500, content={"error": err_msg or "Failed to run plan"})
-    finally:
-        if state:
-            state.run_task = None
+
+    idea_id = (body.idea_id or "").strip() or None
+    if not idea_id or idea_id == DEFAULT_IDEA_ID or not idea_id.startswith("idea_"):
+        return JSONResponse(status_code=400, content={"error": "Please Refine first to create an idea. Idea ID is required for plan generation."})
+
+    idea_data = await get_idea(idea_id)
+    if not idea_data or not idea_data.get("idea"):
+        return JSONResponse(status_code=400, content={"error": "Idea not found. Please Refine first to create an idea."})
+
+    plan_id = f"plan_{int(time.time() * 1000)}"
+    state.run_task = asyncio.create_task(_run_plan_inner(body, idea_id, plan_id))
+
+    return {"success": True, "ideaId": idea_id, "planId": plan_id}

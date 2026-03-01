@@ -1,0 +1,48 @@
+/**
+ * MAARS - 设计变量
+ * 合并 theme 色板与 base 布局/组件变量
+ */
+
+@import "./theme.css";
+
+:root {
+    /* 全局字体：仅 JetBrains Mono */
+    --font-family: "JetBrains Mono", monospace;
+
+    /* Layout */
+    --area-height: 300px;
+    --main-content-height: 550px;
+    --border-radius: 8px;
+    --padding: 16px;
+    --gap: 20px;
+
+    /* Task tree */
+    --tree-task-width: 110px;
+    --tree-task-height: 52px;
+    --tree-task-font-number: 12px;
+    --tree-task-font-desc: 10px;
+    --tree-task-radius: 10px;
+    --tree-node-shadow: var(--shadow-md);
+    --tree-node-shadow-hover: var(--shadow-lg);
+
+    /* Placeholder */
+    --placeholder-color: var(--text-muted);
+    --placeholder-font-size: 14px;
+
+    /* Scrollbar */
+    --scrollbar-width: 8px;
+
+    /* Button */
+    --btn-radius: 8px;
+    --btn-transition: all 0.2s ease;
+    --btn-hover-bg: var(--interactive-hover);
+    --btn-active-bg: var(--interactive-active);
+    --btn-hover-border: var(--interactive-border-hover);
+    --button-padding-y: 10px;
+    --button-padding-x: 20px;
+    --button-font-size: 14px;
+    --button-font-weight: 500;
+
+    /* State transition */
+    --state-transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}

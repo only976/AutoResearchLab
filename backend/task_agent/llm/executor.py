@@ -94,8 +94,9 @@ def _build_task_agent_messages(
 Rules:
 1. Use only the provided input artifacts and task description.
 2. Output must strictly conform to the specified format.
-3. For JSON: output valid JSON only, no extra text or markdown fences.
-4. For Markdown: output the document content directly."""
+3. You may reason first (1-3 sentences); this will be shown as your thinking process.
+4. For JSON: output reasoning first, then the JSON in a ```json``` code block.
+5. For Markdown: output reasoning first, then a blank line, then the document content."""
 
     inputs_str = "No input artifacts."
     if resolved_inputs:
@@ -116,7 +117,7 @@ Rules:
 **Output description:** {output_desc}
 **Output format:** {output_format}
 
-Produce the output now. Output ONLY the result, no explanation."""
+Produce the output now. You may reason first; then output the result."""
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -126,7 +127,7 @@ Produce the output now. Output ONLY the result, no explanation."""
 
 
 def _parse_task_agent_output(content: str, use_json_mode: bool) -> Any:
-    """Parse Task Agent output (content) to final result."""
+    """Parse Task Agent output (content) to final result. 支持 reasoning + 结果的格式。"""
     content = (content or "").strip()
     if not content:
         raise ValueError("LLM returned empty response")
@@ -135,10 +136,18 @@ def _parse_task_agent_output(content: str, use_json_mode: bool) -> Any:
         m = re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
         if m:
             cleaned = m.group(1).strip()
+        # 若无 ```json``` 块，尝试从文本中提取 {...} 或整体解析
+        if not cleaned or not cleaned.strip().startswith("{"):
+            obj_match = re.search(r"\{[\s\S]*\}", content)
+            if obj_match:
+                cleaned = obj_match.group(0)
         try:
             return json_repair.loads(cleaned)
         except Exception as e:
             raise ValueError(f"Failed to parse JSON from LLM response: {e}") from e
+    # Markdown: 若前面有 reasoning（短于 300 字），取第一个 \n\n 之后的内容作为文档
+    if "\n\n" in content and len(content.split("\n\n", 1)[0]) < 300:
+        return content.split("\n\n", 1)[1].strip()
     return content
 
 
@@ -164,6 +173,7 @@ async def execute_task(
     api_config: Optional[Dict[str, Any]] = None,
     abort_event: Optional[Any] = None,
     on_thinking: Optional[Callable[[str, Optional[str], Optional[str]], None]] = None,
+    idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
 ) -> Any:
     """
@@ -182,7 +192,8 @@ async def execute_task(
         task_id, description, input_spec, output_spec, resolved_inputs
     )
     use_json_mode = _is_json_format(output_format)
-    response_format = {"type": "json_object"} if use_json_mode else None
+    # 不使用 response_format，以便 LLM 先输出 reasoning 再输出结果（Thinking 显示推理）
+    response_format = None
     stream = on_thinking is not None
 
     def _on_chunk(chunk: str):

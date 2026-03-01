@@ -19,6 +19,7 @@ class MissingDependencyArtifactError(Exception):
 async def resolve_artifacts(
     task: Dict[str, Any],
     task_map: Dict[str, Dict],
+    idea_id: str,
     plan_id: str,
 ) -> Dict[str, Any]:
     """
@@ -41,7 +42,7 @@ async def resolve_artifacts(
         artifact_name = output_spec.get("artifact")
         if not artifact_name:
             continue
-        value = await get_task_artifact(plan_id, dep_id)
+        value = await get_task_artifact(idea_id, plan_id, dep_id)
         if value is not None:
             result[artifact_name] = value
         else:

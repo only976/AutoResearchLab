@@ -7,17 +7,18 @@
     document.addEventListener('DOMContentLoaded', () => {
         const cfg = window.MAARS?.config;
         const theme = window.MAARS?.theme;
+        const idea = window.MAARS?.idea;
         const plan = window.MAARS?.plan;
-        const views = window.MAARS?.views;
+        const task = window.MAARS?.task;
         const ws = window.MAARS?.ws;
 
-        if (theme) {
-            theme.initTheme().catch(() => {});
-            theme.initSettingsModal();
-        }
+        if (theme) theme.initTheme().catch(() => {});
+        const settings = window.MAARS?.settings;
+        if (settings) settings.initSettingsModal();
         if (cfg && cfg.resolvePlanId) cfg.resolvePlanId().catch(() => {});
+        if (idea) idea.init();
         if (plan) plan.init();
-        if (views) views.init();
+        if (task) task.init();
         if (ws) ws.init();
 
         const taskTree = window.MAARS?.taskTree;
@@ -30,6 +31,7 @@
             if (!api?.restoreRecentPlan) return;
             try {
                 await api.restoreRecentPlan();
+                /* restore 流程由 api 派发 maars:restore-complete，各模块自行监听并恢复 UI */
             } catch (_) {
                 /* 无 plan 时静默忽略 */
             }
@@ -39,6 +41,12 @@
     function initTreeViewTabs() {
         const tabs = document.querySelectorAll('.tree-view-tab');
         const panels = document.querySelectorAll('.tree-view-panel');
+
+        function switchToView(view) {
+            const tab = Array.from(tabs).find((t) => t.getAttribute('data-view') === view);
+            if (tab) tab.click();
+        }
+
         tabs.forEach((tab) => {
             tab.addEventListener('click', () => {
                 const view = tab.getAttribute('data-view');
@@ -52,5 +60,7 @@
                 });
             });
         });
+
+        document.addEventListener('maars:switch-to-output-tab', () => switchToView('output'));
     }
 })();

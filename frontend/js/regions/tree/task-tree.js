@@ -1,6 +1,6 @@
 /**
- * Task tree rendering module.
- * Uses pre-computed layout from backend (decomposition: level-order by task_id; execution: stage-based).
+ * MAARS Tree View - 任务树渲染（Decomposition / Execution 两视图）。
+ * 与 region-responsibilities 中 Tree View 对应。
  */
 (function () {
     'use strict';
@@ -312,19 +312,9 @@
             const retryBtn = e.target.closest('.task-retry-btn');
             const resumeBtn = e.target.closest('.task-resume-btn');
             const taskId = retryBtn?.getAttribute('data-retry-task-id') || resumeBtn?.getAttribute('data-resume-task-id');
-            if (taskId && window.MAARS?.api) {
-                const fn = retryBtn ? window.MAARS.api.retryTask : window.MAARS.api.resumeFromTask;
-                if (fn) {
-                    fn.call(window.MAARS.api, taskId).then(() => {
-                        if (window.MAARS?.views?.startExecutionUI) {
-                            window.MAARS.views.startExecutionUI();
-                        }
-                    }).catch((err) => {
-                        console.error('Action failed:', err);
-                        alert('Failed: ' + (err.message || err));
-                    });
-                    hideTaskPopover();
-                }
+            if (taskId) {
+                document.dispatchEvent(new CustomEvent(retryBtn ? 'maars:task-retry' : 'maars:task-resume', { detail: { taskId } }));
+                hideTaskPopover();
             }
         });
         popoverOutsideClickHandler = (e) => {
@@ -364,6 +354,49 @@
         });
     }
 
+    /**
+     * 批量更新任务状态（DOM），供 websocket task-states-update / sync 调用。
+     * @param {Array<{task_id: string, status: string}>} tasks
+     */
+    function updateTaskStates(tasks) {
+        if (!tasks || !Array.isArray(tasks)) return;
+        const areas = document.querySelectorAll('.plan-agent-tree-area, .plan-agent-execution-tree-area');
+        tasks.forEach((taskState) => {
+            areas.forEach((treeArea) => {
+                if (!treeArea) return;
+                const byId = treeArea.querySelectorAll(`[data-task-id="${taskState.task_id}"]`);
+                const byIds = treeArea.querySelectorAll('[data-task-ids]');
+                const cells = Array.from(byId);
+                byIds.forEach((cell) => {
+                    const ids = (cell.getAttribute('data-task-ids') || '').split(',').map((s) => s.trim());
+                    if (ids.includes(taskState.task_id)) cells.push(cell);
+                });
+                cells.forEach((cell) => {
+                    cell.classList.remove('task-status-undone', 'task-status-doing', 'task-status-validating', 'task-status-done', 'task-status-validation-failed', 'task-status-execution-failed');
+                    const dataAttr = cell.getAttribute('data-task-data');
+                    if (dataAttr) {
+                        try {
+                            const d = JSON.parse(dataAttr);
+                            const arr = Array.isArray(d) ? d : [d];
+                            const updated = arr.map((t) => (t.task_id === taskState.task_id ? { ...t, status: taskState.status } : t));
+                            cell.setAttribute('data-task-data', JSON.stringify(Array.isArray(d) ? updated : updated[0]));
+                            const status = arr.length === 1 ? taskState.status : aggregateStatus(updated);
+                            if (status && status !== 'undone') cell.classList.add(`task-status-${status}`);
+                        } catch (_) {
+                            if (taskState.status && taskState.status !== 'undone') cell.classList.add(`task-status-${taskState.status}`);
+                        }
+                    } else {
+                        if (taskState.status && taskState.status !== 'undone') cell.classList.add(`task-status-${taskState.status}`);
+                    }
+                    document.querySelectorAll(`.task-detail-tab[data-tab-task-id="${taskState.task_id}"]`).forEach((tab) => {
+                        tab.classList.remove('task-status-undone', 'task-status-doing', 'task-status-validating', 'task-status-done', 'task-status-validation-failed', 'task-status-execution-failed');
+                        if (taskState.status && taskState.status !== 'undone') tab.classList.add(`task-status-${taskState.status}`);
+                    });
+                });
+            });
+        });
+    }
+
     function updatePlanAgentQualityBadge(score, comment) {
         const badge = document.getElementById('planAgentQualityBadge');
         if (!badge) return;
@@ -380,6 +413,41 @@
         else badge.classList.add('quality-low');
     }
 
+    (function initFlowStartListeners() {
+        const onFlowStart = () => { clear(AREA.decomposition); updatePlanAgentQualityBadge(null); };
+        document.addEventListener('maars:idea-start', onFlowStart);
+        document.addEventListener('maars:plan-start', onFlowStart);
+    })();
+
+    document.addEventListener('maars:plan-tree-update', (e) => {
+        const { treeData, layout } = e.detail || {};
+        if (treeData) renderPlanAgentTree(treeData, layout);
+    });
+
+    document.addEventListener('maars:plan-complete', (e) => {
+        const data = e.detail || {};
+        if (data.treeData) renderPlanAgentTree(data.treeData, data.layout);
+        updatePlanAgentQualityBadge(data.qualityScore, data.qualityComment);
+    });
+
+    document.addEventListener('maars:task-states-update', (e) => {
+        const data = e.detail;
+        if (data?.tasks && Array.isArray(data.tasks)) updateTaskStates(data.tasks);
+    });
+
+    document.addEventListener('maars:execution-sync', (e) => {
+        const data = e.detail;
+        if (data?.tasks && Array.isArray(data.tasks)) updateTaskStates(data.tasks);
+    });
+
+    document.addEventListener('maars:restore-complete', (e) => {
+        const { treePayload, plan } = e.detail || {};
+        if (treePayload?.treeData?.length) {
+            renderPlanAgentTree(treePayload.treeData, treePayload.layout);
+            if (plan?.qualityScore != null) updatePlanAgentQualityBadge(plan.qualityScore, plan.qualityComment);
+        }
+    });
+
     window.MAARS.taskTree = {
         aggregateStatus,
         renderPlanAgentTree,
@@ -388,5 +456,6 @@
         clearExecutionTree: () => clear(AREA.execution),
         initClickHandlers,
         updatePlanAgentQualityBadge,
+        updateTaskStates,
     };
 })();
