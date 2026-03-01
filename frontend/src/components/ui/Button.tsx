@@ -18,7 +18,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
       ghost: "hover:bg-accent hover:text-accent-foreground",
       link: "text-primary underline-offset-4 hover:underline",
-      accent: "bg-[#7c5cff] text-white hover:bg-[#9f8cff]",
+      accent: "bg-primary text-primary-foreground hover:bg-primary/90",
     }
 
     const sizes = {

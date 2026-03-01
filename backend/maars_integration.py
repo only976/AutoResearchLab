@@ -7,8 +7,8 @@ from fastapi import FastAPI
 
 
 def ensure_maars_path() -> Path:
-    repo_root = Path(__file__).resolve().parents[1]
-    maars_backend = repo_root / "maars" / "backend"
+    backend_root = Path(__file__).resolve().parent
+    maars_backend = backend_root / "maars"
     maars_backend_str = str(maars_backend)
     if maars_backend_str in sys.path:
         sys.path.remove(maars_backend_str)

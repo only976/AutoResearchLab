@@ -1,17 +1,14 @@
 google-adk
-python-dotenv
 pydantic
 fastapi==0.123.10
 uvicorn==0.40.0
 httpx
 requests
-backoff
 python-socketio
 aiofiles
 networkx
 orjson
 json-repair
-loguru
 PyYAML
 duckduckgo-search
 google-genai

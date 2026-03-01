@@ -8,13 +8,9 @@ from backend.api.experiments import router as experiments_router
 from backend.api.ideas import router as ideas_router
 from backend.api.paper import router as paper_router
 from backend.api.maars_proxy import router as maars_router
-from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
+from backend.api.config import router as config_router
 from backend.db import init_db
 from backend.maars_integration import attach_maars
-from backend.sandbox.docker_sandbox import DockerSandbox
-from backend.utils.logger import configure_logging
-
-configure_logging()
 
 app = FastAPI(title="AutoResearchLab API", version="0.1.0")
 
@@ -31,6 +27,7 @@ app.include_router(ideas_router)
 app.include_router(experiments_router)
 app.include_router(paper_router)
 app.include_router(maars_router)
+app.include_router(config_router)
 sio = attach_maars(app)
 
 # Expose Socket.IO at /maars/socket.io while preserving all FastAPI routes.
@@ -43,16 +40,13 @@ def health() -> Dict[str, Any]:
 @app.get("/api/health/detail")
 def health_detail() -> Dict[str, Any]:
     docker_ok = False
-    docker_message = "Docker client not available. Is Docker running?"
+    docker_message = "Docker sandbox not configured (MAARS uses file-based execution)"
     try:
-        sandbox = DockerSandbox()
-        if sandbox.client:
-            try:
-                sandbox.client.ping()
-                docker_ok = True
-                docker_message = "Docker is running"
-            except Exception as exc:
-                docker_message = str(exc)
+        import docker
+        client = docker.from_env()
+        client.ping()
+        docker_ok = True
+        docker_message = "Docker is running"
     except Exception as exc:
         docker_message = str(exc)
     return {
@@ -60,10 +54,3 @@ def health_detail() -> Dict[str, Any]:
         "docker": {"ok": docker_ok, "message": docker_message},
     }
 
-@app.get("/api/config")
-def get_config() -> Dict[str, Any]:
-    return {
-        "llm_model": LLM_MODEL,
-        "llm_api_base": LLM_API_BASE,
-        "llm_api_key_configured": bool(LLM_API_KEY),
-    }

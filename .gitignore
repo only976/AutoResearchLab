@@ -30,9 +30,15 @@ data/logs/*
 # Project Data
 data/*
 
+# backend/db file storage (config with API keys, SQLite, MAARS)
+backend/db/config.json
+backend/db/*.sqlite3*
+backend/db/maars/
+
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.eslintcache
 frontend/.turbo/
 
+maars-only-for-ref
