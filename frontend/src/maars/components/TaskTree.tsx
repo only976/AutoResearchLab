@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
+import { createPortal } from "react-dom"
 import { useMaars } from "../context/MaarsContext"
 import { useMaarsApi } from "../hooks/useMaarsApi"
 import { escapeHtml } from "../utils/markdown"
@@ -39,8 +40,16 @@ export function TaskTree({ treeData, layout, taskById, isExecution }: TaskTreePr
   const { retryTask, resumeFromTask } = useMaarsApi()
   const [popover, setPopover] = useState<{
     tasks: Task[]
-    anchor: { x: number; y: number }
+    anchor: { left: number; right: number; top: number; bottom: number; width: number; height: number }
   } | null>(null)
+  const [rollbackTaskId, setRollbackTaskId] = useState<string | null>(null)
+  const rollbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (rollbackTimeoutRef.current) clearTimeout(rollbackTimeoutRef.current)
+    },
+    []
+  )
 
   const getStatus = useCallback(
     (taskId: string, task?: Task): string => {
@@ -53,20 +62,45 @@ export function TaskTree({ treeData, layout, taskById, isExecution }: TaskTreePr
     (e: React.MouseEvent, tasks: Task[]) => {
       e.stopPropagation()
       const rect = (e.target as HTMLElement).getBoundingClientRect()
-      setPopover((prev) =>
-        prev && prev.tasks === tasks ? null : { tasks, anchor: { x: rect.right, y: rect.top + rect.height / 2 } }
-      )
+      const ids = (a: Task[]) => a.map((t) => t.task_id).sort().join(",")
+      setPopover((prev) => {
+        const isSameNode = prev && ids(prev.tasks) === ids(tasks)
+        return isSameNode
+          ? null
+          : {
+              tasks,
+              anchor: {
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+                bottom: rect.bottom,
+                width: rect.width,
+                height: rect.height,
+              },
+            }
+      })
     },
     []
   )
 
   const handleRetry = useCallback(
     async (taskId: string) => {
+      if (rollbackTimeoutRef.current) clearTimeout(rollbackTimeoutRef.current)
+      setRollbackTaskId(taskId)
+      rollbackTimeoutRef.current = setTimeout(() => {
+        setRollbackTaskId(null)
+        rollbackTimeoutRef.current = null
+      }, 3000)
       try {
         await retryTask(taskId)
         setPopover(null)
       } catch (err) {
         console.error(err)
+        setRollbackTaskId(null)
+        if (rollbackTimeoutRef.current) {
+          clearTimeout(rollbackTimeoutRef.current)
+          rollbackTimeoutRef.current = null
+        }
         alert("Failed: " + (err as Error).message)
       }
     },
@@ -86,7 +120,41 @@ export function TaskTree({ treeData, layout, taskById, isExecution }: TaskTreePr
     [resumeFromTask]
   )
 
-  if (!layout || !treeData.length) {
+  // Backend may return { treeData, layout: { nodes, edges, width, height } }; extract inner layout
+  const actualLayout =
+    layout && typeof layout === "object" && "layout" in layout && layout.layout && "nodes" in (layout.layout as object)
+      ? (layout.layout as Layout)
+      : (layout as Layout | null)
+
+  const edges = actualLayout?.edges ?? []
+
+  // Glow type: undone→doing = yellow on upstream; red only on error rollback (user clicked Retry)
+  const edgeGlowType = useCallback(
+    (edge: LayoutEdge): "yellow" | "red" | null => {
+      if (!isExecution) return null
+      const fromIds = Array.isArray(edge.from) ? edge.from : edge.from ? [edge.from] : []
+      const toIds = Array.isArray(edge.to) ? edge.to : edge.to ? [edge.to] : []
+      const ids = [...fromIds, ...toIds]
+      if (rollbackTaskId && ids.includes(rollbackTaskId)) return "red"
+      const hasDoingTarget = toIds.some((id) => getStatus(id, taskById.get(id)) === "doing")
+      if (hasDoingTarget) return "yellow"
+      return null
+    },
+    [isExecution, taskById, getStatus, rollbackTaskId]
+  )
+
+  // Decomposition: leaf = no outgoing edges. Execution: no leaf styling for single nodes.
+  const isLeafNode = useCallback(
+    (taskId: string) => {
+      if (isExecution) return false
+      const fromIds = (e: LayoutEdge) =>
+        Array.isArray(e.from) ? e.from : e.from ? [e.from] : []
+      return !edges.some((e) => fromIds(e).includes(taskId))
+    },
+    [edges, isExecution]
+  )
+
+  if (!actualLayout || !treeData.length) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
         No tasks to display
@@ -94,24 +162,84 @@ export function TaskTree({ treeData, layout, taskById, isExecution }: TaskTreePr
     )
   }
 
-  const { nodes, edges, width, height } = layout
+  const { nodes = {}, width: layoutWidth = 0, height: layoutHeight = 0 } = actualLayout
+  const width = Math.max(layoutWidth, 1)
+  const height = Math.max(layoutHeight, 1)
 
   return (
     <div className="relative flex-1 min-h-0 overflow-auto">
       <div
-        className="relative"
-        style={{ width: `${width}px`, height: `${height}px`, minHeight: `${height}px` }}
+        className="relative overflow-visible"
+        style={{
+          width: `${width}px`,
+          height: `${height}px`,
+          minWidth: `${width}px`,
+          minHeight: `${height}px`,
+        }}
       >
+        {/* SVG 和节点必须在同一坐标系的同一容器内叠加 */}
         <svg
-          className="absolute inset-0 pointer-events-none"
+          className="absolute top-0 left-0 pointer-events-none"
           width={width}
           height={height}
           viewBox={`0 0 ${width} ${height}`}
+          style={{ display: "block" }}
         >
+          <defs>
+            <filter id="edge-glow" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x={-100} y={-100} width={width + 200} height={height + 200}>
+              <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
           {(edges || []).map((edge: LayoutEdge, i) => {
             const pts = edge.points
             if (!pts || pts.length < 2) return null
             const d = buildSmoothPath(pts)
+            const isCrossStage = isExecution && edge.adjacent === false
+            const glowType = isExecution ? edgeGlowType(edge) : null
+            if (isExecution) {
+              const glowStroke =
+                glowType === "red"
+                  ? "hsl(var(--destructive))"
+                  : glowType === "yellow"
+                    ? "hsl(45 93% 47%)"
+                    : undefined
+              return (
+                <g key={i}>
+                  {/* Glow on status change: yellow (doing), red (error); includes cross-stage */}
+                  {glowType && (
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke={glowStroke}
+                      strokeWidth={isCrossStage ? 2 : 2.5}
+                      strokeDasharray={isCrossStage ? "4 3" : "none"}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      filter="url(#edge-glow)"
+                      className="tree-edge-glow-on-active"
+                    />
+                  )}
+                  {/* Main stroke: cross-stage = reduced presence */}
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={isCrossStage ? 1 : 1.5}
+                    strokeDasharray={isCrossStage ? "4 3" : "none"}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={cn(
+                      "tree-edge-path text-muted-foreground/50",
+                      isCrossStage && "opacity-35"
+                    )}
+                  />
+                </g>
+              )
+            }
             return (
               <path
                 key={i}
@@ -119,18 +247,17 @@ export function TaskTree({ treeData, layout, taskById, isExecution }: TaskTreePr
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={1.5}
-                className={cn(
-                  "text-muted-foreground/50",
-                  isExecution && edge.adjacent === false && "opacity-60"
-                )}
+                className="tree-edge-path text-muted-foreground/50"
               />
             )
           })}
         </svg>
 
-        <div className="absolute inset-0">
-          <div className="absolute top-0 left-0" style={{ width: `${width}px`, height: `${height}px` }}>
-            {Object.entries(nodes).map(([taskId, pos]) => {
+        <div
+          className="absolute top-0 left-0"
+          style={{ width: `${width}px`, height: `${height}px` }}
+        >
+          {Object.entries(nodes).map(([taskId, pos]) => {
               const ids = (pos as LayoutNode & { ids?: string[] }).ids
               const isMerged = ids && ids.length >= 2 && isExecution
 
@@ -141,11 +268,12 @@ export function TaskTree({ treeData, layout, taskById, isExecution }: TaskTreePr
                   <div
                     key={taskId}
                     className={cn(
-                      "absolute tree-task tree-task-leaf tree-task-merged cursor-pointer rounded border px-2 py-1 text-xs font-medium truncate flex items-center justify-center",
+                      "absolute tree-task tree-task-merged cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium truncate flex items-center justify-center",
                       "bg-background border-border hover:border-primary/50",
                       status !== "undone" && `task-status-${status}`
                     )}
                     style={{
+                      position: "absolute",
                       left: pos.x,
                       top: pos.y,
                       width: pos.w,
@@ -168,12 +296,13 @@ export function TaskTree({ treeData, layout, taskById, isExecution }: TaskTreePr
                 <div
                   key={taskId}
                   className={cn(
-                    "absolute tree-task cursor-pointer rounded border px-2 py-1 text-xs font-medium truncate",
+                    "absolute tree-task cursor-pointer rounded-md border border-border px-2 py-1 text-xs font-medium truncate",
                     "bg-background border-border hover:border-primary/50",
                     isExecution && status !== "undone" && `task-status-${status}`,
-                    !isExecution && !task.dependencies?.length && "tree-task-leaf"
+                    !isExecution && isLeafNode(taskId) && "tree-task-leaf"
                   )}
                   style={{
+                    position: "absolute",
                     left: pos.x,
                     top: pos.y,
                     width: pos.w,
@@ -182,62 +311,92 @@ export function TaskTree({ treeData, layout, taskById, isExecution }: TaskTreePr
                   title={desc}
                   onClick={(e) => handleNodeClick(e, [task])}
                 >
-                  {desc}
+                  {/* 普通节点不显示文本，仅合并节点显示数量 */}
                 </div>
               )
             })}
-          </div>
         </div>
       </div>
 
-      {popover && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setPopover(null)}
-            aria-hidden="true"
-          />
-          <div
-            className="fixed z-50 bg-background border rounded-lg shadow-xl max-w-md p-4"
-            style={{
-              left: Math.min(popover.anchor.x + 8, typeof window !== "undefined" ? window.innerWidth - 320 : popover.anchor.x + 8),
-              top: Math.min(
-                popover.anchor.y - 100,
-                typeof window !== "undefined" ? window.innerHeight - 250 : popover.anchor.y - 100
-              ),
-            }}
-            role="dialog"
-            aria-label="Task details"
-          >
-            {popover.tasks.length === 1 ? (
-              <TaskDetailBody
-                task={popover.tasks[0]}
-                onRetry={handleRetry}
-                onResume={handleResume}
-              />
-            ) : (
-              <div className="space-y-2">
-                {popover.tasks.map((t, i) => (
-                  <TaskDetailBody
-                    key={t.task_id}
-                    task={t}
-                    onRetry={handleRetry}
-                    onResume={handleResume}
-                  />
-                ))}
-              </div>
-            )}
-            <button
-              type="button"
-              className="absolute top-2 right-2 text-lg leading-none"
+      {popover &&
+        typeof document !== "undefined" &&
+        (() => {
+          const POPOVER_W = 220
+          const POPOVER_MAX_H = 360
+          const GAP = 8
+          const r = popover.anchor
+          const vw = window.innerWidth
+          const vh = window.innerHeight
+          // 优先在节点右侧，空间不足则放左侧
+          let left = r.right + GAP
+          if (left + POPOVER_W > vw - GAP) {
+            left = r.left - POPOVER_W - GAP
+          }
+          if (left < GAP) left = GAP
+          if (left + POPOVER_W > vw - GAP) left = vw - POPOVER_W - GAP
+          // 垂直：优先在节点下方，空间不足则放上方。用 bottom 定位“上方”时可不依赖弹窗高度
+          type VerticalStyle = { top?: number; bottom?: number }
+          let vertical: VerticalStyle
+          if (r.bottom + POPOVER_MAX_H + GAP <= vh) {
+            vertical = { top: r.bottom + GAP }
+          } else if (r.top - GAP - POPOVER_MAX_H >= GAP) {
+            vertical = { bottom: vh - (r.top - GAP) }
+          } else {
+            const centerTop = r.top + r.height / 2 - 80
+            vertical = { top: Math.max(GAP, Math.min(centerTop, vh - POPOVER_MAX_H - GAP)) }
+          }
+          return createPortal(
+          <>
+            <div
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 9998,
+                cursor: "default",
+              }}
               onClick={() => setPopover(null)}
-              aria-label="Close"
+              onMouseDown={() => setPopover(null)}
+              aria-hidden="true"
+            />
+            <div
+              className="bg-background border border-border rounded-md shadow-xl p-4 overflow-y-auto"
+              style={{
+                position: "fixed",
+                zIndex: 9999,
+                width: POPOVER_W,
+                maxHeight: POPOVER_MAX_H,
+                left,
+                ...vertical,
+              }}
+              role="dialog"
+              aria-label="Task details"
             >
-              ×
-            </button>
-          </div>
-        </>
-      )}
+              {popover.tasks.length === 1 ? (
+                <TaskDetailBody
+                  task={popover.tasks[0]}
+                  onRetry={handleRetry}
+                  onResume={handleResume}
+                />
+              ) : (
+                <div className="space-y-2">
+                  {popover.tasks.map((t) => (
+                    <TaskDetailBody
+                      key={t.task_id}
+                      task={t}
+                      onRetry={handleRetry}
+                      onResume={handleResume}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>,
+          document.body
+          )
+        })()}
     </div>
   )
 }
@@ -264,7 +423,7 @@ function TaskDetailBody({
     : "-"
 
   return (
-    <div className="space-y-2 text-sm">
+    <div className="space-y-2 text-sm break-words">
       <div className="font-medium">{escapeHtml(task.task_id)}</div>
       <div>
         <span className="text-muted-foreground">Description:</span> {escapeHtml(desc)}
@@ -289,10 +448,20 @@ function TaskDetailBody({
           </div>
         </>
       )}
+      {task.validation && (
+        <div>
+          <span className="text-muted-foreground">Validation:</span>{" "}
+          {task.validation.description
+            ? escapeHtml(task.validation.description)
+            : task.validation.criteria?.length
+              ? escapeHtml((task.validation.criteria || []).join("; "))
+              : "-"}
+        </div>
+      )}
       {isFailed && (
         <button
           type="button"
-          className="rounded border px-2 py-1 text-xs hover:bg-muted"
+          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
           onClick={() => onRetry(task.task_id)}
         >
           Retry
@@ -301,7 +470,7 @@ function TaskDetailBody({
       {isUndone && (
         <button
           type="button"
-          className="rounded border px-2 py-1 text-xs hover:bg-muted"
+          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
           onClick={() => onResume(task.task_id)}
         >
           Run from here

@@ -225,7 +225,7 @@ export function MaarsSettingsSection() {
     <motion.div variants={{ show: { transition: { staggerChildren: 0.05 } } }} initial="hidden" animate="show">
       <h2 className="text-lg font-semibold mb-4">MAARS Settings</h2>
       {error && (
-        <div className="mb-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive">
+        <div className="mb-4 p-4 rounded-md bg-destructive/10 border border-destructive/20 text-destructive">
           {error}
         </div>
       )}
@@ -436,7 +436,7 @@ export function MaarsSettingsSection() {
                                     onChange={(e) =>
                                       updateModeConfig(aiMode, param.key, e.target.checked)
                                     }
-                                    className="rounded border-input"
+                                    className="rounded-md border-input"
                                   />
                                 </div>
                               ) : (

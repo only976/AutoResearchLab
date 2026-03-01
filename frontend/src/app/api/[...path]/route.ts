@@ -27,9 +27,21 @@ async function proxy(
 
   const res = await fetch(backendUrl, init)
   const contentType = res.headers.get("content-type") || "application/json"
+  const isSSE = contentType.includes("text/event-stream")
   const isBinary = contentType.includes("octet-stream") || contentType.startsWith("image/")
-  const payload = isBinary ? await res.arrayBuffer() : await res.text()
 
+  if (isSSE && res.body) {
+    return new Response(res.body, {
+      status: res.status,
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    })
+  }
+
+  const payload = isBinary ? await res.arrayBuffer() : await res.text()
   return new Response(payload, {
     status: res.status,
     headers: { "Content-Type": contentType },

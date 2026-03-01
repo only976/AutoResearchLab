@@ -3,7 +3,8 @@ import type { Config } from "tailwindcss"
 const config: Config = {
   content: [
     "./src/app/**/*.{ts,tsx}",
-    "./src/components/**/*.{ts,tsx}"
+    "./src/components/**/*.{ts,tsx}",
+    "./src/maars/**/*.{ts,tsx}"
   ],
   theme: {
     extend: {
@@ -45,12 +46,6 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Legacy colors kept for backward compatibility if needed, 
-        // but mapped to new variables where appropriate or kept as static fallback
-        surface: "#0b0f1a", 
-        panel: "#101726",
-        accentLegacy: "#7c5cff",
-        accentSoft: "#9f8cff"
       },
       borderRadius: {
         lg: "var(--radius)",

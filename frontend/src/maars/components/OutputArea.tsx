@@ -1,15 +1,29 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { useMaars } from "../context/MaarsContext"
 import { renderMarkdown, escapeHtml } from "../utils/markdown"
 import { cn } from "@/lib/utils"
 
+const TASK_BLOCK_HEIGHT = 192 // h-48 = 12rem = 192px
+
 export function OutputArea() {
   const { taskOutputs } = useMaars()
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
   const [modalTaskId, setModalTaskId] = useState<string | null>(null)
   const [modalContent, setModalContent] = useState<string>("")
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!focusedTaskId) return
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setFocusedTaskId(null)
+      }
+    }
+    document.addEventListener("click", handleClick)
+    return () => document.removeEventListener("click", handleClick)
+  }, [focusedTaskId])
 
   const keys = Object.keys(taskOutputs).sort()
 
@@ -53,7 +67,7 @@ export function OutputArea() {
 
   if (keys.length === 0) {
     return (
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden rounded-lg border bg-muted/20">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div className="flex-1 overflow-auto p-4 text-sm text-muted-foreground">
           <p>Task outputs will appear here after execution.</p>
         </div>
@@ -63,7 +77,7 @@ export function OutputArea() {
 
   return (
     <>
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden rounded-lg border bg-muted/20">
+      <div ref={containerRef} className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <div className="flex-1 overflow-auto p-4 space-y-3">
           {keys.map((taskId) => {
             const raw = taskOutputs[taskId]
@@ -73,18 +87,19 @@ export function OutputArea() {
             } else {
               content = raw ? renderMarkdown(String(raw)) : ""
             }
-            const isFocused = expandedTaskId === taskId
+            const isFocused = focusedTaskId === taskId
             return (
               <div
                 key={taskId}
                 className={cn(
-                  "rounded border overflow-hidden transition-colors",
-                  isFocused ? "ring-2 ring-primary" : "bg-background/50"
+                  "rounded-md border border-border overflow-hidden transition-[background-color,border-color,box-shadow] duration-200 ease-out shrink-0 flex flex-col",
+                  isFocused && "ring-2 ring-primary"
                 )}
+                style={{ height: TASK_BLOCK_HEIGHT }}
               >
                 <div
-                  className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 cursor-pointer"
-                  onClick={() => setExpandedTaskId(isFocused ? null : taskId)}
+                  className="flex items-center justify-between px-3 py-2 border-b cursor-pointer shrink-0"
+                  onClick={() => setFocusedTaskId(isFocused ? null : taskId)}
                 >
                   <span className="text-sm font-medium">Task {escapeHtml(taskId)}</span>
                   <button
@@ -100,7 +115,11 @@ export function OutputArea() {
                   </button>
                 </div>
                 <div
-                  className="p-3 prose prose-sm dark:prose-invert max-w-none max-h-48 overflow-auto"
+                  className={cn(
+                    "flex-1 min-h-0 p-3 prose prose-sm dark:prose-invert max-w-none cursor-pointer",
+                    isFocused ? "overflow-auto" : "overflow-hidden"
+                  )}
+                  onClick={() => setFocusedTaskId(isFocused ? null : taskId)}
                   dangerouslySetInnerHTML={{ __html: content }}
                 />
               </div>
@@ -116,8 +135,8 @@ export function OutputArea() {
           aria-modal="true"
           aria-label="Task Output"
         >
-          <div className="bg-background border rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col m-4">
-            <div className="flex items-center justify-between px-4 py-2 border-b">
+          <div className="bg-background border border-border rounded-md shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col m-4">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border">
               <span className="font-medium">Task {escapeHtml(modalTaskId)}</span>
               <div className="flex gap-2">
                 <button

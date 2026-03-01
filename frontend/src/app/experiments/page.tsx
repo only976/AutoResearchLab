@@ -25,9 +25,14 @@ function ExperimentsContent() {
 
   const decompositionTaskById = useMemo(() => {
     const m = new Map<string, import("@/maars/types").Task>()
-    treeData.forEach((t) => {
-      if (t?.task_id) m.set(t.task_id, t)
-    })
+    const flatten = (tasks: import("@/maars/types").Task[]) => {
+      for (const t of tasks) {
+        if (t?.task_id) m.set(t.task_id, t)
+        const subs = (t as { subtasks?: import("@/maars/types").Task[] }).subtasks
+        if (Array.isArray(subs)) flatten(subs)
+      }
+    }
+    flatten(treeData)
     return m
   }, [treeData])
 
@@ -58,10 +63,24 @@ function ExperimentsContent() {
 
       <IdeaInputRow />
 
-      <div className="flex gap-4 min-h-[400px]">
-        <div className="flex-1 flex flex-col min-w-0 border rounded-lg overflow-hidden bg-muted/10">
+      <div className="flex h-[500px] border border-border rounded-none overflow-hidden bg-background">
+        <div className="w-[30%] min-w-[200px] h-full flex flex-col shrink-0">
           <div className="relative flex-1 flex flex-col min-h-0 p-2">
             <TreeViewTabs />
+
+            {view === "decomposition" && qualityScore != null && (
+              <div
+                className={cn(
+                  "absolute bottom-8 right-3 z-20 text-xs px-2 py-1 rounded-md",
+                  qualityScore >= 80 && "bg-green-500/20 text-green-700 dark:text-green-400",
+                  qualityScore >= 60 && qualityScore < 80 && "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
+                  qualityScore < 60 && "bg-red-500/20 text-red-700 dark:text-red-400"
+                )}
+                title={qualityComment || ""}
+              >
+                Quality: {qualityScore}
+              </div>
+            )}
 
             <div
               className={cn(
@@ -72,27 +91,12 @@ function ExperimentsContent() {
               )}
             >
               {view === "decomposition" && (
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                  {qualityScore != null && (
-                    <div
-                      className={cn(
-                        "mb-2 text-xs px-2 py-1 rounded w-fit",
-                        qualityScore >= 80 && "bg-green-500/20 text-green-700 dark:text-green-400",
-                        qualityScore >= 60 && qualityScore < 80 && "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400",
-                        qualityScore < 60 && "bg-red-500/20 text-red-700 dark:text-red-400"
-                      )}
-                      title={qualityComment || ""}
-                    >
-                      Quality: {qualityScore}
-                    </div>
-                  )}
-                  <TaskTree
-                    treeData={treeData}
-                    layout={layout}
-                    taskById={decompositionTaskById}
-                    isExecution={false}
-                  />
-                </div>
+                <TaskTree
+                  treeData={treeData}
+                  layout={layout}
+                  taskById={decompositionTaskById}
+                  isExecution={false}
+                />
               )}
 
               {view === "execution" && (
@@ -109,7 +113,8 @@ function ExperimentsContent() {
           </div>
         </div>
 
-        <div className="w-[40%] min-w-[280px] flex flex-col min-h-0">
+        <div className="w-px shrink-0 bg-border" aria-hidden />
+        <div className="flex-1 flex flex-col min-h-0 min-w-0 h-full">
           <ThinkingArea />
         </div>
       </div>

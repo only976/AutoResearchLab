@@ -103,7 +103,7 @@ export default function ConfigPage() {
 
       <div className="flex-1 space-y-6">
         {error && (
-          <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-lg">
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-md">
             {error}
           </div>
         )}

@@ -78,12 +78,18 @@ export async function generateExecutionFromPlan(planId: string): Promise<{ execu
 }
 
 export async function fetchLayout(execution: Execution, planId: string): Promise<{ layout: Layout }> {
-  const data = await api<{ layout?: Layout }>(`${BASE}/plan/layout`, {
-    method: "POST",
-    body: { execution, planId },
-  })
+  const data = await api<{ layout?: Layout | { layout?: Layout; treeData?: unknown[] } }>(
+    `${BASE}/plan/layout`,
+    {
+      method: "POST",
+      body: { execution, planId },
+    }
+  )
   if (!data.layout) throw new Error("No layout returned")
-  return { layout: data.layout }
+  // Backend returns { treeData, layout: { nodes, edges, width, height } }; extract inner layout
+  const raw = data.layout as { layout?: Layout; nodes?: unknown }
+  const layout = raw.layout && "nodes" in raw.layout ? raw.layout : (raw as Layout)
+  return { layout }
 }
 
 export async function runExecution(planId: string, resumeFromTaskId?: string): Promise<void> {

@@ -41,9 +41,9 @@ export default function Sidebar() {
   }, [])
 
   return (
-    <aside className="hidden h-screen w-64 flex-col border-r bg-card/50 backdrop-blur-xl px-4 py-6 md:flex fixed left-0 top-0 z-50">
+    <aside className="hidden h-screen w-64 flex-col border-r border-border bg-card/50 backdrop-blur-xl px-4 py-6 md:flex fixed left-0 top-0 z-50">
       <div className="mb-8 px-2 flex items-center gap-2">
-        <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
+        <div className="h-8 w-8 rounded-md bg-primary/20 flex items-center justify-center">
           <FlaskConical className="h-5 w-5 text-primary" />
         </div>
         <div>
@@ -75,8 +75,8 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto border-t pt-4">
-        <div className="rounded-lg bg-muted/50 p-3 text-xs">
+      <div className="mt-auto border-t border-border pt-4">
+        <div className="rounded-md bg-muted/50 p-3 text-xs">
           <div className="flex items-center justify-between mb-2">
             <span className="font-medium text-muted-foreground">System Status</span>
             <Activity className="h-3 w-3 text-muted-foreground" />

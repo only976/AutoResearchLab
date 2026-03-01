@@ -10,7 +10,7 @@ import { useMaarsSSE } from "../hooks/useMaarsSSE"
 import { api } from "@/lib/api"
 
 export function IdeaInputRow() {
-  const { idea, setIdea, planRunning, executionRunning, planId } = useMaars()
+  const { idea, setIdea, planRunning, executionRunning, planId, dispatch } = useMaars()
   const [loadIdeaLoading, setLoadIdeaLoading] = useState(false)
   const {
     restoreRecentPlan,
@@ -92,6 +92,7 @@ export function IdeaInputRow() {
 
   const handleExecute = useCallback(async () => {
     if (!planId) return
+    dispatch({ type: "CLEAR_EXECUTION_STATE" })
     try {
       await generateExecutionLayout()
       await startExecution()
@@ -99,7 +100,7 @@ export function IdeaInputRow() {
       console.error(err)
       alert("Error: " + ((err as Error).message || "Failed to start execution"))
     }
-  }, [planId, generateExecutionLayout, startExecution])
+  }, [planId, dispatch, generateExecutionLayout, startExecution])
 
   const handleStopExecution = useCallback(async () => {
     await stopExecutionRun()

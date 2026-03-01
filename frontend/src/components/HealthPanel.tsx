@@ -47,25 +47,25 @@ export default function HealthPanel() {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-200">
-          <div className="text-slate-400">Backend</div>
-          <div className="mt-2 text-sm text-white">{backendOk ? "运行中" : "异常"}</div>
+        <div className="rounded-md border border-border bg-card p-4 text-xs text-foreground">
+          <div className="text-muted-foreground">Backend</div>
+          <div className="mt-2 text-sm font-medium">{backendOk ? "运行中" : "异常"}</div>
         </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-200">
-          <div className="text-slate-400">Docker</div>
-          <div className="mt-2 text-sm text-white">{dockerOk ? "运行中" : "未启动"}</div>
-          <div className="mt-2 text-xs text-slate-400">{health?.docker?.message || ""}</div>
+        <div className="rounded-md border border-border bg-card p-4 text-xs text-foreground">
+          <div className="text-muted-foreground">Docker</div>
+          <div className="mt-2 text-sm font-medium">{dockerOk ? "运行中" : "未启动"}</div>
+          <div className="mt-2 text-xs text-muted-foreground">{health?.docker?.message || ""}</div>
         </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-200">
-          <div className="text-slate-400">LLM</div>
-          <div className="mt-2 text-sm text-white">{config?.llm_model || "Unknown"}</div>
-          <div className="mt-1 text-xs text-slate-400">
+        <div className="rounded-md border border-border bg-card p-4 text-xs text-foreground">
+          <div className="text-muted-foreground">LLM</div>
+          <div className="mt-2 text-sm font-medium">{config?.llm_model || "Unknown"}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
             {config?.llm_api_key_configured ? "API Key 已配置" : "API Key 未配置"}
           </div>
         </div>
       </div>
       {!dockerOk ? (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
           Docker 未启动，实验执行会失败。请启动 Docker Desktop 或运行 colima start。
         </div>
       ) : null}

@@ -46,6 +46,7 @@ type MaarsAction =
   | { type: "SET_VIEW"; view: MaarsView }
   | { type: "TASK_STATE_UPDATE"; taskId: string; status: string }
   | { type: "TASK_STATES_BATCH"; updates: Array<{ taskId: string; status: string }> }
+  | { type: "CLEAR_EXECUTION_STATE" }
   | { type: "RESET" }
 
 const initialState: MaarsState = {
@@ -158,6 +159,14 @@ function reducer(state: MaarsState, action: MaarsAction): MaarsState {
       action.updates.forEach(({ taskId, status }) => prev.set(taskId, status))
       return { ...state, previousTaskStates: prev, taskStatusMap: statusMap }
     }
+    case "CLEAR_EXECUTION_STATE":
+      return {
+        ...state,
+        taskStatusMap: {},
+        previousTaskStates: new Map(),
+        thinkingBlocks: [],
+        taskOutputs: {},
+      }
     case "RESET":
       return {
         ...initialState,

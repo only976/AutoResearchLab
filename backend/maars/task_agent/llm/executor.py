@@ -18,10 +18,13 @@ from shared.utils import chunk_string
 
 # Mock 模式下 chunk 间延迟（秒）
 _MOCK_CHUNK_DELAY = 0.03
+# Mock 任务最小执行时长（秒），保证短直边光晕有足够时间显示
+_MOCK_TASK_MIN_DURATION = 0.4
 
 
 async def _mock_execute(output_format: str, task_id: str, on_thinking: Optional[Callable] = None) -> Any:
     """Return simulated output for mock mode. No LLM call."""
+    await asyncio.sleep(_MOCK_TASK_MIN_DURATION)
     if _is_json_format(output_format):
         result = {"_mock": True, "task_id": task_id, "note": "Simulated output (Mock AI mode)"}
         if on_thinking:

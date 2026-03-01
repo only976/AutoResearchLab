@@ -294,7 +294,7 @@ export default function IdeasPage() {
           </AnimatePresence>
         </div>
 
-        <div className="w-80 border-l bg-muted/10 p-4 overflow-y-auto flex flex-col gap-4">
+        <div className="w-80 border-l border-border bg-muted/10 p-4 overflow-y-auto flex flex-col gap-4">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Saved Ideas</h3>
           <div className="space-y-2">
             {snapshots.length === 0 && <div className="text-sm text-muted-foreground">No saved snapshots found.</div>}

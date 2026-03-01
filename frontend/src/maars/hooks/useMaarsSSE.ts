@@ -4,12 +4,22 @@ import { useEffect, useRef } from "react"
 import { useMaars } from "../context/MaarsContext"
 import {
   fetchLayout,
-  fetchExecution,
   generateExecutionFromPlan,
 } from "../api"
-import type { ThinkingBlock } from "../types"
+import type { Layout } from "../types"
 
 const EVENTS_URL = "/api/maars/events"
+
+/** Extract flat layout from backend response (may be nested { treeData, layout }). */
+function normalizeLayout(raw: unknown): Layout | null {
+  if (!raw || typeof raw !== "object") return null
+  const obj = raw as Record<string, unknown>
+  if (obj.layout && typeof obj.layout === "object" && "nodes" in (obj.layout as object)) {
+    return obj.layout as Layout
+  }
+  if ("nodes" in obj && "edges" in obj) return obj as Layout
+  return null
+}
 
 export function useMaarsSSE(planId: string | null) {
   const { dispatch } = useMaars()
@@ -72,7 +82,7 @@ export function useMaarsSSE(planId: string | null) {
           dispatch({
             type: "SET_TREE",
             treeData: data.treeData,
-            layout: data.layout ?? null,
+            layout: normalizeLayout(data.layout) ?? null,
           })
         }
       } catch {
@@ -87,7 +97,7 @@ export function useMaarsSSE(planId: string | null) {
           dispatch({
             type: "SET_TREE",
             treeData: data.treeData,
-            layout: data.layout ?? null,
+            layout: normalizeLayout(data.layout) ?? null,
           })
         }
         if (data.planId) dispatch({ type: "SET_PLAN_ID", planId: data.planId })
@@ -120,8 +130,9 @@ export function useMaarsSSE(planId: string | null) {
     es.addEventListener("execution-layout", (evt) => {
       try {
         const data = JSON.parse((evt as MessageEvent).data || "{}")
-        if (data.layout) {
-          dispatch({ type: "SET_EXECUTION_LAYOUT", layout: data.layout })
+        const layout = normalizeLayout(data.layout ?? data)
+        if (layout) {
+          dispatch({ type: "SET_EXECUTION_LAYOUT", layout })
         }
       } catch {
         // ignore
