@@ -2,10 +2,17 @@ import "./globals.css"
 import Sidebar from "@/components/Sidebar"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
+import { JetBrains_Mono } from "next/font/google"
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jetbrains-mono",
+})
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className={cn("dark", jetbrainsMono.variable)}>
       <body className={cn("min-h-screen bg-background font-sans antialiased")}>
         <div className="flex min-h-screen">
           <Sidebar />

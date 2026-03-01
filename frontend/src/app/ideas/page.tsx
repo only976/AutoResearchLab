@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Loader2, Save, Play, RefreshCw, ChevronRight, FileJson, ArrowLeft } from "lucide-react"
+import { Loader2, Save, RefreshCw, ChevronRight, FileJson, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
 import { Badge } from "@/components/ui/Badge"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/PageHeader"
+import { api } from "@/lib/api"
 
 // Types
 type Idea = {
@@ -38,7 +39,7 @@ type Snapshot = {
 }
 
 export default function IdeasPage() {
-  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [step, setStep] = useState<1 | 3>(1)
   const [scope, setScope] = useState("")
   const [refinedTopic, setRefinedTopic] = useState<RefinedTopic | null>(null)
   const [results, setResults] = useState<IdeaResult[]>([])
@@ -53,19 +54,13 @@ export default function IdeasPage() {
 
   const fetchSnapshots = async () => {
     try {
-      const res = await fetch("/api/ideas/snapshots")
-      if (res.ok) {
-        const data = await res.json()
-        // Handle both old (string[]) and new (object[]) formats
-        const files = data.files || []
-        const parsedSnapshots = files.map((f: any) => {
-          if (typeof f === 'string') {
-             return { filename: f, title: f, timestamp: '' }
-          }
-          return f
-        })
-        setSnapshots(parsedSnapshots)
-      }
+      const data = await api<{ files?: (string | Snapshot)[] }>("ideas/snapshots")
+      const files = data.files || []
+      const parsedSnapshots = files.map((f: string | Snapshot) => {
+        if (typeof f === "string") return { filename: f, title: f, timestamp: "" }
+        return f
+      })
+      setSnapshots(parsedSnapshots)
     } catch (e) {
       console.error("Failed to load snapshots", e)
     }
@@ -75,17 +70,27 @@ export default function IdeasPage() {
     if (!scope.trim()) return
     setLoading(true)
     try {
-      const res = await fetch("/api/ideas/refine", {
+      const refined = await api<RefinedTopic>("ideas/refine", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope }),
+        body: { scope },
       })
-      const data = await res.json()
-      setRefinedTopic(data)
-      setStep(2)
+      setRefinedTopic(refined)
+
+      const generationScope = JSON.stringify(refined)
+      const generated = await api<{ ideas?: Idea[] } | Idea[]>("ideas/generate", {
+        method: "POST",
+        body: { scope: generationScope },
+      })
+      const result: IdeaResult = {
+        topic: refined,
+        ideas: Array.isArray(generated) ? generated : generated.ideas || []
+      }
+      setResults([result])
+      setStep(3)
+      fetchSnapshots()
     } catch (e) {
       console.error(e)
-      alert("Failed to refine topic")
+      alert("Failed to refine and generate ideas")
     } finally {
       setLoading(false)
     }
@@ -95,14 +100,11 @@ export default function IdeasPage() {
     if (!refinedTopic) return
     setLoading(true)
     try {
-      // Use the refined abstract/tldr as the scope for generation
       const generationScope = JSON.stringify(refinedTopic)
-      const res = await fetch("/api/ideas/generate", {
+      const data = await api<{ ideas?: Idea[] } | Idea[]>("ideas/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: generationScope }),
+        body: { scope: generationScope },
       })
-      const data = await res.json()
       // Structure the result
       const result: IdeaResult = {
         topic: refinedTopic,
@@ -124,18 +126,12 @@ export default function IdeasPage() {
     if (!refinedTopic || results.length === 0) return
     setSaving(true)
     try {
-      const res = await fetch("/api/ideas/snapshots", {
+      await api("ideas/snapshots", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          refinement_data: refinedTopic,
-          results: results
-        }),
+        body: { refinement_data: refinedTopic, results },
       })
-      if (res.ok) {
-        fetchSnapshots()
-        alert("Snapshot saved!")
-      }
+      fetchSnapshots()
+      alert("Snapshot saved!")
     } catch (e) {
       console.error(e)
       alert("Failed to save snapshot")
@@ -147,13 +143,12 @@ export default function IdeasPage() {
   const loadSnapshot = async (filename: string) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/ideas/snapshots/${filename}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (data.refinement_data) setRefinedTopic(data.refinement_data)
-        if (data.results) setResults(data.results)
-        setStep(3)
-      }
+      const data = await api<{ refinement_data?: RefinedTopic; results?: IdeaResult[] }>(
+        `ideas/snapshots/${encodeURIComponent(filename)}`
+      )
+      if (data.refinement_data) setRefinedTopic(data.refinement_data)
+      if (data.results) setResults(data.results)
+      setStep(3)
     } catch (e) {
       console.error(e)
     } finally {
@@ -164,25 +159,15 @@ export default function IdeasPage() {
   const [startingExperiment, setStartingExperiment] = useState<string | null>(null)
 
   const handleStartExperiment = async (topic: RefinedTopic, idea: Idea, ideaIndex: number) => {
-    if (startingExperiment !== null) return // Prevent multiple clicks
-    
+    if (startingExperiment !== null) return
+
     setStartingExperiment(String(ideaIndex))
     try {
-      const res = await fetch("/api/experiments", {
+      await api("experiments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic: topic,
-          idea: idea
-        }),
+        body: { topic, idea },
       })
-      if (res.ok) {
-        // Use router.push for smoother navigation instead of window.location
-        // But window.location ensures full reload if state is stale
-        window.location.href = "/experiments"
-      } else {
-        throw new Error("Failed to create experiment")
-      }
+      window.location.href = "/experiments"
     } catch (e) {
       console.error(e)
       alert("Failed to start experiment")
@@ -197,7 +182,7 @@ export default function IdeasPage() {
         description="Transform research concepts into executable experiments."
       >
         {step > 1 && (
-           <Button variant="outline" onClick={() => setStep(step - 1 as 1|2)} size="sm">
+            <Button variant="outline" onClick={() => setStep(1)} size="sm">
              <ArrowLeft className="mr-2 h-4 w-4" /> Back
            </Button>
         )}
@@ -236,38 +221,6 @@ export default function IdeasPage() {
                     >
                       {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                       Refine Topic
-                    </Button>
-                  </CardFooter>
-                </Card>
-              </motion.div>
-            )}
-
-            {step === 2 && refinedTopic && (
-              <motion.div
-                key="step2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="max-w-3xl mx-auto space-y-6"
-              >
-                <Card className="border-primary/20 bg-card/50 backdrop-blur">
-                  <CardHeader>
-                    <CardTitle>Refined Topic: {refinedTopic.title}</CardTitle>
-                    <CardDescription>Review the refined research direction before generating concrete ideas.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
-                      <span className="font-semibold text-foreground">TL;DR:</span> {refinedTopic.tldr}
-                    </div>
-                    <div className="text-sm leading-relaxed">
-                      {refinedTopic.abstract}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="flex justify-between gap-4">
-                    <Button variant="ghost" onClick={() => setStep(1)}>Edit Topic</Button>
-                    <Button onClick={handleGenerate} disabled={loading} size="lg" className="flex-1">
-                      {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-                      Generate Ideas
                     </Button>
                   </CardFooter>
                 </Card>
@@ -341,7 +294,7 @@ export default function IdeasPage() {
           </AnimatePresence>
         </div>
 
-        <div className="w-80 border-l bg-muted/10 p-4 overflow-y-auto flex flex-col gap-4">
+        <div className="w-80 border-l border-border bg-muted/10 p-4 overflow-y-auto flex flex-col gap-4">
           <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Saved Ideas</h3>
           <div className="space-y-2">
             {snapshots.length === 0 && <div className="text-sm text-muted-foreground">No saved snapshots found.</div>}

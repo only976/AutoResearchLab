@@ -1,73 +1,65 @@
-import os
-import json
 from typing import Any, Dict
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
 
-# 1. 导入核心组件和配置
-from backend.ideas.agent import IdeaAgent, ResearchIdeaEngine
 from backend.api.common import parse_json_text
-from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
-from backend.schemas.request_models import IdeaRefineRequest, SnapshotSaveRequest
-from backend.ideas.snapshots import save_snapshot, list_snapshots, load_snapshot
+from backend.ideas.agent import IdeaAgent
+from backend.ideas.snapshots import load_snapshot, list_snapshots, save_snapshot
+from backend.schemas.request_models import (
+    IdeaGenerateRequest,
+    IdeaRefineRequest,
+    SnapshotSaveRequest,
+)
 
 router = APIRouter(prefix="/api/ideas")
 
 
+def _fallback_topic_from_scope(scope: str) -> Dict[str, Any]:
+    cleaned = (scope or "").strip()
+    if not cleaned:
+        return {"title": "Idea Snapshot", "scope": ""}
+
+    one_line = " ".join(cleaned.split())
+    title = one_line[:80]
+    return {"title": title, "scope": cleaned}
+
+
+def _build_snapshot_name_with_llm(agent: IdeaAgent, refined_topic: Any, snapshot_results: Any) -> str:
+    llm_title = agent.generate_snapshot_title(refined_topic, snapshot_results)
+    if not llm_title:
+        llm_title = "idea_snapshot"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{timestamp}_{llm_title}"
+
+
 @router.post("/refine")
 def refine_ideas(payload: IdeaRefineRequest) -> Dict[str, Any]:
-    """
-    第一阶段：精炼研究主题
-    保持原样，使用 IdeaAgent 进行初步的方向发散
-    """
     agent = IdeaAgent()
     text = agent.refine_topic(payload.scope)
     return parse_json_text(text)
 
 
 @router.post("/generate")
-def generate_ideas(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    第二阶段：生成深度研究报告（适配云端 RAG 和自定义模板）
-    接收包含 broad_topic, vram_gb, depth_level, language 的 JSON
-    """
-    # 初始化 RAG 引擎
-    # 引擎内部会自动读取环境变量 QDRANT_URL 和 QDRANT_API_KEY 以连接云端数据库
-    engine = ResearchIdeaEngine(
-        model_config={
-            "model_name": LLM_MODEL,
-            "api_base": LLM_API_BASE,
-            "api_key": LLM_API_KEY
-        },
-        db_path="./qdrant_local_cache"  # 云端连接失败时的本地备份路径
-    )
-
-    # 提取主题用于日志或快照
-    topic = payload.get("broad_topic", "Untitled Research")
-
+def generate_ideas(payload: IdeaGenerateRequest) -> Dict[str, Any]:
+    agent = IdeaAgent()
+    text = agent.generate_ideas(payload.scope)
+    result = parse_json_text(text)
     try:
-        # 核心：运行你在 agent.py 中修改好的 run_agent_workflow
-        # 它会自动处理检索、Source ID 引用、VRAM 评估和召回率计算
-        result = engine.run_agent_workflow(payload)
+        import json
 
-        # 检查是否有错误返回
-        if "error" in result:
-            raise HTTPException(status_code=500, detail=result["error"])
-
-        # 自动保存快照 (Auto-save)
         try:
-            # 构造快照数据结构，适配前端展示
-            snapshot_data = {
-                "refinement_data": {"title": topic},
-                "results": result
-            }
-            save_snapshot(snapshot_data["refinement_data"], [result])
-        except Exception as save_err:
-            print(f"⚠️ Snapshot auto-save failed: {save_err}")
+            refined_topic = json.loads(payload.scope)
+        except Exception:
+            refined_topic = _fallback_topic_from_scope(payload.scope)
 
-        return result
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+        ideas_list = result.get("ideas", []) if isinstance(result, dict) else result
+        snapshot_results = [{"topic": refined_topic, "ideas": ideas_list}]
+        snapshot_name = _build_snapshot_name_with_llm(agent, refined_topic, snapshot_results)
+        save_snapshot(refined_topic, snapshot_results, custom_name=snapshot_name)
+    except Exception:
+        pass
+    return result
 
 
 @router.get("/snapshots")
@@ -78,8 +70,9 @@ def get_snapshots() -> Dict[str, Any]:
 
 @router.post("/snapshots")
 def save_snapshot_api(payload: SnapshotSaveRequest) -> Dict[str, Any]:
-    """手动保存当前研究成果快照"""
-    filename = save_snapshot(payload.refinement_data, payload.results)
+    agent = IdeaAgent()
+    snapshot_name = _build_snapshot_name_with_llm(agent, payload.refinement_data, payload.results)
+    filename = save_snapshot(payload.refinement_data, payload.results, custom_name=snapshot_name)
     return {"file": filename}
 
 

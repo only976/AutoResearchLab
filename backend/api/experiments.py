@@ -1,26 +1,13 @@
-import os
-import subprocess
-import uuid
-from datetime import datetime
+import asyncio
+import json
+import time
+from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
-from backend.experiments.agents.experiment_design_agent import ExperimentDesignAgent
-from backend.api.common import (
-    EXPERIMENTS_DIR,
-    ensure_dir,
-    read_json,
-    write_json,
-    parse_json_text,
-    get_workspace_path,
-    ensure_experiment_path,
-    list_experiments,
-    safe_artifact_path,
-)
-from backend.experiments.execution.experiment_runner import start_experiment_background
-from backend.experiments.execution.feedback_manager import FeedbackManager
+from backend.maars_integration import ensure_maars_path
 from backend.schemas.request_models import (
     ExperimentCreateRequest,
     ExperimentPlanRequest,
@@ -31,153 +18,266 @@ from backend.schemas.request_models import (
 router = APIRouter(prefix="/api/experiments")
 
 
+def _idea_to_text(payload: ExperimentPlanRequest | ExperimentCreateRequest) -> str:
+    idea = payload.idea or {}
+    topic = getattr(payload, "topic", None) or {}
+    for field in ("title", "name", "summary", "description"):
+        if isinstance(idea, dict) and idea.get(field):
+            return str(idea[field])
+    for field in ("title", "name", "summary", "description"):
+        if isinstance(topic, dict) and topic.get(field):
+            return str(topic[field])
+    if isinstance(idea, dict):
+        return json.dumps(idea, ensure_ascii=True)
+    return str(idea) if idea else "Untitled idea"
+
+
+def _load_maars():
+    ensure_maars_path()
+    from api import state as maars_state
+    from db import (
+        get_effective_config,
+        get_execution,
+        get_plan,
+        get_task_artifact,
+        list_plan_ids,
+        list_plan_outputs,
+        save_execution,
+        save_plan,
+    )
+    from plan_agent.execution_builder import build_execution_from_plan
+    from plan_agent.index import run_plan
+    from visualization import build_layout_from_execution
+
+    return {
+        "state": maars_state,
+        "get_effective_config": get_effective_config,
+        "get_execution": get_execution,
+        "get_plan": get_plan,
+        "get_task_artifact": get_task_artifact,
+        "list_plan_ids": list_plan_ids,
+        "list_plan_outputs": list_plan_outputs,
+        "save_execution": save_execution,
+        "save_plan": save_plan,
+        "build_execution_from_plan": build_execution_from_plan,
+        "build_layout_from_execution": build_layout_from_execution,
+        "run_plan": run_plan,
+    }
+
+
 @router.get("")
-def get_experiments() -> List[Dict[str, Any]]:
-    return list_experiments()
+async def get_experiments() -> List[Dict[str, Any]]:
+    maars = _load_maars()
+    plan_ids = await maars["list_plan_ids"]()
+    items: List[Dict[str, Any]] = []
+    for plan_id in plan_ids:
+        plan = await maars["get_plan"](plan_id)
+        title = plan.get("idea") if isinstance(plan, dict) else None
+        if not title and isinstance(plan, dict):
+            tasks = plan.get("tasks") or []
+            if tasks:
+                title = tasks[0].get("description")
+        items.append(
+            {
+                "id": plan_id,
+                "title": title or plan_id,
+                "status": "initialized",
+                "updated_at": None,
+                "created_at": None,
+            }
+        )
+    return items
 
 
 @router.get("/{exp_id}/meta")
-def get_experiment_meta(exp_id: str) -> Dict[str, Any]:
-    workspace_path = ensure_experiment_path(exp_id)
-    meta = read_json(os.path.join(workspace_path, "meta.json"))
-    if not meta:
+async def get_experiment_meta(exp_id: str) -> Dict[str, Any]:
+    maars = _load_maars()
+    plan = await maars["get_plan"](exp_id)
+    if not plan:
         raise HTTPException(status_code=404, detail="Meta not found")
-    return meta
+    idea = plan.get("idea") if isinstance(plan, dict) else None
+    return {
+        "id": exp_id,
+        "plan_id": exp_id,
+        "idea": {"title": idea or exp_id},
+        "topic": {},
+    }
 
 
 @router.get("/{exp_id}/plan")
-def get_experiment_plan(exp_id: str) -> Dict[str, Any]:
-    workspace_path = ensure_experiment_path(exp_id)
-    plan = read_json(os.path.join(workspace_path, "plan.json"))
+async def get_experiment_plan(exp_id: str) -> Dict[str, Any]:
+    maars = _load_maars()
+    plan = await maars["get_plan"](exp_id)
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     return plan
 
 
 @router.get("/{exp_id}/conclusion")
-def get_experiment_conclusion(exp_id: str) -> Dict[str, Any]:
-    workspace_path = ensure_experiment_path(exp_id)
-    conclusion = read_json(os.path.join(workspace_path, "conclusion.json"))
-    if not conclusion:
-        raise HTTPException(status_code=404, detail="Conclusion not found")
-    return conclusion
+async def get_experiment_conclusion(exp_id: str) -> Dict[str, Any]:
+    raise HTTPException(status_code=404, detail="Conclusion not found")
 
 
 @router.post("")
-def create_experiment(payload: ExperimentCreateRequest) -> Dict[str, Any]:
-    ensure_dir(EXPERIMENTS_DIR)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    exp_id = f"exp_{timestamp}_{str(uuid.uuid4())[:8]}"
-    workspace_path = get_workspace_path(exp_id)
-    ensure_dir(workspace_path)
-    write_json(
-        os.path.join(workspace_path, "meta.json"),
-        {"id": exp_id, "idea": payload.idea, "topic": payload.topic},
-    )
-    return {"id": exp_id}
+async def create_experiment(payload: ExperimentCreateRequest) -> Dict[str, Any]:
+    plan_id = f"plan_{int(time.time() * 1000)}"
+    return {"id": plan_id}
 
 
 @router.post("/{exp_id}/plan")
-def generate_plan(exp_id: str, payload: ExperimentPlanRequest) -> Dict[str, Any]:
-    workspace_path = get_workspace_path(exp_id)
-    if not os.path.exists(workspace_path):
-        raise HTTPException(status_code=404, detail="Experiment not found")
-    agent = ExperimentDesignAgent()
-    plan_text = agent.refine_plan(payload.idea, payload.topic or {})
-    plan = parse_json_text(plan_text)
-    write_json(os.path.join(workspace_path, "plan.json"), plan)
+async def generate_plan(exp_id: str, payload: ExperimentPlanRequest) -> Dict[str, Any]:
+    maars = _load_maars()
+    config = await maars["get_effective_config"]()
+    idea_text = _idea_to_text(payload)
+    plan = {
+        "tasks": [{"task_id": "0", "description": idea_text, "dependencies": []}],
+        "idea": idea_text,
+    }
+    result = await maars["run_plan"](
+        plan,
+        None,
+        lambda *args, **kwargs: None,
+        abort_event=None,
+        on_tasks_batch=None,
+        use_mock=config.get("useMock", True),
+        api_config=config,
+        skip_quality_assessment=False,
+        plan_id=exp_id,
+    )
+    plan["tasks"] = result.get("tasks", plan.get("tasks"))
+    await maars["save_plan"](plan, exp_id)
     return plan
 
 
 @router.post("/{exp_id}/run")
-def run_experiment(exp_id: str, payload: ExperimentRunRequest) -> Dict[str, Any]:
-    workspace_path = get_workspace_path(exp_id)
-    plan = read_json(os.path.join(workspace_path, "plan.json"))
+async def run_experiment(exp_id: str, payload: ExperimentRunRequest) -> Dict[str, Any]:
+    maars = _load_maars()
+    plan = await maars["get_plan"](exp_id)
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    if payload.max_iterations is not None:
-        status_path = os.path.join(workspace_path, "status.json")
-        status = read_json(status_path) or {}
-        status["max_iterations"] = payload.max_iterations
-        write_json(status_path, status)
-    start_experiment_background(workspace_path, plan)
-    return {"status": "started"}
+
+    execution = maars["build_execution_from_plan"](plan)
+    await maars["save_execution"](execution, exp_id)
+    layout = maars["build_layout_from_execution"](execution)
+
+    state = maars["state"]
+    runner = state.runner
+    if runner is None:
+        raise HTTPException(status_code=503, detail="MAARS runner not initialized")
+
+    try:
+        runner.set_layout(layout, plan_id=exp_id, execution=execution)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+    config = await maars["get_effective_config"]()
+
+    async def _run() -> None:
+        await runner.start_execution(api_config=config, resume_from_task_id=None)
+
+    asyncio.create_task(_run())
+    return {"status": "started", "plan_id": exp_id}
 
 
 @router.get("/{exp_id}/status")
-def get_status(exp_id: str) -> Dict[str, Any]:
-    workspace_path = get_workspace_path(exp_id)
-    status = read_json(os.path.join(workspace_path, "status.json"))
-    if not status:
-        return {
-            "experiment_status": "initialized",
-            "current_step": 0,
-            "total_steps": 0,
-            "step_name": "Initializing",
-            "details": "Waiting for execution to start..."
-        }
-    return status
+async def get_status(exp_id: str) -> Dict[str, Any]:
+    maars = _load_maars()
+    state = maars["state"]
+    runner = state.runner
 
+    execution = await maars["get_execution"](exp_id)
+    tasks = (execution or {}).get("tasks") or []
+    total_steps = len(tasks)
+    done_steps = sum(1 for t in tasks if t.get("status") == "done")
+    failed_steps = sum(1 for t in tasks if t.get("status") in {"execution-failed", "validation-failed"})
 
-@router.get("/{exp_id}/logs")
-def get_logs(exp_id: str, lines: int = Query(default=200, ge=1, le=2000)) -> Dict[str, Any]:
-    workspace_path = get_workspace_path(exp_id)
-    log_path = os.path.join(workspace_path, "execution.log")
-    if not os.path.exists(log_path):
-        return {"lines": []}
-    with open(log_path, "r") as f:
-        content = f.readlines()
-    return {"lines": content[-lines:]}
+    is_running = bool(runner and runner.is_running and runner.plan_id == exp_id)
+    if is_running:
+        status = "running"
+        details = "Execution in progress"
+    elif total_steps == 0:
+        status = "initialized"
+        details = "Waiting for execution to start..."
+    elif failed_steps > 0:
+        status = "failed"
+        details = f"{failed_steps} tasks failed"
+    elif done_steps == total_steps:
+        status = "completed"
+        details = "All tasks completed"
+    else:
+        status = "paused"
+        details = "Execution ready"
+
+    return {
+        "experiment_status": status,
+        "current_step": done_steps,
+        "total_steps": total_steps,
+        "step_name": "Execution",
+        "details": details,
+    }
 
 
 @router.get("/{exp_id}/artifacts")
-def get_artifacts(exp_id: str) -> Dict[str, Any]:
-    workspace_path = ensure_experiment_path(exp_id)
-    files = []
-    for name in os.listdir(workspace_path):
-        if name.endswith((".png", ".jpg", ".csv", ".json")):
-            files.append(name)
-    return {"files": sorted(files)}
+async def get_artifacts(exp_id: str) -> Dict[str, Any]:
+    maars = _load_maars()
+    outputs = await maars["list_plan_outputs"](exp_id)
+    manifest = []
+    for task_id, output in outputs.items():
+        manifest.append(
+            {
+                "name": f"task_{task_id}.json",
+                "type": "json",
+                "stage": "execution",
+                "step_id": task_id,
+                "summary": None,
+                "for_next_stage": False,
+            }
+        )
+    return {"files": [], "manifest": manifest}
 
 
 @router.get("/{exp_id}/artifacts/{name}")
-def get_artifact(exp_id: str, name: str):
-    workspace_path = ensure_experiment_path(exp_id)
-    path = safe_artifact_path(workspace_path, name)
-    return FileResponse(path)
+async def get_artifact(exp_id: str, name: str):
+    maars = _load_maars()
+    task_id = None
+    for prefix in ("task_", "output_"):
+        if name.startswith(prefix) and name.endswith(".json"):
+            task_id = name[len(prefix) : -5]
+            break
+    if not task_id:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    output = await maars["get_task_artifact"](exp_id, task_id)
+    if output is None:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    return JSONResponse(content=output)
 
 
 @router.get("/{exp_id}/history")
-def get_history(exp_id: str) -> Dict[str, Any]:
-    workspace_path = ensure_experiment_path(exp_id)
-    if not os.path.exists(os.path.join(workspace_path, ".git")):
-        return {"commits": []}
-    result = subprocess.run(
-        ["git", "log", "--pretty=format:%h|%s|%cr|%an", "-n", "20"],
-        cwd=workspace_path,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    if result.returncode != 0:
-        return {"commits": []}
-    commits = []
-    for line in result.stdout.strip().split("\n"):
-        parts = line.split("|")
-        if len(parts) == 4:
-            commits.append(
-                {
-                    "sha": parts[0],
-                    "message": parts[1],
-                    "time": parts[2],
-                    "author": parts[3],
-                }
-            )
-    return {"commits": commits}
+async def get_history(exp_id: str) -> Dict[str, Any]:
+    return {"commits": []}
 
 
 @router.post("/{exp_id}/feedback")
-def add_feedback(exp_id: str, payload: FeedbackRequest) -> Dict[str, Any]:
-    workspace_path = ensure_experiment_path(exp_id)
-    fm = FeedbackManager(workspace_path)
-    fm.add_feedback(payload.type.lower(), payload.message)
+async def add_feedback(exp_id: str, payload: FeedbackRequest) -> Dict[str, Any]:
+    ensure_maars_path()
+    from db import DB_DIR
+
+    plan_dir = Path(DB_DIR) / exp_id
+    plan_dir.mkdir(parents=True, exist_ok=True)
+    feedback_path = plan_dir / "feedback.json"
+    entries: List[Dict[str, Any]] = []
+    if feedback_path.exists():
+        try:
+            entries = json.loads(feedback_path.read_text(encoding="utf-8"))
+        except Exception:
+            entries = []
+
+    entries.append(
+        {
+            "type": payload.type.lower(),
+            "message": payload.message,
+            "ts": int(time.time()),
+        }
+    )
+    feedback_path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
     return {"status": "queued"}

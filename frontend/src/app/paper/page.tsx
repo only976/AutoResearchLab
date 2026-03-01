@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Section from "@/components/Section"
+import { Button } from "@/components/ui/Button"
+import { api, apiFetch } from "@/lib/api"
+import { cn } from "@/lib/utils"
 
 type ExperimentItem = {
   id: string
@@ -26,12 +29,23 @@ type DraftResponse = {
   content: string
 }
 
+type ArtifactManifestItem = {
+  name: string
+  type?: string
+  stage?: string
+  step_id?: string
+  summary?: string | null
+  for_next_stage?: boolean
+  created_at?: string
+}
+
 export default function PaperPage() {
   const [experiments, setExperiments] = useState<ExperimentItem[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
   const [plan, setPlan] = useState<Plan | null>(null)
   const [conclusion, setConclusion] = useState<Conclusion | null>(null)
   const [artifacts, setArtifacts] = useState<string[]>([])
+  const [artifactManifest, setArtifactManifest] = useState<ArtifactManifestItem[]>([])
   const [draft, setDraft] = useState<DraftResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,8 +58,7 @@ export default function PaperPage() {
   const loadExperiments = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/experiments")
-      const data = await res.json()
+      const data = await api<ExperimentItem[]>("experiments")
       setExperiments(data)
       if (!selectedId && data.length > 0) {
         setSelectedId(data[0].id)
@@ -62,14 +75,19 @@ export default function PaperPage() {
     setError(null)
     try {
       const [planRes, conclusionRes, artifactsRes] = await Promise.all([
-        fetch(`/api/experiments/${expId}/plan`),
-        fetch(`/api/experiments/${expId}/conclusion`),
-        fetch(`/api/experiments/${expId}/artifacts`)
+        apiFetch(`experiments/${expId}/plan`),
+        apiFetch(`experiments/${expId}/conclusion`),
+        apiFetch(`experiments/${expId}/artifacts`)
       ])
       setPlan(planRes.ok ? await planRes.json() : null)
       setConclusion(conclusionRes.ok ? await conclusionRes.json() : null)
       const artifactsData = artifactsRes.ok ? await artifactsRes.json() : null
-      setArtifacts(artifactsData?.files || [])
+      const manifest = Array.isArray(artifactsData?.manifest) ? artifactsData.manifest : []
+      setArtifactManifest(manifest)
+      const nextStageFiles = manifest
+        .filter((item: ArtifactManifestItem) => item.for_next_stage)
+        .map((item: ArtifactManifestItem) => item.name)
+      setArtifacts(nextStageFiles.length > 0 ? nextStageFiles : (artifactsData?.files || []))
       setDraft(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error")
@@ -83,15 +101,10 @@ export default function PaperPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/experiments/${selectedId}/draft`, {
+      const data = await api<DraftResponse>(`experiments/${selectedId}/draft`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ format })
+        body: { format }
       })
-      if (!res.ok) {
-        throw new Error("Draft generation failed")
-      }
-      const data = await res.json()
       setDraft(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error")
@@ -143,7 +156,10 @@ export default function PaperPage() {
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <select
-              className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200"
+              className={cn(
+                "flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm",
+                "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              )}
               value={selectedId}
               onChange={(event) => setSelectedId(event.target.value)}
             >
@@ -153,26 +169,23 @@ export default function PaperPage() {
                 </option>
               ))}
             </select>
-            <button
-              className="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200 hover:border-slate-500"
-              onClick={loadExperiments}
-            >
+            <Button variant="outline" size="sm" onClick={loadExperiments}>
               Refresh
-            </button>
+            </Button>
           </div>
-          {loading ? <div className="text-xs text-slate-400">Loading...</div> : null}
-          {error ? <div className="text-sm text-rose-400">{error}</div> : null}
+          {loading ? <div className="text-sm text-muted-foreground">Loading...</div> : null}
+          {error ? <div className="text-sm text-destructive">{error}</div> : null}
           <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
+            <div className="rounded-md border border-border bg-card p-3 text-sm text-foreground">
               Status: {plan ? "Plan Ready" : "Missing Plan"}
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
+            <div className="rounded-md border border-border bg-card p-3 text-sm text-foreground">
               Conclusion: {conclusion ? "Available" : "Missing"}
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
-              Artifacts: {artifacts.length}
+            <div className="rounded-md border border-border bg-card p-3 text-sm text-foreground">
+              Artifacts: {artifacts.length} {artifactManifest.length > 0 ? `(manifest: ${artifactManifest.length})` : ""}
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-300">
+            <div className="rounded-md border border-border bg-card p-3 text-sm text-foreground">
               Draft: {draft ? draft.format : "Not generated"}
             </div>
           </div>
@@ -182,31 +195,46 @@ export default function PaperPage() {
       <Section title="Draft Editor" description="Edit the core sections before exporting.">
         <div className="grid gap-4">
           <textarea
-            className="min-h-[60px] rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-100"
+            className={cn(
+              "min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+              "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Title"
           />
           <textarea
-            className="min-h-[120px] rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-100"
+            className={cn(
+              "min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+              "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
             value={abstractText}
             onChange={(event) => setAbstractText(event.target.value)}
             placeholder="Abstract"
           />
           <textarea
-            className="min-h-[160px] rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-100"
+            className={cn(
+              "min-h-[160px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+              "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
             value={methodText}
             onChange={(event) => setMethodText(event.target.value)}
             placeholder="Methodology"
           />
           <textarea
-            className="min-h-[160px] rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-100"
+            className={cn(
+              "min-h-[160px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+              "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
             value={resultsText}
             onChange={(event) => setResultsText(event.target.value)}
             placeholder="Results"
           />
           <textarea
-            className="min-h-[120px] rounded-2xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-100"
+            className={cn(
+              "min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm",
+              "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
             value={discussion}
             onChange={(event) => setDiscussion(event.target.value)}
             placeholder="Discussion"
@@ -217,51 +245,46 @@ export default function PaperPage() {
       <Section title="Figures & Data" description="Preview artifacts to include in the draft.">
         <div className="flex flex-wrap gap-2">
           {artifacts.length ? (
-            artifacts.map((file) => (
-              <a
-                key={file}
-                className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200"
-                href={`/api/experiments/${selectedId}/artifacts/${file}`}
-                target="_blank"
-              >
-                {file}
-              </a>
-            ))
+            artifacts.map((file) => {
+              const item = artifactManifest.find((manifestItem) => manifestItem.name === file)
+              const tag = item?.stage ? ` · ${item.stage}` : ""
+              return (
+                <a
+                  key={file}
+                  className="rounded-md border border-border bg-card px-3 py-1.5 text-xs text-foreground hover:border-primary/50 transition-colors"
+                  href={`/api/experiments/${selectedId}/artifacts/${file}`}
+                  target="_blank"
+                >
+                  {file}{tag}
+                </a>
+              )
+            })
           ) : (
-            <div className="text-xs text-slate-400">No artifacts available</div>
+            <div className="text-sm text-muted-foreground">No artifacts available</div>
           )}
         </div>
       </Section>
 
       <Section title="AI Full Draft" description="Generate a Markdown or LaTeX draft.">
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            className="rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white hover:bg-accentSoft"
-            onClick={() => generateDraft("markdown")}
-          >
+          <Button size="sm" onClick={() => generateDraft("markdown")}>
             Generate Markdown
-          </button>
-          <button
-            className="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200 hover:border-slate-500"
-            onClick={() => generateDraft("latex")}
-          >
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => generateDraft("latex")}>
             Generate LaTeX
-          </button>
+          </Button>
           {draft ? (
-            <button
-              className="rounded-xl border border-slate-700 px-4 py-2 text-xs text-slate-200 hover:border-slate-500"
-              onClick={handleDownload}
-            >
+            <Button variant="outline" size="sm" onClick={handleDownload}>
               Download Draft
-            </button>
+            </Button>
           ) : null}
         </div>
         {draft ? (
-          <pre className="mt-4 max-h-80 overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-200">
+          <pre className="mt-4 max-h-80 overflow-auto rounded-md border border-border bg-card p-4 text-sm text-foreground">
             {draft.content}
           </pre>
         ) : (
-          <div className="mt-4 text-xs text-slate-400">No draft generated yet</div>
+          <div className="mt-4 text-sm text-muted-foreground">No draft generated yet</div>
         )}
       </Section>
     </div>
