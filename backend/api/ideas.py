@@ -15,6 +15,32 @@ from backend.schemas.request_models import (
 router = APIRouter(prefix="/api/ideas")
 
 
+def _normalize_generated_ideas(result: Any) -> Dict[str, Any]:
+    """Normalize LLM output to a stable API shape.
+
+    Frontend expects either `Idea[]` or `{ ideas: Idea[] }`.
+    Some prompts/templates return a single idea dict (e.g. {title,gap,...}).
+    We wrap that into `{ ideas: [result] }` for backward compatibility.
+    """
+
+    if isinstance(result, list):
+        return {"ideas": result}
+
+    if isinstance(result, dict):
+        ideas = result.get("ideas")
+        if isinstance(ideas, list):
+            return result
+        # Preserve parse/LLM error fields but ensure ideas exists.
+        if "error" in result and "raw" in result:
+            return {"ideas": [], **result}
+        return {"ideas": [result]}
+
+    if result is None:
+        return {"ideas": []}
+
+    return {"ideas": [{"content": result}]}
+
+
 def _fallback_topic_from_scope(scope: str) -> Dict[str, Any]:
     cleaned = (scope or "").strip()
     if not cleaned:
@@ -44,7 +70,8 @@ def refine_ideas(payload: IdeaRefineRequest) -> Dict[str, Any]:
 def generate_ideas(payload: IdeaGenerateRequest) -> Dict[str, Any]:
     agent = IdeaAgent()
     text = agent.generate_ideas(payload.scope)
-    result = parse_json_text(text)
+    parsed = parse_json_text(text)
+    result = _normalize_generated_ideas(parsed)
     try:
         import json
 
@@ -53,7 +80,7 @@ def generate_ideas(payload: IdeaGenerateRequest) -> Dict[str, Any]:
         except Exception:
             refined_topic = _fallback_topic_from_scope(payload.scope)
 
-        ideas_list = result.get("ideas", []) if isinstance(result, dict) else result
+        ideas_list = result.get("ideas", [])
         snapshot_results = [{"topic": refined_topic, "ideas": ideas_list}]
         snapshot_name = _build_snapshot_name_with_llm(agent, refined_topic, snapshot_results)
         save_snapshot(refined_topic, snapshot_results, custom_name=snapshot_name)

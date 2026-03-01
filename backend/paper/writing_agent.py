@@ -8,22 +8,27 @@ from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
 from backend.utils.logger import setup_logger
-from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
+from backend.config import get_llm_config
 
 load_dotenv()
 
 class WritingAgent:
     def __init__(self):
         self.logger = setup_logger(self.__class__.__name__)
-        if LLM_API_BASE:
+        llm = get_llm_config()
+        model_name = llm.get("model")
+        api_base = llm.get("api_base")
+        api_key = llm.get("api_key")
+
+        if api_base:
             self.model = LiteLlm(
-                model=LLM_MODEL, 
-                api_base=LLM_API_BASE,
-                api_key=LLM_API_KEY
+                model=model_name,
+                api_base=api_base,
+                api_key=api_key,
             )
         else:
             # Use native model (e.g. Gemini) if API base is not provided
-            self.model = LLM_MODEL
+            self.model = model_name
         
     def generate_paper(self, plan: dict, conclusion: dict, artifacts: list, format: str = "markdown") -> str:
         """Generates a research paper based on experiment data."""

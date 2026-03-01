@@ -90,6 +90,27 @@ export function useMaarsApi() {
       try {
         const { planId: newId } = await runPlan(idea, signal)
         dispatch({ type: "SET_PLAN_ID", planId: newId })
+
+        // Fallback: fetch plan tree so the UI populates even if SSE events were missed.
+        try {
+          const [planRes, treeRes] = await Promise.all([
+            fetchPlan(newId),
+            fetchPlanTree(newId),
+          ])
+          if (planRes?.plan?.idea) {
+            dispatch({ type: "SET_IDEA", idea: planRes.plan.idea })
+          }
+          dispatch({
+            type: "SET_TREE",
+            treeData: treeRes.treeData,
+            layout: treeRes.layout,
+          })
+          if (planRes?.plan?.qualityScore != null) {
+            dispatch({ type: "SET_QUALITY", score: planRes.plan.qualityScore, comment: planRes.plan.qualityComment ?? null })
+          }
+        } catch {
+          // best-effort; SSE will still update when available
+        }
       } catch (err) {
         if ((err as Error).name === "AbortError") return
         throw err

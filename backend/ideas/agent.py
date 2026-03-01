@@ -13,7 +13,7 @@ from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from google.adk.models.lite_llm import LiteLlm
-from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
+from backend.config import get_llm_config
 from backend.utils.logger import setup_logger
 from backend.ideas.templates import (
     RESEARCH_TOPIC_SCHEMA,
@@ -25,15 +25,53 @@ from backend.ideas.templates import (
 class IdeaAgent:
     def __init__(self):
         self.logger = setup_logger(self.__class__.__name__)
-        if LLM_API_BASE:
+        llm = get_llm_config()
+        model_name = llm.get("model")
+        api_base = llm.get("api_base")
+        api_key = llm.get("api_key")
+        if api_base:
             self.model = LiteLlm(
-                model=LLM_MODEL,
-                api_base=LLM_API_BASE,
-                api_key=LLM_API_KEY
+                model=model_name,
+                api_base=api_base,
+                api_key=api_key,
             )
         else:
-            self.model = LLM_MODEL
+            self.model = model_name
         self.tools = [self.search_literature]
+
+    def generate_snapshot_title(self, refined_topic: Any, snapshot_results: Any) -> str:
+        """Generate a short, filesystem-safe title for snapshot filenames.
+
+        This is intentionally heuristic (no LLM call) to keep snapshot save
+        robust even when LLM credentials are missing.
+        """
+
+        def _pick_title(value: Any) -> str:
+            if isinstance(value, dict):
+                for key in ("title", "name", "topic", "summary", "description"):
+                    v = value.get(key)
+                    if isinstance(v, str) and v.strip():
+                        return v.strip()
+                # nested topic/title
+                topic = value.get("topic")
+                if isinstance(topic, dict):
+                    t = topic.get("title")
+                    if isinstance(t, str) and t.strip():
+                        return t.strip()
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            return ""
+
+        title = _pick_title(refined_topic)
+        if not title and isinstance(snapshot_results, list) and snapshot_results:
+            title = _pick_title(snapshot_results[0])
+        if not title:
+            title = "idea_snapshot"
+
+        # keep it compact & safe for filenames
+        safe = "".join(c if (c.isalnum() or c in {" ", "_", "-"}) else "_" for c in title)
+        safe = "_".join(safe.split())
+        return safe[:50] or "idea_snapshot"
 
     def search_literature(self, query: str, limit: int = 5) -> str:
         words = re.findall(r"\w+", query)
