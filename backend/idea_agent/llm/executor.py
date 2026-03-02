@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import orjson
 
+from shared.constants import TEMP_CREATIVE, TEMP_EXTRACT
 from shared.llm_client import chat_completion, merge_phase_config
 from test.mock_stream import mock_chat_completion
 
@@ -90,7 +91,7 @@ async def extract_keywords(idea: str, api_config: dict, abort_event: Optional[An
     if not idea:
         return []
 
-    use_mock = api_config.get("useMock", True)
+    use_mock = api_config.get("ideaUseMock", True)
     if use_mock:
         mock = _load_mock_response(RESPONSE_TYPE_KEYWORDS, MOCK_KEY)
         if not mock:
@@ -98,24 +99,16 @@ async def extract_keywords(idea: str, api_config: dict, abort_event: Optional[An
         return _parse_keywords_response(mock["content"])
 
     cfg = merge_phase_config(api_config, "idea")
-    ai_mode = api_config.get("aiMode", "llm")
-    mode_cfg = api_config.get("modeConfig", {}).get(ai_mode, {})
-    temperature = mode_cfg.get("ideaLlmTemperature")
-    if temperature is not None:
-        temperature = float(temperature)
-    else:
-        temperature = 0.3
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": idea},
     ]
     try:
-        # 不使用 response_format，以便 LLM 先输出 reasoning 再输出 JSON（流式时 Thinking 显示推理）
         response = await chat_completion(
             messages,
             cfg,
             stream=False,
-            temperature=temperature,
+            temperature=TEMP_EXTRACT,
             abort_event=abort_event,
         )
         text = response if isinstance(response, str) else str(response)
@@ -140,7 +133,7 @@ async def extract_keywords_stream(
     if not idea:
         return []
 
-    use_mock = api_config.get("useMock", True)
+    use_mock = api_config.get("ideaUseMock", True)
     if use_mock:
         mock = _load_mock_response(RESPONSE_TYPE_KEYWORDS, MOCK_KEY)
         if not mock:
@@ -162,13 +155,6 @@ async def extract_keywords_stream(
         return _parse_keywords_response(content or "")
 
     cfg = merge_phase_config(api_config, "idea")
-    ai_mode = api_config.get("aiMode", "llm")
-    mode_cfg = api_config.get("modeConfig", {}).get(ai_mode, {})
-    temperature = mode_cfg.get("ideaLlmTemperature")
-    if temperature is not None:
-        temperature = float(temperature)
-    else:
-        temperature = 0.3
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": idea},
@@ -179,13 +165,12 @@ async def extract_keywords_stream(
             return on_chunk(chunk, None, "Keywords", None)
 
     try:
-        # 不使用 response_format，以便 LLM 先输出 reasoning 再输出 JSON（流式时 Thinking 显示推理）
         full_content = await chat_completion(
             messages,
             cfg,
             on_chunk=_stream_cb,
             stream=True,
-            temperature=temperature,
+            temperature=TEMP_EXTRACT,
             abort_event=abort_event,
         )
         text = full_content if isinstance(full_content, str) else str(full_content)
@@ -281,7 +266,7 @@ async def refine_idea_from_papers(
     idea = idea.strip()
     papers = papers or []
 
-    use_mock = api_config.get("useMock", True)
+    use_mock = api_config.get("ideaUseMock", True)
     if use_mock:
         mock = _load_mock_response(RESPONSE_TYPE_REFINE, MOCK_KEY)
         if not mock:
@@ -289,13 +274,6 @@ async def refine_idea_from_papers(
         return _parse_refined_idea_response(mock["content"])
 
     cfg = merge_phase_config(api_config, "idea")
-    ai_mode = api_config.get("aiMode", "llm")
-    mode_cfg = api_config.get("modeConfig", {}).get(ai_mode, {})
-    temperature = mode_cfg.get("ideaLlmTemperature")
-    if temperature is not None:
-        temperature = float(temperature)
-    else:
-        temperature = 0.5  # Refine 稍高以鼓励创意
     papers_ctx = _build_papers_context(papers)
     user_content = f"**User's idea:** {idea}\n\n**Retrieved papers:**\n{papers_ctx}\n\n**Output:**"
     messages = [
@@ -303,12 +281,11 @@ async def refine_idea_from_papers(
         {"role": "user", "content": user_content},
     ]
     try:
-        # 不使用 response_format，以便 LLM 先输出 reasoning 再输出 JSON（流式时 Thinking 显示推理）
         response = await chat_completion(
             messages,
             cfg,
             stream=False,
-            temperature=temperature,
+            temperature=TEMP_CREATIVE,
             abort_event=abort_event,
         )
         text = response if isinstance(response, str) else str(response)
@@ -333,7 +310,7 @@ async def refine_idea_from_papers_stream(
     idea = idea.strip()
     papers = papers or []
 
-    use_mock = api_config.get("useMock", True)
+    use_mock = api_config.get("ideaUseMock", True)
     if use_mock:
         mock = _load_mock_response(RESPONSE_TYPE_REFINE, MOCK_KEY)
         if not mock:
@@ -355,13 +332,6 @@ async def refine_idea_from_papers_stream(
         return _parse_refined_idea_response(content or "{}")
 
     cfg = merge_phase_config(api_config, "idea")
-    ai_mode = api_config.get("aiMode", "llm")
-    mode_cfg = api_config.get("modeConfig", {}).get(ai_mode, {})
-    temperature = mode_cfg.get("ideaLlmTemperature")
-    if temperature is not None:
-        temperature = float(temperature)
-    else:
-        temperature = 0.5
     papers_ctx = _build_papers_context(papers)
     user_content = f"**User's idea:** {idea}\n\n**Retrieved papers:**\n{papers_ctx}\n\n**Output:**"
     messages = [
@@ -374,13 +344,12 @@ async def refine_idea_from_papers_stream(
             return on_chunk(chunk, None, "Refine", None)
 
     try:
-        # 不使用 response_format，以便 LLM 先输出 reasoning 再输出 JSON（流式时 Thinking 显示推理）
         full_content = await chat_completion(
             messages,
             cfg,
             on_chunk=_stream_cb,
             stream=True,
-            temperature=temperature,
+            temperature=TEMP_CREATIVE,
             abort_event=abort_event,
         )
         text = full_content if isinstance(full_content, str) else str(full_content)

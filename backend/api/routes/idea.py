@@ -5,9 +5,11 @@ import time
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
+from loguru import logger
 
 from db import get_effective_config, get_idea, save_idea
-from idea_agent import collect_literature
+from idea_agent import collect_literature, run_idea_agent
+from shared.reflection import reflection_loop
 
 from .. import state as api_state
 from ..schemas import IdeaCollectRequest
@@ -48,8 +50,8 @@ def _make_on_thinking(sio):
             payload["scheduleInfo"] = schedule_info
         try:
             await sio.emit("idea-thinking", payload)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("idea-thinking emit failed: %s", e)
 
     return on_thinking
 
@@ -62,13 +64,46 @@ async def _run_collect_inner(idea_id: str, idea: str, limit: int, abort_event=No
     try:
         if sio:
             await sio.emit("idea-start", {})
-        result = await collect_literature(
-            idea=idea,
-            api_config=config,
-            limit=limit,
+        if config.get("ideaAgentMode"):
+            result = await run_idea_agent(
+                idea=idea,
+                api_config=config,
+                limit=limit,
+                on_thinking=on_thinking,
+                abort_event=abort_event,
+            )
+        else:
+            result = await collect_literature(
+                idea=idea,
+                api_config=config,
+                limit=limit,
+                on_thinking=on_thinking,
+                abort_event=abort_event,
+            )
+
+        async def _rerun_idea():
+            if config.get("ideaAgentMode"):
+                return await run_idea_agent(
+                    idea=idea, api_config=config, limit=limit,
+                    on_thinking=on_thinking, abort_event=abort_event,
+                )
+            return await collect_literature(
+                idea=idea, api_config=config, limit=limit,
+                on_thinking=on_thinking, abort_event=abort_event,
+            )
+
+        reflected = await reflection_loop(
+            agent_type="idea",
+            run_fn=_rerun_idea,
+            initial_output=result,
+            context={"idea": idea},
             on_thinking=on_thinking,
             abort_event=abort_event,
+            api_config=config,
         )
+        result = reflected["output"]
+        reflection_data = reflected.get("reflection")
+
         idea_data = {
             "idea": idea,
             "keywords": result.get("keywords", []),
@@ -77,28 +112,33 @@ async def _run_collect_inner(idea_id: str, idea: str, limit: int, abort_event=No
         }
         await save_idea(idea_data, idea_id)
         if sio:
-            await sio.emit(
-                "idea-complete",
-                {
-                    "ideaId": idea_id,
-                    "keywords": result.get("keywords", []),
-                    "papers": result.get("papers", []),
-                    "refined_idea": result.get("refined_idea"),
-                },
-            )
+            complete_payload = {
+                "ideaId": idea_id,
+                "keywords": result.get("keywords", []),
+                "papers": result.get("papers", []),
+                "refined_idea": result.get("refined_idea"),
+            }
+            if reflection_data:
+                complete_payload["reflection"] = {
+                    "iterations": reflection_data.get("iterations", 0),
+                    "bestScore": reflection_data.get("best_score", 0),
+                    "skillsCreated": [s["name"] for s in reflection_data.get("skills_created", [])],
+                }
+            await sio.emit("idea-complete", complete_payload)
     except asyncio.CancelledError:
         try:
             if sio:
                 await sio.emit("idea-error", {"error": "Idea Agent stopped by user", "ideaId": idea_id})
-        except Exception:
-            pass
+        except Exception as emit_err:
+            logger.warning("idea-error emit (cancel) failed: %s", emit_err)
         raise
     except Exception as e:
+        logger.warning("Idea Agent error: %s", e)
         try:
             if sio:
                 await sio.emit("idea-error", {"error": str(e), "ideaId": idea_id})
-        except Exception:
-            pass
+        except Exception as emit_err:
+            logger.warning("idea-error emit failed: %s", emit_err)
         raise
     finally:
         state = getattr(api_state, "idea_run_state", None)
@@ -144,6 +184,6 @@ async def stop_idea():
             sio = getattr(api_state, "sio", None)
             if sio:
                 await sio.emit("idea-error", {"error": "Idea Agent stopped by user"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("idea-error emit (stop) failed: %s", e)
     return {"success": True}

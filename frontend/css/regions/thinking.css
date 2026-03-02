@@ -97,22 +97,39 @@
     cursor: default;
 }
 
-/* 调度信息 / 纯 JSON：与 thinking 块相同结构，仅展示 header，body 隐藏 */
+/* 连续调度信息分组容器：固定高度 + 滚动 */
+.plan-agent-thinking-block-schedule-group {
+    max-height: 120px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin-bottom: 10px;
+    padding: 6px 10px;
+    background: var(--bg-area-tertiary);
+    border-radius: 6px;
+}
+.plan-agent-thinking-block-schedule-group:last-child {
+    margin-bottom: 0;
+}
+
+/* 调度信息行 */
 .plan-agent-thinking-block--header-only {
     height: auto;
     min-height: 0;
-    margin-bottom: 2px;
+    margin-bottom: 0;
     padding: 0;
     border: none;
     background: transparent;
     cursor: default;
 }
 .plan-agent-thinking-block--header-only .plan-agent-thinking-block-header {
-    padding: 2px 0;
+    padding: 3px 0;
     border: none;
     border-bottom: none;
     background: transparent;
-    font-size: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+    letter-spacing: -0.01em;
 }
 
 .plan-agent-thinking-placeholder {
@@ -127,3 +144,10 @@
     pointer-events: none;
 }
 .plan-agent-thinking-area.has-content .plan-agent-thinking-placeholder { display: none; }
+
+/* Self-Reflection phase visual indicator */
+.plan-agent-thinking-block[data-operation="Reflect"] .plan-agent-thinking-block-header {
+    color: var(--accent, #7c6ef0);
+    border-left: 2px solid var(--accent, #7c6ef0);
+    padding-left: 8px;
+}

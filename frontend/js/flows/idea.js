@@ -61,6 +61,7 @@
             refineIdeaBtn.disabled = true;
             if (stopRefineBtn) stopRefineBtn.style.display = '';
             document.dispatchEvent(new CustomEvent('maars:idea-start'));
+            document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'output' } }));
             await api.refineIdea(idea, 10);
         } catch (err) {
             resetRefineUI(err.message || 'Unknown error');

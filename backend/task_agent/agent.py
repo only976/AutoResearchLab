@@ -12,27 +12,11 @@ import orjson
 import json_repair
 
 from db import ensure_sandbox_dir
+from shared.constants import TASK_AGENT_MAX_TURNS, TEMP_AGENT_LOOP
 from shared.llm_client import chat_completion, merge_phase_config
 from shared.utils import format_tool_args_preview
 
 from .agent_tools import TOOLS, execute_tool
-
-MAX_AGENT_TURNS = 15
-
-
-def _get_task_agent_params(api_config: Dict[str, Any]) -> tuple[int, float]:
-    """Return (max_turns, temperature) from modeConfig or defaults."""
-    mode_cfg = api_config.get("modeConfig") or {}
-    agent_cfg = mode_cfg.get("agent") or {}
-    llm_cfg = mode_cfg.get("llm") or {}
-    max_turns = agent_cfg.get("taskAgentMaxTurns") or MAX_AGENT_TURNS
-    max_turns = int(max_turns)
-    temperature = (
-        agent_cfg.get("taskLlmTemperature")
-        or llm_cfg.get("taskLlmTemperature")
-        or 0.3
-    )
-    return max_turns, float(temperature)
 
 
 def _is_json_format(output_format: str) -> bool:
@@ -66,6 +50,7 @@ def _build_task_agent_messages(
     output_spec: Dict[str, Any],
     resolved_inputs: Dict[str, Any],
     validation_spec: Optional[Dict[str, Any]] = None,
+    idea_context: str = "",
 ) -> tuple[list[dict], str]:
     """Build system + user messages for Task Agent mode."""
     output_format = output_spec.get("format") or ""
@@ -77,13 +62,17 @@ def _build_task_agent_messages(
         validation_rule = """
 5. **Validation (required when task has validation spec)**: Before calling Finish, you MUST validate your output. Load the task-output-validator skill, write output to sandbox (e.g. sandbox/output.json or sandbox/result.md), run its validate script with the validation criteria, fix any failures, then call Finish only when validation passes."""
 
+    idea_block = ""
+    if idea_context:
+        idea_block = f"\n6. **Research context**: This task is part of a larger research project. The overarching research idea is provided below — use it to ensure your output aligns with the project goals and maintains consistency."
+
     system_prompt = f"""You are a Task Agent. Your job is to complete a single atomic task and produce output in the exact format specified.
 
 Rules:
 1. Use only the provided input artifacts and task description.
 2. Output must strictly conform to the specified format.
-3. You may reason first in your response; this will be shown as your thinking process.
-4. For JSON: output valid JSON when calling Finish; for Markdown, pass the document content.{validation_rule}
+3. Before calling any tool, briefly explain your reasoning: what you know, what you need, and why you are choosing this tool. This reasoning will be shown as your thinking process.
+4. For JSON: output valid JSON when calling Finish; for Markdown, pass the document content.{validation_rule}{idea_block}
 
 You have tools: ReadArtifact (read dependency task output), ReadFile (read files; use 'sandbox/X' for this task's sandbox), WriteFile (write to sandbox only), ListSkills, LoadSkill, ReadSkillFile (read skill's scripts/references), RunSkillScript (execute skill scripts, use {{sandbox}}/file for sandbox paths), WebSearch (search the web for research—use for benchmarks, docs, current data), WebFetch (fetch URL content for citations), Finish (submit final output).
 Use ListSkills to discover skills, LoadSkill when relevant. ReadSkillFile and RunSkillScript let you use skill capabilities (e.g. docx validate, pptx convert). When your output satisfies the output spec, you MUST call Finish with the result—do not output inline. For JSON format pass a valid JSON string; for Markdown pass the content string. All file I/O is scoped to the plan dir and this task's sandbox."""
@@ -108,9 +97,13 @@ Use ListSkills to discover skills, LoadSkill when relevant. ReadSkillFile and Ru
 {optional_text}
 """
 
+    idea_section = ""
+    if idea_context:
+        idea_section = f"\n**Research idea (project context):** {idea_context}\n"
+
     user_prompt = f"""**Task ID:** {task_id}
 **Description:** {description}
-
+{idea_section}
 **Input description:** {input_desc}
 **Input artifacts:**
 ```json
@@ -142,9 +135,10 @@ async def run_task_agent(
     idea_id: str,
     plan_id: str,
     validation_spec: Optional[Dict[str, Any]] = None,
+    idea_context: str = "",
 ) -> Any:
     """ReAct-style Agent loop with ReadArtifact, ReadFile, Finish tools. Runs in isolated sandbox."""
-    if api_config.get("useMock"):
+    if api_config.get("taskUseMock"):
         from .llm.executor import _run_mock_execute
 
         output_format = (output_spec or {}).get("format") or ""
@@ -169,11 +163,12 @@ async def run_task_agent(
     if idea_id and plan_id and task_id:
         await ensure_sandbox_dir(idea_id, plan_id, task_id)
     messages, output_format = _build_task_agent_messages(
-        task_id, description, input_spec, output_spec, resolved_inputs, validation_spec
+        task_id, description, input_spec, output_spec, resolved_inputs, validation_spec, idea_context
     )
     use_json_mode = _is_json_format(output_format)
     cfg = merge_phase_config(api_config, "execute")
-    max_turns, temperature = _get_task_agent_params(api_config)
+    max_turns = TASK_AGENT_MAX_TURNS
+    temperature = TEMP_AGENT_LOOP
     turn = 0
 
     while turn < max_turns:

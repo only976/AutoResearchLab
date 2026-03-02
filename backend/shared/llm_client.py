@@ -9,32 +9,19 @@ from typing import Any, Callable, List, Optional, Union
 from google import genai
 from google.genai import types
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+from loguru import logger
+
+from shared.constants import DEFAULT_MODEL, LLM_REQUEST_TIMEOUT, LLM_STREAM_CHUNK_TIMEOUT
 
 
 def merge_phase_config(api_config: dict, phase: str) -> dict:
-    """
-    Merge global api_config with phase-specific overrides.
-    phase: atomicity | decompose | format | execute | validate
-    Returns dict with apiKey, model (camelCase for compatibility).
-    """
+    """从 api_config 提取 LLM 连接参数。phase 参数保留用于未来扩展，当前不做区分。"""
     cfg = dict(api_config or {})
-    phases = cfg.get("phases") or {}
-    phase_cfg = phases.get(phase) or {}
-    if isinstance(phase_cfg, dict):
-        base = {
-            "baseUrl": cfg.get("baseUrl") or cfg.get("base_url"),
-            "apiKey": cfg.get("apiKey") or cfg.get("api_key"),
-            "model": cfg.get("model"),
-        }
-        for k, v in phase_cfg.items():
-            key = k if k in ("baseUrl", "apiKey", "model") else {"base_url": "baseUrl", "api_key": "apiKey"}.get(k, k)
-            if v is not None and v != "":
-                base[key] = v
-        if not base.get("model"):
-            base["model"] = DEFAULT_MODEL
-        return base
-    return cfg
+    return {
+        "baseUrl": cfg.get("baseUrl") or cfg.get("base_url"),
+        "apiKey": cfg.get("apiKey") or cfg.get("api_key"),
+        "model": cfg.get("model") or DEFAULT_MODEL,
+    }
 
 
 def _tools_to_gemini(tools: List[dict]) -> List[Any]:
@@ -171,6 +158,15 @@ async def chat_completion(
 
     config = types.GenerateContentConfig(**config_kw) if config_kw else None
 
+    _ABORT_SENTINEL = object()
+
+    async def _abort_waiter():
+        """轮询 abort_event，触发后返回哨兵值。"""
+        while True:
+            await asyncio.sleep(0.5)
+            if abort_event and abort_event.is_set():
+                return _ABORT_SENTINEL
+
     try:
         aclient = client.aio
         try:
@@ -179,11 +175,13 @@ async def chat_completion(
 
             if stream and not tools:
                 full_content = []
-                async for chunk in await aclient.models.generate_content_stream(
-                    model=model,
-                    contents=contents,
-                    config=config,
-                ):
+                stream_iter = await asyncio.wait_for(
+                    aclient.models.generate_content_stream(
+                        model=model, contents=contents, config=config,
+                    ),
+                    timeout=LLM_REQUEST_TIMEOUT,
+                )
+                async for chunk in stream_iter:
                     if abort_event and abort_event.is_set():
                         raise asyncio.CancelledError("Aborted")
                     text = chunk.text or ""
@@ -194,13 +192,38 @@ async def chat_completion(
                     full_content.append(text)
                 return "".join(full_content)
 
-            resp = await aclient.models.generate_content(
-                model=model,
-                contents=contents,
-                config=config,
+            api_coro = aclient.models.generate_content(
+                model=model, contents=contents, config=config,
             )
+            if abort_event:
+                api_task = asyncio.ensure_future(api_coro)
+                abort_task = asyncio.ensure_future(_abort_waiter())
+                done, pending = await asyncio.wait(
+                    [api_task, abort_task],
+                    timeout=LLM_REQUEST_TIMEOUT,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for t in pending:
+                    t.cancel()
+                if not done:
+                    raise TimeoutError(f"LLM request timed out after {LLM_REQUEST_TIMEOUT}s")
+                if abort_task in done:
+                    api_task.cancel()
+                    raise asyncio.CancelledError("Aborted")
+                resp = api_task.result()
+            else:
+                resp = await asyncio.wait_for(api_coro, timeout=LLM_REQUEST_TIMEOUT)
         finally:
-            await aclient.aclose()
+            try:
+                await aclient.aclose()
+            except Exception:
+                pass
+    except asyncio.CancelledError:
+        raise
+    except TimeoutError:
+        raise RuntimeError(f"LLM request timed out after {LLM_REQUEST_TIMEOUT}s")
+    except asyncio.TimeoutError:
+        raise RuntimeError(f"LLM request timed out after {LLM_REQUEST_TIMEOUT}s")
     except Exception as e:
         raise RuntimeError(f"Gemini API error: {e}") from e
 

@@ -5,35 +5,27 @@ Task Agent 含两阶段：Execution（执行原子任务）→ Validation（验�
 """
 
 import asyncio
-import os
 import random
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
 
-from db import delete_task_artifact, save_execution, save_task_artifact, save_validation_report
+from db import delete_task_artifact, get_idea, save_execution, save_task_artifact, save_validation_report
+from shared.constants import (
+    MAX_EXECUTION_CONCURRENCY,
+    MAX_FAILURES,
+    MOCK_EXECUTION_PASS_PROBABILITY,
+    MOCK_VALIDATION_PASS_PROBABILITY,
+)
 from shared.utils import chunk_string
 from .pools import worker_manager
 from .artifact_resolver import resolve_artifacts
 from .agent import run_task_agent
 from .llm.executor import execute_task
 from .llm.validation import validate_task_output_with_llm
+from shared.reflection import self_evaluate, generate_skill_from_reflection, save_learned_skill
 
-# Mock validation chunk delay (seconds), same as task execution for consistent streaming UX
 _MOCK_VALIDATOR_CHUNK_DELAY = 0.03
-
-# Configurable via env (Mock mode); defaults for tuning
-def _float_env(name: str, default: float) -> float:
-    v = os.environ.get(name)
-    return float(v) if v is not None else default
-
-def _int_env(name: str, default: int) -> int:
-    v = os.environ.get(name)
-    return int(v) if v is not None else default
-
-_RUNNER_EXECUTION_PASS_PROBABILITY = _float_env("MAARS_EXECUTION_PASS_PROBABILITY", 0.95)
-_RUNNER_VALIDATION_PASS_PROBABILITY = _float_env("MAARS_VALIDATION_PASS_PROBABILITY", 0.95)
-_RUNNER_MAX_FAILURES = _int_env("MAARS_MAX_FAILURES", 3)
 
 
 class ExecutionRunner:
@@ -49,14 +41,15 @@ class ExecutionRunner:
         self.task_map: Dict[str, Dict] = {}
         self.reverse_dependency_index: Dict[str, List[str]] = {}
         self.task_failure_count: Dict[str, int] = {}
-        self.EXECUTION_PASS_PROBABILITY = _RUNNER_EXECUTION_PASS_PROBABILITY
-        self.VALIDATION_PASS_PROBABILITY = _RUNNER_VALIDATION_PASS_PROBABILITY
-        self.MAX_FAILURES = _RUNNER_MAX_FAILURES
+        self.EXECUTION_PASS_PROBABILITY = MOCK_EXECUTION_PASS_PROBABILITY
+        self.VALIDATION_PASS_PROBABILITY = MOCK_VALIDATION_PASS_PROBABILITY
+        self.MAX_FAILURES = MAX_FAILURES
         self.execution_layout = None
         self.idea_id: Optional[str] = None
         self.plan_id: Optional[str] = None
         self.api_config: Optional[Dict] = None
         self.abort_event: Optional[asyncio.Event] = None
+        self._idea_text: str = ""
         self._persist_lock = asyncio.Lock()
         self._start_lock = asyncio.Lock()
 
@@ -90,8 +83,8 @@ class ExecutionRunner:
         if hasattr(self.sio, "emit"):
             try:
                 await self.sio.emit(event, data)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("%s emit failed: %s", event, e)
 
     def _get_downstream_task_ids(self, task_id: str) -> Set[str]:
         """Return task_id and all downstream dependents."""
@@ -116,28 +109,6 @@ class ExecutionRunner:
     ) -> None:
         if api_config is not None:
             self.api_config = api_config
-            mode_cfg = api_config.get("modeConfig") or {}
-            ai_mode = api_config.get("aiMode") or ""
-            mock_cfg = mode_cfg.get(ai_mode) or mode_cfg.get("mock") or {}
-            if mock_cfg and api_config.get("useMock"):
-                v = mock_cfg.get("executionPassProbability")
-                if v is not None:
-                    self.EXECUTION_PASS_PROBABILITY = float(v)
-                v = mock_cfg.get("validationPassProbability")
-                if v is not None:
-                    self.VALIDATION_PASS_PROBABILITY = float(v)
-            # maxFailures: read from mock | mockagent | llm | llmagent | agent
-            use_mock = api_config.get("useMock", True)
-            exec_agent = api_config.get("taskAgentMode", False)
-            if use_mock:
-                runner_cfg = mock_cfg
-            elif exec_agent:
-                runner_cfg = mode_cfg.get(ai_mode) or mode_cfg.get("agent") or {}
-            else:
-                runner_cfg = mode_cfg.get("llm") or {}
-            v = runner_cfg.get("maxFailures")
-            if v is not None:
-                self.MAX_FAILURES = int(v)
         async with self._start_lock:
             if self.is_running:
                 raise ValueError("Execution is already running")
@@ -148,8 +119,17 @@ class ExecutionRunner:
             self.is_running = True
         self.abort_event = asyncio.Event()
         self.abort_event.clear()
+        self._idea_text = ""
+        if self.idea_id:
+            try:
+                idea_data = await get_idea(self.idea_id)
+                if idea_data:
+                    refined = idea_data.get("refined_idea") or {}
+                    self._idea_text = (refined.get("description") or "").strip() or (idea_data.get("idea") or "").strip()
+            except Exception:
+                pass
         try:
-            max_conc = (self.api_config or {}).get("maxExecutionConcurrency", 7)
+            max_conc = MAX_EXECUTION_CONCURRENCY
             worker_manager["initialize_workers"](max_conc)
             self._broadcast_worker_states()
 
@@ -295,6 +275,7 @@ class ExecutionRunner:
                         idea_id=self.idea_id or "",
                         plan_id=self.plan_id or "",
                         validation_spec=task.get("validation"),
+                        idea_context=self._idea_text,
                     )
                 else:
                     result = await execute_task(
@@ -308,6 +289,7 @@ class ExecutionRunner:
                         on_thinking=_on_thinking,
                         idea_id=self.idea_id or "",
                         plan_id=self.plan_id or "",
+                        idea_context=self._idea_text,
                     )
                 to_save = result if isinstance(result, dict) else {"content": result}
                 await save_task_artifact(self.idea_id or "", self.plan_id or "", task["task_id"], to_save)
@@ -344,7 +326,7 @@ class ExecutionRunner:
             # Validation: mock uses random; LLM mode uses LLM validation; Agent mode validates via skill before Finish
             task_id = task["task_id"]
             output_spec = task.get("output") or {}
-            use_mock = (self.api_config or {}).get("useMock", True)
+            use_mock = (self.api_config or {}).get("taskUseMock", True)
             exec_agent = (self.api_config or {}).get("taskAgentMode", False)
             if use_mock:
                 validation_passed = random.random() < self.VALIDATION_PASS_PROBABILITY
@@ -358,12 +340,15 @@ class ExecutionRunner:
                     "(Mock validation mode)"
                 )
             elif exec_agent:
-                # Agent mode: Agent validates via task-output-validator skill before Finish
-                validation_passed = True
-                report = (
-                    f"# Validating Task {task_id}\n\n"
-                    "Validated by Agent via task-output-validator skill before Finish.\n\n"
-                    "**Result: PASS**"
+                validation_spec = task.get("validation")
+                validation_passed, report = await validate_task_output_with_llm(
+                    result,
+                    output_spec,
+                    task_id,
+                    validation_spec=validation_spec,
+                    api_config=self.api_config,
+                    abort_event=self.abort_event,
+                    on_thinking=_on_thinking,
                 )
             else:
                 validation_spec = task.get("validation")
@@ -376,8 +361,7 @@ class ExecutionRunner:
                     abort_event=self.abort_event,
                     on_thinking=_on_thinking,
                 )
-            # Mock / Agent 模式：report 非流式生成，需模拟 chunk 写入 Thinking
-            if use_mock or exec_agent:
+            if use_mock:
                 for chunk in chunk_string(report, 20):
                     await self._emit_await("task-thinking", {"chunk": chunk, "source": "task", "taskId": task_id, "operation": "Validate"})
                     await asyncio.sleep(_MOCK_VALIDATOR_CHUNK_DELAY)
@@ -393,6 +377,7 @@ class ExecutionRunner:
             await asyncio.sleep(0.1)
 
             if validation_passed:
+                await self._reflect_on_task(task, result, _on_thinking)
                 async with self._worker_lock:
                     worker_manager["release_worker_by_task_id"](task["task_id"])
                 self._broadcast_worker_states()
@@ -440,6 +425,39 @@ class ExecutionRunner:
                     candidates.add(task_id)
 
         self._schedule_ready_tasks([self.task_map[id] for id in candidates if self.task_map.get(id)])
+
+    async def _reflect_on_task(self, task: Dict, result: Any, on_thinking) -> None:
+        """单个 task 完成后的自迭代：评估质量、可选生成 skill。不做重执行（已有 retry 机制）。"""
+        api_cfg = self.api_config or {}
+        if not api_cfg.get("reflectionEnabled", False):
+            return
+        if api_cfg.get("taskUseMock", False):
+            return
+        try:
+            evaluation = await self_evaluate(
+                "task", result,
+                context={
+                    "task_id": task["task_id"],
+                    "description": task.get("description", ""),
+                    "output_spec": task.get("output") or {},
+                },
+                on_thinking=on_thinking,
+                abort_event=self.abort_event,
+                api_config=api_cfg,
+            )
+            suggestion = evaluation.get("skill_suggestion", {})
+            if suggestion.get("should_create") and suggestion.get("name"):
+                skill_content = await generate_skill_from_reflection(
+                    "task", evaluation,
+                    context={"task_id": task["task_id"], "description": task.get("description", "")},
+                    api_config=api_cfg, abort_event=self.abort_event,
+                )
+                if skill_content:
+                    save_learned_skill("task", suggestion["name"], skill_content)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("Task reflection failed for %s: %s", task["task_id"], e)
 
     def _schedule_ready_tasks(self, tasks_to_check: List[Dict]) -> None:
         if not tasks_to_check or not self.is_running:

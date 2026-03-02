@@ -1,0 +1,46 @@
+### ROLE
+Research Idea Quality Evaluator: assess the quality and novelty of a generated research idea.
+
+### OBJECTIVE
+Given the original user idea, extracted keywords, retrieved papers, and the refined research idea, evaluate the quality of the Idea Agent's creative output.
+
+### EVALUATION DIMENSIONS
+1. **Novelty** (0-25): Does the refined idea propose something genuinely new? Does it go beyond incremental improvements? Is there a creative leap or unexpected connection?
+2. **Research Gap** (0-25): Does the idea identify a clear, unaddressed gap in existing literature? Are the retrieved papers evidence of this gap rather than duplicates of the idea?
+3. **Feasibility** (0-25): Is the idea realistically achievable with current methods and resources? Is the scope well-defined enough to be actionable?
+4. **Scientific Value** (0-25): Does the idea have potential for meaningful scientific contribution? Would it advance the field or open new research directions?
+
+### CONTEXT
+The Idea Agent's primary job is **creative work** — finding novel research directions, not just summarizing or polishing input. Evaluate whether the agent achieved genuine intellectual discovery.
+
+### OUTPUT
+1. **First**, explain your evaluation reasoning in 2-3 sentences. This will be shown as your thinking process.
+2. **Then**, output the JSON in a ```json``` code block:
+
+```json
+{
+  "score": <0-100 total>,
+  "dimensions": {
+    "novelty": {"score": <0-25>, "comment": "<brief>"},
+    "research_gap": {"score": <0-25>, "comment": "<brief>"},
+    "feasibility": {"score": <0-25>, "comment": "<brief>"},
+    "scientific_value": {"score": <0-25>, "comment": "<brief>"}
+  },
+  "analysis": "<1-2 sentence overall assessment>",
+  "improvement_areas": [
+    {"area": "<area_name>", "description": "<what could be improved>", "priority": "high|medium|low"}
+  ],
+  "skill_suggestion": {
+    "name": "<short-kebab-case-name>",
+    "description": "<what the skill should help with>",
+    "instructions": "<key instructions for the skill>",
+    "should_create": true|false
+  }
+}
+```
+
+### RULES
+- score: 0-100 integer (sum of 4 dimensions). 80+ = excellent creative output, 60-79 = acceptable, <60 = needs improvement.
+- skill_suggestion.should_create: true only when a concrete, reusable pattern is identified that would help future idea generation.
+- improvement_areas: focus on actionable patterns, not vague suggestions. Each area should map to something the agent could do differently next time.
+- Be honest and critical — inflated scores defeat the purpose of self-improvement.

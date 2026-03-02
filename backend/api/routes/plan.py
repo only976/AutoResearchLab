@@ -17,6 +17,7 @@ from db import (
 )
 from visualization import build_layout_from_execution, compute_decomposition_layout
 from plan_agent.index import run_plan
+from shared.reflection import reflection_loop
 
 from ..schemas import PlanLayoutRequest, PlanRunRequest
 from .. import state as api_state
@@ -80,8 +81,8 @@ def _emit_plan_error(err_msg: str) -> None:
     """统一发送 plan-error，供 Plan Agent 停止或异常时使用。"""
     try:
         api_state.sio.emit("plan-error", {"error": err_msg})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("plan-error emit failed: %s", e)
 
 
 async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str):
@@ -104,7 +105,7 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str):
         idea = (refined.get("description") or "").strip() or raw_idea
 
         config = await get_effective_config()
-        use_mock = config.get("useMock", True)
+        use_mock = config.get("planUseMock", True)
 
         plan = {
             "tasks": [{"task_id": "0", "description": idea, "dependencies": []}],
@@ -136,8 +137,8 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str):
                 payload["scheduleInfo"] = schedule_info
             try:
                 await api_state.sio.emit("plan-thinking", payload)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("plan-thinking emit failed: %s", e)
 
         result = await run_plan(
             plan, None, on_thinking, abort_event, on_tasks_batch,
@@ -147,15 +148,52 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str):
             plan_id=plan_id,
         )
         plan["tasks"] = result["tasks"]
+
+        async def _rerun_plan():
+            rerun_plan = {
+                "tasks": [{"task_id": "0", "description": idea, "dependencies": []}],
+                "idea": idea,
+            }
+            r = await run_plan(
+                rerun_plan, None, on_thinking, abort_event, on_tasks_batch,
+                use_mock=use_mock, api_config=config,
+                skip_quality_assessment=True,
+                idea_id=idea_id, plan_id=plan_id,
+            )
+            plan["tasks"] = r["tasks"]
+            plan.pop("qualityScore", None)
+            plan.pop("qualityComment", None)
+            return {"tasks": r["tasks"]}
+
+        reflected = await reflection_loop(
+            agent_type="plan",
+            run_fn=_rerun_plan,
+            initial_output={"tasks": plan["tasks"]},
+            context={"idea": idea},
+            on_thinking=on_thinking,
+            abort_event=abort_event,
+            api_config=config,
+        )
+        plan["tasks"] = reflected["output"]["tasks"]
+        reflection_data = reflected.get("reflection")
+
         plan_to_save = {"tasks": plan["tasks"], "qualityScore": plan.get("qualityScore"), "qualityComment": plan.get("qualityComment")}
         await save_plan(plan_to_save, idea_id, plan_id)
-        await api_state.sio.emit("plan-complete", {
+
+        complete_payload = {
             **_tree_update_payload(plan),
             "ideaId": idea_id,
             "planId": plan_id,
             "qualityScore": plan.get("qualityScore"),
             "qualityComment": plan.get("qualityComment"),
-        })
+        }
+        if reflection_data:
+            complete_payload["reflection"] = {
+                "iterations": reflection_data.get("iterations", 0),
+                "bestScore": reflection_data.get("best_score", 0),
+                "skillsCreated": [s["name"] for s in reflection_data.get("skills_created", [])],
+            }
+        await api_state.sio.emit("plan-complete", complete_payload)
     except asyncio.CancelledError:
         _emit_plan_error("Plan Agent stopped by user")
     except Exception as e:

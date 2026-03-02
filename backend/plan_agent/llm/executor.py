@@ -11,18 +11,24 @@ from typing import Any, Callable, Dict, List, Optional
 import networkx as nx
 import orjson
 import json_repair
+from loguru import logger
 
 from db import save_ai_response
 from shared.graph import build_dependency_graph, get_ancestor_path, get_parent_id
 from shared.llm_client import chat_completion as real_chat_completion, merge_phase_config
 from test.mock_stream import mock_chat_completion
 
+from shared.constants import (
+    PLAN_MAX_CONCURRENT_CALLS,
+    PLAN_MAX_VALIDATION_RETRIES,
+    TEMP_AGENT_LOOP,
+    TEMP_DETERMINISTIC,
+    TEMP_RETRY,
+    TEMP_STRUCTURED,
+)
+
 PLAN_DIR = Path(__file__).resolve().parent.parent
 MOCK_AI_DIR = PLAN_DIR.parent / "test" / "mock-ai"
-MAX_CONCURRENT_CALLS = 10
-MAX_VALIDATION_RETRIES = 2
-RETRY_TEMPERATURE = 0.5
-MAX_PLAN_AGENT_TURNS = 30
 
 # Caches
 _prompt_cache: Dict[str, str] = {}
@@ -33,7 +39,7 @@ _call_semaphore: Optional[asyncio.Semaphore] = None
 def _get_call_semaphore() -> asyncio.Semaphore:
     global _call_semaphore
     if _call_semaphore is None:
-        _call_semaphore = asyncio.Semaphore(MAX_CONCURRENT_CALLS)
+        _call_semaphore = asyncio.Semaphore(PLAN_MAX_CONCURRENT_CALLS)
     return _call_semaphore
 
 
@@ -288,7 +294,7 @@ async def check_atomicity(
     if atomicity_context:
         ctx["atomicityContext"] = atomicity_context
     last_err: Optional[Exception] = None
-    for attempt in range(MAX_VALIDATION_RETRIES + 1):
+    for attempt in range(PLAN_MAX_VALIDATION_RETRIES + 1):
         raise_if_aborted(abort_event)
         try:
             content = await _call_chat_completion(
@@ -298,7 +304,7 @@ async def check_atomicity(
                 stream=True,
                 use_mock=use_mock,
                 api_config=api_config,
-                temperature=0.0 if attempt == 0 else RETRY_TEMPERATURE,
+                temperature=TEMP_DETERMINISTIC if attempt == 0 else TEMP_RETRY,
             )
             result = _parse_json_response(content)
             if not _validate_atomicity_response(result):
@@ -312,7 +318,7 @@ async def check_atomicity(
             return out
         except Exception as e:
             last_err = e
-            if attempt >= MAX_VALIDATION_RETRIES:
+            if attempt >= PLAN_MAX_VALIDATION_RETRIES:
                 raise
     raise last_err or ValueError("Atomicity check failed")
 
@@ -341,7 +347,7 @@ async def decompose_task(
         "ancestor_path": get_ancestor_path(pid),
     }
     last_err: Optional[Exception] = None
-    for attempt in range(MAX_VALIDATION_RETRIES + 1):
+    for attempt in range(PLAN_MAX_VALIDATION_RETRIES + 1):
         raise_if_aborted(abort_event)
         try:
             content = await _call_chat_completion(
@@ -351,7 +357,7 @@ async def decompose_task(
                 stream=True,
                 use_mock=use_mock,
                 api_config=api_config,
-                temperature=RETRY_TEMPERATURE if attempt > 0 else None,
+                temperature=TEMP_RETRY if attempt > 0 else TEMP_AGENT_LOOP,
             )
             result = _parse_json_response(content)
             valid, err_msg = _validate_decompose_response(result, pid)
@@ -371,7 +377,7 @@ async def decompose_task(
             return out
         except Exception as e:
             last_err = e
-            if attempt >= MAX_VALIDATION_RETRIES:
+            if attempt >= PLAN_MAX_VALIDATION_RETRIES:
                 raise
     raise last_err or ValueError("Decompose failed")
 
@@ -385,31 +391,46 @@ async def format_task(
     idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
 ) -> Optional[Dict]:
-    """Generate input/output spec for atomic task. Plan Agent LLM single-turn."""
-    raise_if_aborted(abort_event)
-    content = await _call_chat_completion(
-        on_thinking,
-        {"type": "format", "taskId": task.get("task_id", ""), "task": task},
-        abort_event,
-        stream=True,
-        use_mock=use_mock,
-        api_config=api_config,
-    )
-    result = _parse_json_response(content)
-    if not result.get("input") or not result.get("output"):
-        return None
-    validation = result.get("validation") if isinstance(result.get("validation"), dict) else None
-    out = {
-        "input": result["input"],
-        "output": result["output"],
-        **({"validation": validation} if validation else {}),
-    }
-    if idea_id and plan_id:
-        asyncio.create_task(save_ai_response(
-            idea_id, plan_id, "format", task.get("task_id", ""),
-            {"content": {"input": result["input"], "output": result["output"], "validation": validation or {}}, "reasoning": ""},
-        ))
-    return out
+    """Generate input/output spec for atomic task. Plan Agent LLM single-turn. Retries once with higher temperature on failure."""
+    temps = [TEMP_STRUCTURED, TEMP_RETRY]
+    for attempt, temp in enumerate(temps):
+        raise_if_aborted(abort_event)
+        try:
+            content = await _call_chat_completion(
+                on_thinking,
+                {"type": "format", "taskId": task.get("task_id", ""), "task": task},
+                abort_event,
+                stream=True,
+                use_mock=use_mock,
+                api_config=api_config,
+                temperature=temp,
+            )
+            result = _parse_json_response(content)
+            if not result.get("input") or not result.get("output"):
+                if attempt < len(temps) - 1:
+                    logger.info("format_task attempt %d failed for %s, retrying with higher temperature", attempt + 1, task.get("task_id", ""))
+                    continue
+                return None
+            validation = result.get("validation") if isinstance(result.get("validation"), dict) else None
+            out = {
+                "input": result["input"],
+                "output": result["output"],
+                **({"validation": validation} if validation else {}),
+            }
+            if idea_id and plan_id:
+                asyncio.create_task(save_ai_response(
+                    idea_id, plan_id, "format", task.get("task_id", ""),
+                    {"content": {"input": result["input"], "output": result["output"], "validation": validation or {}}, "reasoning": ""},
+                ))
+            return out
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            if attempt < len(temps) - 1:
+                logger.info("format_task attempt %d error for %s: %s, retrying", attempt + 1, task.get("task_id", ""), e)
+                continue
+            raise
+    return None
 
 
 async def assess_quality(
@@ -445,6 +466,7 @@ async def assess_quality(
             stream=True,
             use_mock=use_mock,
             api_config=api_config,
+            temperature=TEMP_STRUCTURED,
         )
         result = _parse_json_response(content)
         score = result.get("score")

@@ -313,47 +313,39 @@ async def list_recent_plans() -> list:
     return [{"ideaId": r[0], "planId": r[1]} for r in result]
 
 
-def _ai_mode_to_flags(ai_mode: str) -> tuple:
-    """Convert aiMode to (useMock, taskAgentMode, planAgentMode). aiMode: mock|mockllm|mockagent|llm|llmagent|agent."""
-    if ai_mode in ("mock", "mockllm"):
-        return True, False, False  # Mock LLM: useMock, Task uses LLM path
-    if ai_mode == "mockagent":
-        return True, True, False  # Mock Agent: useMock, Task uses Agent path (simulated)
-    if ai_mode == "llmagent":
-        return False, True, False  # Plan: LLM, Execute: Agent
-    if ai_mode == "agent":
-        return False, True, True  # Plan: Agent, Execute: Agent
-    return False, False, False  # llm
-
-
 def _resolve_config(raw: dict) -> dict:
-    """Resolve presets+current to effective config for LLM/plan/execution. aiMode: mock|llm|llmagent|agent."""
+    """
+    解析 settings 为运行时 cfg。
+    结构：preset（API 连接）+ agentMode（模式标志）。
+    """
     if not raw:
         return {}
-    ai_mode = raw.get("aiMode") or "mock"
-    use_mock, task_agent, plan_agent = _ai_mode_to_flags(ai_mode)
+    agent_mode = raw.get("agentMode") or {}
+    idea_m = agent_mode.get("ideaAgent") or "mock"
+    plan_m = agent_mode.get("planAgent") or "mock"
+    task_m = agent_mode.get("taskAgent") or "mock"
 
     presets = raw.get("presets")
     current = raw.get("current")
     if isinstance(presets, dict) and current and current in presets:
         cfg = dict(presets[current])
         cfg.pop("label", None)
+        cfg.pop("phases", None)
     else:
         cfg = {}
-    cfg["useMock"] = use_mock
-    cfg["taskAgentMode"] = task_agent
-    cfg["planAgentMode"] = plan_agent
-    cfg["aiMode"] = ai_mode
-    mode_config = raw.get("modeConfig") or {}
-    cfg["modeConfig"] = mode_config
-    v = raw.get("maxExecutionConcurrency")
-    cfg["maxExecutionConcurrency"] = int(v) if v is not None else 7
-    for m in ("llm", "llmagent", "agent"):
-        pm = mode_config.get(m) or {}
-        t = pm.get("planLlmTemperature")
-        if t is not None:
-            cfg["temperature"] = float(t)
-            break
+
+    cfg["ideaUseMock"] = idea_m == "mock"
+    cfg["planUseMock"] = plan_m == "mock"
+    cfg["taskUseMock"] = task_m == "mock"
+    cfg["ideaAgentMode"] = idea_m == "agent"
+    cfg["planAgentMode"] = plan_m == "agent"
+    cfg["taskAgentMode"] = task_m == "agent"
+
+    reflection = raw.get("reflection") or {}
+    cfg["reflectionEnabled"] = reflection.get("enabled", False)
+    cfg["reflectionMaxIterations"] = reflection.get("maxIterations", 2)
+    cfg["reflectionQualityThreshold"] = reflection.get("qualityThreshold", 70)
+
     return cfg
 
 

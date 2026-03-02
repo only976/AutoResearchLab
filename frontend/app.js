@@ -62,5 +62,8 @@
         });
 
         document.addEventListener('maars:switch-to-output-tab', () => switchToView('output'));
+        document.addEventListener('maars:switch-view', (e) => {
+            if (e.detail?.view) switchToView(e.detail.view);
+        });
     }
 })();

@@ -38,6 +38,7 @@
             generatePlanBtn.disabled = true;
             if (stopPlanBtn) stopPlanBtn.style.display = '';
             document.dispatchEvent(new CustomEvent('maars:plan-start'));
+            document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'decomposition' } }));
             const ideaId = cfg.getCurrentIdeaId?.() || null;
             const response = await fetch(`${cfg.API_BASE_URL}/plan/run`, {
                 method: 'POST',

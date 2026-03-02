@@ -48,31 +48,31 @@ Task Agent 池并行执行就绪任务，每个任务执行后 Validate，实时
 | **Plan Agent** | 任务分解（atomicity → decompose → format → quality） | Plan 按钮 | plan-start / plan-thinking / plan-tree-update / plan-complete |
 | **Task Agent** | 原子任务执行与验证 | Execute 启动 | task-start / task-thinking / task-states-update / task-output / task-complete |
 
-三个 Agent 均支持 Stop 中止、流式 thinking、error 时按钮重置。
+三个 Agent 均支持 Stop 中止、流式 thinking、error 时按钮重置、Self-Reflection（自迭代：评估输出质量 → 生成 skill → 重执行）。
 
 ## LLM / Agent 模式实现进度
 
-**AI Mode** 可选 Mock LLM / Mock Agent / LLM / LLM+Agent / Agent。
+**AI Mode** 可选 Mock LLM / Mock Agent / LLM / Hybrid / Agent。
 
 | Agent | LLM 模式 | Agent 模式 |
 |-------|----------|------------|
-| **Idea Agent** | ✅ 单轮（关键词 + Refine），Mock 可用 | ❌ 未实现 |
+| **Idea Agent** | ✅ 单轮（关键词 + Refine），Mock 可用 | ✅ ReAct 循环（ExtractKeywords、SearchArxiv、FilterPapers、RefineIdea、ValidateRefinedIdea、自检） |
 | **Plan Agent** | ✅ 单轮 atomicity/decompose/format/quality | ✅ ReAct 循环（CheckAtomicity、Decompose、FormatTask 等工具） |
 | **Task Agent** | ✅ 单轮执行 + LLM 验证 | ✅ ReAct 循环（ReadFile、WriteFile、WebSearch、Finish 等工具，task-output-validator 自检） |
 
-| AI Mode | Plan | Task |
-|---------|------|------|
-| Mock LLM | Mock | Mock LLM |
-| Mock Agent | Mock | Mock Agent |
-| LLM | LLM | LLM |
-| LLM+Agent | LLM | Agent |
-| Agent | Agent | Agent |
+| AI Mode | Idea | Plan | Task |
+|---------|------|------|------|
+| Mock LLM | Mock | Mock LLM | Mock LLM |
+| Mock Agent | Mock | Mock | Mock Agent |
+| LLM | LLM | LLM | LLM |
+| Hybrid (LLM+Agent) | Agent | LLM | Agent |
+| Agent | Agent | Agent | Agent |
 
 ## Agent 工作流（详细）
 
 ### Idea Agent
 
-Refine 按钮触发，从模糊 idea 提取关键词并检索 arXiv 文献。仅 LLM 单轮，Mock 模式可用。流式 thinking 通过 `idea-thinking` 推送。
+Refine 按钮触发，从模糊 idea 提取关键词并检索 arXiv 文献。LLM 单轮或 Agent 模式（`ideaAgentMode`）。Agent 模式支持迭代检索、论文筛选、CoT 分析、自检重试。流式 thinking 通过 `idea-thinking` 推送。
 
 ### Plan Agent
 
@@ -112,16 +112,22 @@ maars/
 │   ├── main.py          # FastAPI + Socket.io 入口
 │   ├── api/             # 路由、schemas、state
 │   ├── idea_agent/      # Idea Agent：关键词提取、arXiv 检索
-│   │   └── llm/         # Idea Agent LLM 实现
+│   │   ├── llm/         # Idea Agent LLM 实现
+│   │   ├── agent.py     # Idea Agent ReAct 模式
+│   │   ├── prompts/     # idea-agent-prompt.txt、reflect-prompt.txt
+│   │   └── skills/      # Idea Agent skills（含 learned/）
 │   ├── plan_agent/      # Plan Agent：atomicity → decompose → format（业务逻辑）
 │   │   ├── llm/         # Plan Agent LLM 实现
-│   │   └── agent.py     # Plan Agent ReAct 模式
+│   │   ├── agent.py     # Plan Agent ReAct 模式
+│   │   ├── prompts/     # plan-agent-prompt.txt、reflect-prompt.txt
+│   │   └── skills/      # Plan Agent skills
 │   ├── task_agent/      # Task Agent：runner、execution、skills
 │   │   ├── llm/         # Task Agent LLM 实现（executor + validation）
-│   │   └── agent.py     # Task Agent ReAct 模式
-│   │   └── skills/     # task-output-validator、markdown-reporter 等
+│   │   ├── agent.py     # Task Agent ReAct 模式
+│   │   ├── prompts/     # reflect-prompt.txt
+│   │   └── skills/      # task-output-validator、markdown-reporter 等
 │   ├── visualization/   # 分解树、执行图布局
-│   ├── shared/          # 共享模块：graph、llm_client、skill_utils、utils
+│   ├── shared/          # 共享模块：graph、llm_client、reflection、constants、skill_utils
 │   ├── db/              # 文件存储：db/{plan_id}/、settings.json
 │   └── test/            # Mock AI（mock-ai/refine.json、execute.json 等）
 └── frontend/            # 静态页面、任务树、WebSocket
@@ -129,7 +135,7 @@ maars/
 
 ## 配置
 
-按 **Alt+Shift+S** 打开 **Settings**：Theme、DB Operation（Restore/Clear）、AI Mode（Mock LLM / Mock Agent / LLM / LLM+Agent / Agent）、Preset（Base URL、API Key、Model）、模式参数（Temperature、最大轮数等）。
+按 **Alt+Shift+S** 打开 **Settings**：Theme、DB Operation（Restore/Clear）、AI Mode（Mock / LLM / Agent）、Self-Reflection（开关、迭代次数、质量阈值）、Preset（Base URL、API Key、Model）。
 
 ## 文档
 

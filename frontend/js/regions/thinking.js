@@ -50,10 +50,11 @@
     function _buildHeaderText(block) {
         const si = block.scheduleInfo || {};
         const agentLabel = (block.source || 'Thinking').charAt(0).toUpperCase() + (block.source || 'thinking').slice(1);
-        const op = si.operation || block.operation || '—';
+        const op = si.operation || block.operation || null;
         const tid = si.task_id ?? block.taskId;
-        const tidStr = tid != null ? String(tid) : '—';
-        const parts = [agentLabel, op, tidStr];
+        const parts = [agentLabel];
+        if (op) parts.push(op);
+        if (tid != null) parts.push(String(tid));
         if (si.turn != null) parts.push(`Turn ${si.turn}${si.max_turns != null ? `/${si.max_turns}` : ''}`);
         if (si.tool_name) {
             const argsDisplay = si.tool_args_preview || (si.tool_args ? truncateForDisplay(si.tool_args, 50) : null);
@@ -72,17 +73,25 @@
         while (i < blocks.length) {
             const block = blocks[i];
             const isHeaderOnly = block.blockType === 'schedule' || _isNoThinking(block);
-            const headerText = _buildHeaderText(block);
-            i++;
             if (isHeaderOnly) {
-                /* 调度信息 / 纯 JSON：与 thinking 块相同结构，仅展示 header，body 隐藏 */
-                html += `<div class="${BLOCK_CLASS} ${BLOCK_CLASS}--header-only" data-block-key="${(block.key || '').replace(/"/g, '&quot;')}"><div class="${BLOCK_CLASS}-header">${escapeHtml(headerText || '')}</div></div>`;
+                let groupHtml = '';
+                while (i < blocks.length) {
+                    const b = blocks[i];
+                    if (b.blockType !== 'schedule' && !_isNoThinking(b)) break;
+                    const ht = _buildHeaderText(b);
+                    groupHtml += `<div class="${BLOCK_CLASS} ${BLOCK_CLASS}--header-only" data-block-key="${(b.key || '').replace(/"/g, '&quot;')}"><div class="${BLOCK_CLASS}-header">${escapeHtml(ht || '')}</div></div>`;
+                    i++;
+                }
+                html += `<div class="${BLOCK_CLASS}-schedule-group">${groupHtml}</div>`;
                 continue;
             }
+            const headerText = _buildHeaderText(block);
+            const opAttr = block.operation ? ` data-operation="${escapeHtml(block.operation)}"` : '';
+            i++;
             const raw = block.content || '';
             let blockHtml = raw ? (typeof marked !== 'undefined' ? marked.parse(raw) : raw) : '';
             if (blockHtml && typeof DOMPurify !== 'undefined') blockHtml = DOMPurify.sanitize(blockHtml);
-            html += `<div class="${BLOCK_CLASS}" data-block-key="${(block.key || '').replace(/"/g, '&quot;')}"><div class="${BLOCK_CLASS}-header">${escapeHtml(headerText || '')}</div><div class="${BLOCK_CLASS}-body">${blockHtml}</div></div>`;
+            html += `<div class="${BLOCK_CLASS}"${opAttr} data-block-key="${(block.key || '').replace(/"/g, '&quot;')}"><div class="${BLOCK_CLASS}-header">${escapeHtml(headerText || '')}</div><div class="${BLOCK_CLASS}-body">${blockHtml}</div></div>`;
         }
         const wasNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         const savedScrollTops = {};
@@ -105,6 +114,9 @@
         if (!state[`${PREFIX}ThinkingUserScrolled`] && wasNearBottom) {
             requestAnimationFrame(() => { requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; }); });
         }
+        el.querySelectorAll(`.${BLOCK_CLASS}-schedule-group`).forEach((g) => {
+            g.scrollTop = g.scrollHeight;
+        });
         state[`${PREFIX}ThinkingBlockUserScrolled`] = state[`${PREFIX}ThinkingBlockUserScrolled`] || {};
         const lastKey = state[`${PREFIX}LastUpdatedBlockKey`] || '';
         el.querySelectorAll(`.${BLOCK_CLASS}`).forEach((blockEl) => {

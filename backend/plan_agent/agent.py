@@ -8,33 +8,18 @@ Agent 实现放在 plan_agent/，单轮 LLM 放在 plan_agent/llm/。
 import asyncio
 from typing import Any, Callable, Dict, List, Optional
 
+from shared.constants import PLAN_AGENT_MAX_TURNS, TEMP_AGENT_LOOP
 from shared.llm_client import chat_completion as real_chat_completion, merge_phase_config
 from shared.utils import format_tool_args_preview
 
 from .agent_tools import PLAN_AGENT_TOOLS, execute_plan_agent_tool
 from .llm.executor import (
-    MAX_PLAN_AGENT_TURNS,
     _get_prompt_cached,
     check_atomicity,
     decompose_task,
     format_task,
     raise_if_aborted,
 )
-
-
-def _get_plan_agent_params(api_config: Dict[str, Any]) -> tuple:
-    """Return (max_turns, temperature) for Plan Agent from modeConfig or defaults."""
-    mode_cfg = api_config.get("modeConfig") or {}
-    agent_cfg = mode_cfg.get("agent") or {}
-    llm_cfg = mode_cfg.get("llm") or {}
-    max_turns = agent_cfg.get("planAgentMaxTurns") or MAX_PLAN_AGENT_TURNS
-    max_turns = int(max_turns)
-    temperature = (
-        agent_cfg.get("planLlmTemperature")
-        or llm_cfg.get("planLlmTemperature")
-        or 0.3
-    )
-    return max_turns, float(temperature)
 
 
 async def run_plan_agent(
@@ -75,22 +60,14 @@ async def run_plan_agent(
     ]
 
     cfg = merge_phase_config(api_config, "atomicity")
-    max_turns, temperature = _get_plan_agent_params(api_config or {})
+    max_turns = PLAN_AGENT_MAX_TURNS
+    temperature = TEMP_AGENT_LOOP
     on_thinking_fn = on_thinking or (lambda *a, **_: None)
 
     turn = 0
     while turn < max_turns:
         turn += 1
         raise_if_aborted(abort_event)
-        if on_thinking_fn:
-            r = on_thinking_fn(
-                "",
-                task_id=None,
-                operation="Plan",
-                schedule_info={"turn": turn, "max_turns": max_turns, "operation": "Plan"},
-            )
-            if asyncio.iscoroutine(r):
-                await r
 
         result = await real_chat_completion(
             messages,
@@ -110,9 +87,9 @@ async def run_plan_agent(
         else:
             content = result or ""
 
-        schedule_info = {"turn": turn, "max_turns": max_turns, "operation": "Plan"}
+        schedule_info = {"turn": turn, "max_turns": max_turns, "operation": "Decompose"}
         if on_thinking_fn and content:
-            r = on_thinking_fn(content, task_id=None, operation="Plan", schedule_info=schedule_info)
+            r = on_thinking_fn(content, task_id=None, operation="Decompose", schedule_info=schedule_info)
             if asyncio.iscoroutine(r):
                 await r
 
@@ -161,9 +138,9 @@ async def run_plan_agent(
                         "tool_name": name,
                         "tool_args": tool_args_raw,
                         "tool_args_preview": tool_args_preview,
-                        "operation": "Plan",
+                        "operation": "Decompose",
                     }
-                    r = on_thinking_fn("", task_id=None, operation="Plan", schedule_info=tool_schedule)
+                    r = on_thinking_fn("", task_id=None, operation="Decompose", schedule_info=tool_schedule)
                     if asyncio.iscoroutine(r):
                         await r
                 try:

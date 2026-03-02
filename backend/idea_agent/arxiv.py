@@ -4,7 +4,7 @@ arXiv API 请求与解析。
 
 import re
 import xml.etree.ElementTree as ET
-from typing import List
+from typing import List, Optional
 
 import httpx
 from loguru import logger
@@ -13,13 +13,16 @@ ARXiv_API_BASE = "https://export.arxiv.org/api/query"
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 
 
-async def search_arxiv(query: str, limit: int = 10) -> List[dict]:
+async def search_arxiv(
+    query: str, limit: int = 10, cat: Optional[str] = None
+) -> List[dict]:
     """
     检索 arXiv API，解析 Atom XML，返回文献列表。
 
     Args:
         query: 检索词，多个词用 + 连接（如 Python+JavaScript+backend）
         limit: 返回数量上限
+        cat: 可选 arXiv 分类，如 cs.AI, cs.LG, math.NA
 
     Returns:
         [{title, abstract, url, authors, published}, ...]
@@ -31,7 +34,8 @@ async def search_arxiv(query: str, limit: int = 10) -> List[dict]:
         return []
     limit = min(max(1, int(limit) if isinstance(limit, (int, float)) else 10), 50)
 
-    url = f"{ARXiv_API_BASE}?search_query=all:{query}&max_results={limit}"
+    search_query = f"cat:{cat}+all:{query}" if (cat and cat.strip()) else f"all:{query}"
+    url = f"{ARXiv_API_BASE}?search_query={search_query}&max_results={limit}"
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(url)

@@ -107,6 +107,7 @@
         const btn = executionBtn;
         const originalText = btn.textContent;
         document.dispatchEvent(new CustomEvent('maars:task-start'));
+        document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'execution' } }));
         startExecutionUI();
         try {
             const socket = window.MAARS?.state?.socket;

@@ -9,6 +9,7 @@ import json
 import re
 from typing import Any, Callable, Dict, Optional, Tuple
 
+from shared.constants import TEMP_DETERMINISTIC
 from shared.llm_client import chat_completion, merge_phase_config
 
 
@@ -87,7 +88,7 @@ Output your reasoning first, then the JSON block."""
             on_chunk=_stream_chunk if stream else None,
             abort_event=abort_event,
             stream=stream,
-            temperature=0.0,
+            temperature=TEMP_DETERMINISTIC,
         )
         text = response if isinstance(response, str) else (response.get("content") or "")
         # 从 reasoning + ```json...``` 中提取 JSON，若无代码块则尝试整体解析

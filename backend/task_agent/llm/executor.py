@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Optional
 import orjson
 import json_repair
 
+from shared.constants import TEMP_TASK_EXECUTE
 from shared.llm_client import chat_completion, merge_phase_config
 from test.mock_stream import mock_chat_completion
 
@@ -83,6 +84,7 @@ def _build_task_agent_messages(
     input_spec: Dict[str, Any],
     output_spec: Dict[str, Any],
     resolved_inputs: Dict[str, Any],
+    idea_context: str = "",
 ) -> tuple[list[dict], str]:
     """Build system + user messages for single-turn Task Agent."""
     output_format = output_spec.get("format") or ""
@@ -105,9 +107,13 @@ Rules:
         except (TypeError, ValueError):
             inputs_str = str(resolved_inputs)
 
+    idea_section = ""
+    if idea_context:
+        idea_section = f"\n**Research idea (project context):** {idea_context}\n"
+
     user_prompt = f"""**Task ID:** {task_id}
 **Description:** {description}
-
+{idea_section}
 **Input description:** {input_desc}
 **Input artifacts:**
 ```json
@@ -151,17 +157,6 @@ def _parse_task_agent_output(content: str, use_json_mode: bool) -> Any:
     return content
 
 
-def _get_task_agent_params(api_config: Dict[str, Any]) -> tuple[int, float]:
-    """Return (max_turns, temperature) from modeConfig or defaults. Used for single-turn temperature."""
-    mode_cfg = api_config.get("modeConfig") or {}
-    agent_cfg = mode_cfg.get("agent") or {}
-    llm_cfg = mode_cfg.get("llm") or {}
-    temperature = (
-        agent_cfg.get("taskLlmTemperature")
-        or llm_cfg.get("taskLlmTemperature")
-        or 0.3
-    )
-    return 1, float(temperature)
 
 
 async def execute_task(
@@ -175,21 +170,21 @@ async def execute_task(
     on_thinking: Optional[Callable[[str, Optional[str], Optional[str]], None]] = None,
     idea_id: Optional[str] = None,
     plan_id: Optional[str] = None,
+    idea_context: str = "",
 ) -> Any:
     """
     Execute task via single-turn LLM. Returns parsed output (dict for JSON, str for Markdown).
-    When useMock=True in api_config, returns simulated output without LLM call.
+    When taskUseMock=True in api_config, returns simulated output without LLM call.
     When taskAgentMode=True, caller (runner) should use task_agent.agent.run_task_agent instead.
     """
     raw_cfg = api_config or {}
-    if raw_cfg.get("useMock"):
+    if raw_cfg.get("taskUseMock"):
         output_format = (output_spec or {}).get("format") or ""
         return await _run_mock_execute(task_id, output_format, on_thinking)
 
     cfg = merge_phase_config(raw_cfg, "execute")
-    _, temperature = _get_task_agent_params(raw_cfg)
     messages, output_format = _build_task_agent_messages(
-        task_id, description, input_spec, output_spec, resolved_inputs
+        task_id, description, input_spec, output_spec, resolved_inputs, idea_context
     )
     use_json_mode = _is_json_format(output_format)
     # 不使用 response_format，以便 LLM 先输出 reasoning 再输出结果（Thinking 显示推理）
@@ -206,7 +201,7 @@ async def execute_task(
         on_chunk=_on_chunk if stream else None,
         abort_event=abort_event,
         stream=stream,
-        temperature=temperature,
+        temperature=TEMP_TASK_EXECUTE,
         response_format=response_format,
     )
     content = raw if isinstance(raw, str) else (raw.get("content") or "")
