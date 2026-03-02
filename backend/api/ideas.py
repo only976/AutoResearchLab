@@ -1,6 +1,7 @@
 from typing import Any, Dict
 from datetime import datetime
-
+from ..ideas.agent import ResearchIdeaEngine
+from backend.config import LLM_MODEL, LLM_API_BASE, LLM_API_KEY
 from fastapi import APIRouter, HTTPException
 
 from backend.api.common import parse_json_text
@@ -67,26 +68,50 @@ def refine_ideas(payload: IdeaRefineRequest) -> Dict[str, Any]:
 
 
 @router.post("/generate")
-def generate_ideas(payload: IdeaGenerateRequest) -> Dict[str, Any]:
-    agent = IdeaAgent()
-    text = agent.generate_ideas(payload.scope)
-    parsed = parse_json_text(text)
-    result = _normalize_generated_ideas(parsed)
+def generate_ideas(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    第二阶段：生成深度研究报告（适配云端 RAG 和自定义模板）
+    接收包含 broad_topic, vram_gb, depth_level, language 的 JSON
+    """
+    # 初始化 RAG 引擎
+    # 引擎内部会自动读取环境变量 QDRANT_URL 和 QDRANT_API_KEY 以连接云端数据库
+    engine = ResearchIdeaEngine(
+        model_config={
+            "model_name": LLM_MODEL,
+            "api_base": LLM_API_BASE,
+            "api_key": LLM_API_KEY
+        },
+        db_path="./qdrant_local_cache"  # 云端连接失败时的本地备份路径
+    )
+
+    # 提取主题用于日志或快照
+    topic = payload.get("broad_topic", "Untitled Research")
+
     try:
-        import json
+        # 核心：运行你在 agent.py 中修改好的 run_agent_workflow
+        # 它会自动处理检索、Source ID 引用、VRAM 评估和召回率计算
+        result = engine.run_agent_workflow(payload)
 
+        # 检查是否有错误返回
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+
+        # 自动保存快照 (Auto-save)
         try:
-            refined_topic = json.loads(payload.scope)
-        except Exception:
-            refined_topic = _fallback_topic_from_scope(payload.scope)
+            # 构造快照数据结构，适配前端展示
+            snapshot_data = {
+                "refinement_data": {"title": topic},
+                "results": result
+            }
+            save_snapshot(snapshot_data["refinement_data"], [result])
+        except Exception as save_err:
+            print(f"⚠️ Snapshot auto-save failed: {save_err}")
 
-        ideas_list = result.get("ideas", [])
-        snapshot_results = [{"topic": refined_topic, "ideas": ideas_list}]
-        snapshot_name = _build_snapshot_name_with_llm(agent, refined_topic, snapshot_results)
-        save_snapshot(refined_topic, snapshot_results, custom_name=snapshot_name)
-    except Exception:
-        pass
-    return result
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+
 
 
 @router.get("/snapshots")

@@ -6,11 +6,14 @@ No env fallback - all config comes from config.json.
 import json
 import uuid
 from pathlib import Path
+import os
 
 # Storage in backend/db (unified)
 DB_DIR = Path(__file__).resolve().parent / "db"
 CONFIG_FILE = "config.json"
-
+LLM_MODEL = "gemini-3-flash-preview"
+LLM_API_BASE = None
+LLM_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 def _config_path() -> Path:
     DB_DIR.mkdir(parents=True, exist_ok=True)
