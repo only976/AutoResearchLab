@@ -1,47 +1,24 @@
 import json
 import os
+import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from pathlib import Path
 
-from google import genai
+# Add parent project directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+
+from backend.agents.data_agent import DataAgent
+
 
 def generate_experiment_json(idea_json_str):
-    # 1. 解析上游输入的 JSON
-    idea_data = json.loads(idea_json_str)
-    
-    # 2. 构建面向大模型的指令 (Prompt)
-    prompt = f"""
-    你是一个深度学习实验室的 AI 研究助理。请根据以下论文 Idea JSON，生成一份详细的实验设计 JSON。
-    
-    【输入 Idea 核心内容】:
-    - 标题: {idea_data['idea']['title']}
-    - 创新点: {idea_data['idea']['innovation']}
-    - 基准模型: {idea_data['idea']['baselines']}
-    - 预期指标: {idea_data['idea']['success_metric']}
-    
-    【输出要求】:
-    1. 必须包含 'Datasets'：根据时间序列领域惯例，推荐 5 个常用数据集（如 ETT, Traffic, Electricity）。
-    2. 必须包含 'Experimental_Group'：即本项目的完整模型配置。
-    3. 必须包含 'Ablation_Groups'：针对 4 个创新点分别设计“剔除变量”。
-    4. 必须包含 'Variables'：明确自变量（预测长度 96, 192, 336, 720）和因变量。
-    5. 必须包含 'Expected_Output_Headers'：数组形式，给出结果数据表的列名。
-    6. 格式：严格返回 JSON，不要有任何正文描述。
     """
-
-    # 3. 调用大模型（Gemini API）
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("Missing GEMINI_API_KEY in environment variables.")
-
-    client = genai.Client(api_key=api_key)
-
-    response = client.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=prompt,
-        config={"response_mime_type": "application/json"}
-    )
-
-    return response.text
+    Wrapper function that delegates to DataAgent.generate_experiment_design()
+    Maintains compatibility with existing code.
+    Input/Output completely consistent with original implementation.
+    """
+    agent = DataAgent()
+    return agent.generate_experiment_design(idea_json_str)
 
 
 def _read_idea_json(file_path):
