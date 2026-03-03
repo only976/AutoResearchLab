@@ -43,4 +43,4 @@ layout ← visualization (读 db 数据，计算布局)
 
 ## 目录结构
 
-三个 Agent 保持统一目录结构，详见 [docs/agent-structure.md](../docs/agent-structure.md)。Skills 的 list/load/read 由 `shared/skill_utils` 统一提供。
+三个 Agent 保持统一目录结构，详见 [docs/design/agent-structure.md](../docs/design/agent-structure.md)。Skills 的 list/load/read 由 `shared/skill_utils` 统一提供。

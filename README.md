@@ -20,7 +20,7 @@ python -m uvicorn main:asgi_app --host 0.0.0.0 --port 3001 --loop asyncio --http
 
 ### 0. Refine（可选）
 
-用户输入模糊 idea → **Refine** 按钮 → Idea Agent 提取关键词 → arXiv 检索 → 文献列表展示于 Output，并创建新 plan。
+用户输入模糊 idea → **Refine** 按钮 → Idea Agent 提取关键词 → arXiv 检索 → 文献列表展示于 Output，并创建 idea_id。
 
 ### 1. Generate Plan（规划）
 
@@ -47,7 +47,7 @@ Task Agent 池并行执行就绪任务，每个任务执行后 Validate，实时
 | **Idea Agent** | 关键词提取、arXiv 检索、Refined Idea 生成 | Refine 按钮 | idea-start / idea-thinking / idea-complete |
 | **Plan Agent** | 任务分解（atomicity → decompose → format → quality） | Plan 按钮 | plan-start / plan-thinking / plan-tree-update / plan-complete |
 | **Task Agent** | 原子任务执行与验证 | Execute 启动 | task-start / task-thinking / task-states-update / task-output / task-complete |
-| **Paper Agent** | 根据 Plan 与 Task 产出生成论文草稿 | 生成论文 按钮 | paper-start / paper-thinking / paper-complete |
+| **Paper Agent** | 根据 Plan 与 Task 产出生成论文草稿 | Write 按钮 | paper-start / paper-thinking / paper-complete |
 
 Idea / Plan / Task 均支持 Stop 中止、流式 thinking、error 时按钮重置、Self-Reflection（自迭代：评估输出质量 → 生成 skill → 重执行）。
 
@@ -135,18 +135,19 @@ maars/
 │   ├── paper_agent/     # Paper Agent：单轮 LLM 论文生成
 │   ├── visualization/   # 分解树、执行图布局
 │   ├── shared/          # 共享模块：graph、llm_client、reflection、constants、skill_utils
-│   ├── db/              # 文件存储：db/{plan_id}/、settings.json
+│   ├── db/              # 文件存储：db/{idea_id}/{plan_id}/、settings.json
 │   └── test/            # Mock AI（mock-ai/refine.json、execute.json 等）
 └── frontend/            # 静态页面、任务树、WebSocket
 ```
 
 ## 配置
 
-按 **Alt+Shift+S** 打开 **Settings**：Theme、DB Operation（Restore/Clear）、Agent Mode（Idea/Plan/Task 各选 Mock / LLM / Agent）、Idea Agent PDF RAG（可选，启用后 Refine 可检索论文正文）、Self-Reflection（开关、迭代次数、质量阈值）、Preset（Base URL、API Key、Model）。
+按 **Alt+Shift+S** 打开 **Settings**：**Theme**（主题）、**AI Config**（Agent Mode、Idea RAG、Self-Reflection、Preset）、**Data**（Restore recent plan、Clear all data）。
 
 ## 文档
 
-- [文档索引](docs/README.md)（三个 Agent 工作流、区域职责等）
+- [文档索引](docs/README.md)（工作流、设计文档、前端脚本等）
+- [工作流文档](docs/workflow/README.md)
 - [前端脚本与模块依赖](docs/FRONTEND_SCRIPTS.md)
 - [Release Note 标准](docs/RELEASE_NOTE_STANDARD.md)
 - [执行图布局规则](backend/visualization/EXECUTION_LAYOUT_RULES.md)
