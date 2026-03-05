@@ -14,6 +14,20 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 </head>
 <body>
+    <button
+        id="appSidebarToggle"
+        class="app-sidebar-toggle"
+        type="button"
+        aria-label="Toggle sidebar"
+        aria-controls="appSidebar"
+        aria-expanded="false"
+    >
+        <span class="app-sidebar-toggle-icon" aria-hidden="true"></span>
+    </button>
+    <aside id="appSidebar" class="app-sidebar" aria-hidden="true">
+        <div id="appSidebarContent" class="app-sidebar-content" hidden></div>
+    </aside>
+
     <div class="container">
         <header class="page-header">
             <div class="header-title">
@@ -295,6 +309,7 @@
     <script src="js/ws/handlers/thinking-handler.js"></script>
     <script src="js/ws/websocket.js"></script>
     <script src="js/ui/settings.js"></script>
+    <script src="js/ui/sidebar.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

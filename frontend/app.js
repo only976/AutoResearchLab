@@ -16,6 +16,8 @@
         if (theme) theme.initTheme().catch(() => {});
         const settings = window.MAARS?.settings;
         if (settings) settings.initSettingsModal();
+        const sidebar = window.MAARS?.sidebar;
+        if (sidebar) sidebar.initSidebar();
         if (cfg && cfg.resolvePlanId) cfg.resolvePlanId().catch(() => {});
         if (idea) idea.init();
         if (plan) plan.init();

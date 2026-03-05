@@ -1,0 +1,132 @@
+/**
+ * App Sidebar - left drawer + entry buttons
+ */
+
+:root {
+    --app-sidebar-width: 300px;
+}
+
+.app-sidebar-toggle {
+    position: fixed;
+    top: 22px;
+    left: 22px;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-area-primary) 92%, transparent);
+    color: var(--text-color);
+    box-shadow: var(--shadow-lg);
+    z-index: 1200;
+    backdrop-filter: blur(8px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 260ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.app-sidebar-toggle:hover {
+    border-color: var(--border-color-hover);
+}
+
+.app-sidebar-toggle-icon {
+    position: relative;
+    width: 18px;
+    height: 12px;
+    display: block;
+    border-top: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+}
+
+.app-sidebar-toggle-icon::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: currentColor;
+    transform: translateY(-50%);
+}
+
+.app-sidebar-open .app-sidebar-toggle {
+    transform: translateX(calc(var(--app-sidebar-width) - 14px));
+}
+
+.app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--app-sidebar-width);
+    height: 100vh;
+    background: color-mix(in srgb, var(--bg-area-primary) 94%, var(--bg-color) 6%);
+    border-right: 1px solid var(--border-color);
+    box-shadow: var(--shadow-xl);
+    transform: translateX(calc(var(--app-sidebar-width) * -1));
+    transition: transform 260ms cubic-bezier(0.25, 0.9, 0.25, 1);
+    z-index: 1100;
+    overflow: hidden;
+}
+
+.app-sidebar.is-open {
+    transform: translateX(0);
+}
+
+.app-sidebar-content {
+    height: 100%;
+    width: 100%;
+    padding: 80px 16px 16px;
+    opacity: 0;
+}
+
+.app-sidebar-content.is-visible {
+    opacity: 1;
+    transition: opacity 120ms ease;
+}
+
+.app-sidebar-inner {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.app-sidebar-body {
+    flex: 1;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-area-secondary) 80%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--border-color) 72%, transparent);
+}
+
+.app-sidebar-settings-item {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg-area-secondary) 90%, transparent);
+    color: var(--text-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    font-size: 13px;
+}
+
+.app-sidebar-settings-glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    font-size: 15px;
+}
+
+@media (max-width: 900px) {
+    :root {
+        --app-sidebar-width: min(82vw, 280px);
+    }
+
+    .app-sidebar-toggle {
+        top: 14px;
+        left: 14px;
+    }
+}

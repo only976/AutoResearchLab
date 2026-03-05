@@ -11,6 +11,7 @@
     const PANELS = ['settingsPanelTheme', 'settingsPanelAi', 'settingsPanelDb'];
     let _configState = { agentMode: { ...DEFAULT_AGENT_MODE }, reflection: { ...DEFAULT_REFLECTION }, current: '', presets: {} };
     let _activePresetKey = '';
+    let _openSettingsModal = null;
 
     const _escapeHtml = (() => {
         const u = window.MAARS?.utils;
@@ -201,6 +202,7 @@
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
         }
+        _openSettingsModal = openSettingsModal;
 
         document.addEventListener('keydown', (e) => {
             // Alt+Shift+S (Win/Linux) or Cmd+Shift+S (Mac)
@@ -324,5 +326,9 @@
         });
     }
 
-    window.MAARS.settings = { initSettingsModal };
+    function openSettingsModal() {
+        return _openSettingsModal?.();
+    }
+
+    window.MAARS.settings = { initSettingsModal, openSettingsModal };
 })();
