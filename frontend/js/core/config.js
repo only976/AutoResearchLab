@@ -5,12 +5,15 @@
     'use strict';
     window.MAARS = window.MAARS || {};
 
-    const _base = (typeof window !== 'undefined' && window.location && /^https?:/.test(window.location.origin))
-        ? '' : 'http://localhost:3001';
+    const _isHttpOrigin = (typeof window !== 'undefined' && window.location && /^https?:/.test(window.location.origin));
+    const _base = _isHttpOrigin ? '' : 'http://localhost:3001';
     const API_BASE_URL = _base + '/api';
-    const WS_URL = (typeof window !== 'undefined' && window.location) ? window.location.origin : 'http://localhost:3001';
+    // When opened via file://, window.location.origin is "null" and cannot be used for Socket.IO.
+    // Prefer backend base URL when we are not on an http(s) origin.
+    const WS_URL = _base || ((typeof window !== 'undefined' && window.location) ? window.location.origin : 'http://localhost:3001');
     const IDEA_ID_KEY = 'maars-idea-id';
     const PLAN_ID_KEY = 'maars-plan-id';
+    const RESEARCH_ID_KEY = 'maars-research-id';
     const SESSION_ID_KEY = 'maars-session-id';
     const SESSION_TOKEN_KEY = 'maars-session-token';
     const THEMES = ['light', 'dark', 'black'];
@@ -106,6 +109,19 @@
         try { localStorage.setItem(PLAN_ID_KEY, id); } catch (_) {}
     }
 
+    function getCurrentResearchId() {
+        try {
+            return localStorage.getItem(RESEARCH_ID_KEY) || '';
+        } catch (_) { return ''; }
+    }
+
+    function setCurrentResearchId(id) {
+        try {
+            if (!id) localStorage.removeItem(RESEARCH_ID_KEY);
+            else localStorage.setItem(RESEARCH_ID_KEY, id);
+        } catch (_) {}
+    }
+
     async function resolvePlanId() {
         const storedIdea = getCurrentIdeaId();
         const storedPlan = getCurrentPlanId();
@@ -166,11 +182,13 @@
         WS_URL,
         IDEA_ID_KEY,
         PLAN_ID_KEY,
+        RESEARCH_ID_KEY,
         SESSION_ID_KEY,
         SESSION_TOKEN_KEY,
         THEMES,
         getCurrentIdeaId,
         getCurrentPlanId,
+        getCurrentResearchId,
         getSessionId,
         getSessionToken,
         ensureSession,
@@ -178,6 +196,7 @@
         fetchWithSession,
         setCurrentIdeaId,
         setCurrentPlanId,
+        setCurrentResearchId,
         resolvePlanId,
         resolvePlanIds,
         fetchSettings,

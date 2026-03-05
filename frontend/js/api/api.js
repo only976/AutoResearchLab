@@ -167,5 +167,55 @@
         return data;
     }
 
-    window.MAARS.api = { loadExampleIdea, loadExecution, clearDb, fetchStatus, restoreRecentPlan, retryTask, resumeFromTask, refineIdea, stopAgent };
+    async function createResearch(prompt) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: prompt || '' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to create research');
+        return data;
+    }
+
+    async function listResearches() {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to list researches');
+        return data;
+    }
+
+    async function getResearch(researchId) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to load research');
+        return data;
+    }
+
+    async function runResearch(researchId) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format: 'markdown' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to run research');
+        return data;
+    }
+
+    window.MAARS.api = {
+        loadExampleIdea,
+        loadExecution,
+        clearDb,
+        fetchStatus,
+        restoreRecentPlan,
+        retryTask,
+        resumeFromTask,
+        refineIdea,
+        stopAgent,
+        createResearch,
+        listResearches,
+        getResearch,
+        runResearch,
+    };
 })();

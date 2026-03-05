@@ -5,6 +5,7 @@
     'use strict';
 
     const TRANSITION_MS = 260;
+    let _refreshResearchList = null;
 
     function initSidebar() {
         const sidebar = document.getElementById('appSidebar');
@@ -26,11 +27,50 @@
             document.body.classList.toggle('app-sidebar-open', expanded);
         }
 
+        async function refreshResearchList() {
+            const listEl = document.getElementById('appSidebarResearchList');
+            if (!listEl) return;
+            listEl.innerHTML = '<div class="app-sidebar-list-empty">Loading…</div>';
+            try {
+                const api = window.MAARS?.api;
+                if (!api?.listResearches) {
+                    listEl.innerHTML = '<div class="app-sidebar-list-empty">—</div>';
+                    return;
+                }
+                const data = await api.listResearches();
+                const items = data.items || [];
+                if (!items.length) {
+                    listEl.innerHTML = '<div class="app-sidebar-list-empty">No research yet</div>';
+                    return;
+                }
+                const currentId = window.MAARS?.config?.getCurrentResearchId?.() || '';
+                listEl.innerHTML = items.map((it) => {
+                    const rid = it.researchId || '';
+                    const title = (it.title || rid || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const stage = it.stage || 'refine';
+                    const status = it.stageStatus || 'idle';
+                    const badge = `${stage}${status ? ' · ' + status : ''}`;
+                    const activeClass = rid && currentId && rid === currentId ? ' is-active' : '';
+                    return `<button type="button" class="app-sidebar-list-item${activeClass}" data-research-id="${rid}"><span class="app-sidebar-list-item-title">${title || 'Research'}</span><span class="app-sidebar-badge">${badge}</span></button>`;
+                }).join('');
+            } catch (e) {
+                console.warn('Failed to load research list', e);
+                listEl.innerHTML = '<div class="app-sidebar-list-empty">Failed to load</div>';
+            }
+        }
+
+        _refreshResearchList = refreshResearchList;
+
         function renderSidebarContent() {
             if (contentHost.dataset.rendered === 'true') return;
             contentHost.innerHTML = `
                 <div class="app-sidebar-inner">
-                    <div class="app-sidebar-body" aria-hidden="true"></div>
+                    <div class="app-sidebar-body" aria-hidden="true">
+                        <div class="app-sidebar-section">
+                            <div class="app-sidebar-section-title">Research</div>
+                            <div id="appSidebarResearchList" class="app-sidebar-list"></div>
+                        </div>
+                    </div>
                     <button type="button" class="app-sidebar-settings-item" id="appSidebarSettingsBtn">
                         <span class="app-sidebar-settings-glyph" aria-hidden="true">⚙</span>
                         <span>Settings</span>
@@ -44,6 +84,17 @@
                 openSettingsPage();
                 closeSidebar();
             });
+
+            const listEl = document.getElementById('appSidebarResearchList');
+            listEl?.addEventListener('click', (e) => {
+                const btn = e.target.closest('.app-sidebar-list-item');
+                const rid = btn?.getAttribute('data-research-id') || '';
+                if (!rid) return;
+                window.MAARS?.research?.navigateToResearch?.(rid);
+                closeSidebar();
+            });
+
+            refreshResearchList();
         }
 
         function hideSidebarContentNow() {
@@ -117,5 +168,8 @@
     }
 
     window.MAARS = window.MAARS || {};
-    window.MAARS.sidebar = { initSidebar };
+    window.MAARS.sidebar = {
+        initSidebar,
+        refreshResearchList: () => (_refreshResearchList ? _refreshResearchList().catch(() => {}) : undefined),
+    };
 })();

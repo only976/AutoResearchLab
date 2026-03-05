@@ -194,6 +194,7 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str, sess
             {"error": "Plan Agent stopped by user"},
             warning_label="plan-error emit (cancel)",
         )
+        raise
     except Exception as e:
         err_msg = str(e)
         logger.warning("Plan run error: %s", err_msg)
@@ -203,6 +204,7 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str, sess
             {"error": "Plan Agent stopped by user" if "Aborted" in err_msg else err_msg},
             warning_label="plan-error emit",
         )
+        raise
     finally:
         async with state.lock:
             if state.abort_event is abort_event:

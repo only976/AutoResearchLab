@@ -59,3 +59,15 @@ class PaperRunRequest(BaseModel):
     idea_id: str = Field(..., alias="ideaId", description="Idea ID")
     plan_id: str = Field(..., alias="planId", description="Plan ID")
     format: Optional[str] = Field(default="markdown", description="Output format: markdown or latex")
+
+
+class ResearchCreateRequest(BaseModel):
+    """Create a research (Gemini-like home input)."""
+    model_config = ConfigDict(populate_by_name=True)
+    prompt: str = Field(..., min_length=1, description="User research prompt")
+
+
+class ResearchRunRequest(BaseModel):
+    """Start/Restart the research pipeline for a researchId."""
+    model_config = ConfigDict(populate_by_name=True)
+    format: Optional[str] = Field(default="markdown", description="Paper output format")

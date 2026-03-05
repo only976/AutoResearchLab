@@ -18,6 +18,7 @@
 
 /* Regions - 区域样式 */
 @import "css/regions/idea-input.css";
+@import "css/regions/research.css";
 @import "css/regions/thinking.css";
 @import "css/regions/tree.css";
 @import "css/regions/output.css";

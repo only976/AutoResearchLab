@@ -11,7 +11,8 @@ import re
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional, Set, Tuple
 
 from fastapi import HTTPException
 from loguru import logger
@@ -51,24 +52,120 @@ class SessionState:
 
 
 # Set by main.py
+_sio_raw: Any = None
 sio: Any = None
 sessions: Dict[str, SessionState] = {}
 _sessions_lock: Optional[asyncio.Lock] = None
 _socket_session_map: Dict[str, str] = {}
-_session_secret = os.getenv("MAARS_SESSION_SECRET") or secrets.token_hex(32)
+_sse_subscribers: Dict[str, Set[asyncio.Queue]] = {}
+def _load_or_create_session_secret() -> str:
+    """Load a stable session signing secret.
+
+    If MAARS_SESSION_SECRET is set, use it.
+    Otherwise, persist a generated secret in backend/db/session_secret.txt so
+    session credentials survive server restarts (dev-friendly).
+    """
+    env = os.getenv("MAARS_SESSION_SECRET")
+    if env and env.strip():
+        return env.strip()
+    try:
+        secret_file = Path(__file__).resolve().parent.parent / "db" / "session_secret.txt"
+        secret_file.parent.mkdir(parents=True, exist_ok=True)
+        if secret_file.exists():
+            s = secret_file.read_text(encoding="utf-8").strip()
+            if s:
+                return s
+        s = secrets.token_hex(32)
+        secret_file.write_text(s, encoding="utf-8")
+        return s
+    except Exception:
+        return secrets.token_hex(32)
+
+
+_session_secret = _load_or_create_session_secret()
 _session_id_re = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 SESSION_IDLE_TTL_SECONDS = int(os.getenv("MAARS_SESSION_IDLE_TTL_SECONDS", "7200"))
 _session_sweep_interval_seconds = int(os.getenv("MAARS_SESSION_SWEEP_INTERVAL_SECONDS", "120"))
 _last_session_sweep_ts = 0.0
 
 
+class _RealtimeEmitter:
+    """Proxy emitter that mirrors Socket.IO emits into SSE subscribers."""
+
+    def __init__(self, raw_sio: Any):
+        self._raw = raw_sio
+
+    async def emit(self, event: str, payload: dict, to: Optional[str] = None, **kwargs):
+        # Socket.IO uses "to" for room/session; we reuse it as SSE session id.
+        if to:
+            await _publish_sse(to, event, payload)
+        if self._raw and hasattr(self._raw, "emit"):
+            return await self._raw.emit(event, payload, to=to, **kwargs)
+        return None
+
+
 def init_api_state(
     sio_instance,
 ):
-    global sio, _sessions_lock
-    sio = sio_instance
+    global sio, _sio_raw, _sessions_lock
+    _sio_raw = sio_instance
+    # Expose a proxy emitter so internal components that call api_state.sio.emit
+    # automatically publish to SSE as well.
+    sio = _RealtimeEmitter(sio_instance) if sio_instance is not None else None
     if _sessions_lock is None:
         _sessions_lock = asyncio.Lock()
+
+
+def _get_sse_subscribers(session_id: str) -> Set[asyncio.Queue]:
+    normalized = normalize_session_id(session_id)
+    return _sse_subscribers.setdefault(normalized, set())
+
+
+def subscribe_sse(session_id: str, *, max_queue: int = 200) -> asyncio.Queue:
+    """Register an SSE subscriber queue for a session."""
+    q: asyncio.Queue = asyncio.Queue(maxsize=max_queue)
+    subs = _get_sse_subscribers(session_id)
+    subs.add(q)
+    return q
+
+
+def unsubscribe_sse(session_id: str, q: asyncio.Queue) -> None:
+    """Unregister an SSE subscriber queue for a session."""
+    try:
+        normalized = normalize_session_id(session_id)
+    except ValueError:
+        return
+    subs = _sse_subscribers.get(normalized)
+    if not subs:
+        return
+    subs.discard(q)
+    if not subs:
+        _sse_subscribers.pop(normalized, None)
+
+
+async def _publish_sse(session_id: str, event: str, payload: dict) -> None:
+    """Publish one event to all SSE subscribers of session."""
+    try:
+        normalized = normalize_session_id(session_id)
+    except ValueError:
+        return
+    subs = _sse_subscribers.get(normalized)
+    if not subs:
+        return
+    item: Tuple[str, dict, float] = (event, payload, time.time())
+    # Don't block event loop: drop oldest on backpressure.
+    for q in list(subs):
+        try:
+            q.put_nowait(item)
+        except asyncio.QueueFull:
+            try:
+                _ = q.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                q.put_nowait(item)
+            except Exception:
+                pass
 
 
 def normalize_session_id(raw_session_id: Optional[str]) -> str:
@@ -161,7 +258,7 @@ def _is_session_busy(state: SessionState) -> bool:
 
 async def _cleanup_stale_sessions_locked(now_ts: float) -> None:
     stale_ids = []
-    bound_session_ids = set(_socket_session_map.values())
+    bound_session_ids = set(_socket_session_map.values()) | set(_sse_subscribers.keys())
     for sid, state in sessions.items():
         if sid in bound_session_ids:
             continue
@@ -253,10 +350,11 @@ async def unbind_socket(socket_id: str) -> None:
 
 
 async def emit(session_id: str, event: str, payload: dict) -> None:
-    """Emit websocket event to one session room."""
-    if not sio:
-        return
-    await sio.emit(event, payload, to=normalize_session_id(session_id))
+    """Emit realtime event to one session (SSE + optional Socket.IO)."""
+    normalized = normalize_session_id(session_id)
+    await _publish_sse(normalized, event, payload)
+    if _sio_raw and hasattr(_sio_raw, "emit"):
+        await _sio_raw.emit(event, payload, to=normalized)
 
 
 def emit_background(session_id: str, event: str, payload: dict) -> None:

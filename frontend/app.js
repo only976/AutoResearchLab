@@ -7,22 +7,17 @@
     document.addEventListener('DOMContentLoaded', () => {
         const cfg = window.MAARS?.config;
         const theme = window.MAARS?.theme;
-        const idea = window.MAARS?.idea;
-        const plan = window.MAARS?.plan;
         const task = window.MAARS?.task;
-        const paper = window.MAARS?.paper;
         const ws = window.MAARS?.ws;
+        const research = window.MAARS?.research;
 
         if (theme) theme.initTheme().catch(() => {});
         const settings = window.MAARS?.settings;
         if (settings) settings.initSettingsModal();
         const sidebar = window.MAARS?.sidebar;
         if (sidebar) sidebar.initSidebar();
-        if (cfg && cfg.resolvePlanId) cfg.resolvePlanId().catch(() => {});
-        if (idea) idea.init();
-        if (plan) plan.init();
         if (task) task.init();
-        if (paper) paper.init();
+        if (research) research.init();
         (async () => {
             try {
                 if (cfg?.ensureSession) await cfg.ensureSession();
@@ -37,16 +32,7 @@
 
         initTreeViewTabs();
 
-        (async () => {
-            const api = window.MAARS?.api;
-            if (!api?.restoreRecentPlan) return;
-            try {
-                await api.restoreRecentPlan();
-                /* restore 流程由 api 派发 maars:restore-complete，各模块自行监听并恢复 UI */
-            } catch (_) {
-                /* 无 plan 时静默忽略 */
-            }
-        })();
+        // Home view is the default; research view loads via hash route.
     });
 
     function initTreeViewTabs() {

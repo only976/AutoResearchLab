@@ -414,25 +414,37 @@ async def execute_idea_agent_tool(
 
     if name == "IndexPapers":
         if not api_config.get("ideaUseRAG"):
+            logger.info("Idea RAG: IndexPapers called but disabled (ideaUseRAG=False)")
             return False, "Error: RAG not enabled (ideaUseRAG=False)"
         engine = get_rag_engine() if get_rag_engine else None
         if not engine:
+            logger.info("Idea RAG: IndexPapers called but dependencies unavailable")
             return False, "Error: RAG dependencies not available"
         papers = idea_state.get("filtered_papers") or []
+        logger.info("Idea RAG: IndexPapers start papers=%d", len(papers))
         result = await engine.index_papers(papers)
+        logger.info("Idea RAG: IndexPapers done result=%s", (result or "")[:200])
         return False, result
 
     if name == "QueryKnowledgeBase":
         if not api_config.get("ideaUseRAG"):
+            logger.info("Idea RAG: QueryKnowledgeBase called but disabled (ideaUseRAG=False)")
             return False, "Error: RAG not enabled (ideaUseRAG=False)"
         engine = get_rag_engine() if get_rag_engine else None
         if not engine:
+            logger.info("Idea RAG: QueryKnowledgeBase called but dependencies unavailable")
             return False, "Error: RAG dependencies not available"
         q = (args.get("query") or "").strip()
         if not q:
             return False, "Error: query required"
+        logger.info("Idea RAG: QueryKnowledgeBase start query=%r", q[:200])
         result = await engine.query(q, limit=30)
         idea_state["rag_context"] = result
+        logger.info(
+            "Idea RAG: QueryKnowledgeBase done chars=%d preview=%r",
+            len(result or ""),
+            (result or "")[:120],
+        )
         return False, result
 
     if name == "AnalyzePapers":

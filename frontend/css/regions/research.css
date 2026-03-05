@@ -1,0 +1,81 @@
+/**
+ * Research Views - Home + Research top bar
+ */
+
+.home-view {
+    min-height: 56vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.home-view-inner {
+    width: 100%;
+    max-width: 820px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.home-view-prompt {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.home-view-input {
+    flex: 1;
+}
+
+.research-view {
+    display: block;
+}
+
+.research-topbar {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: var(--gap);
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.research-breadcrumb {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.research-title {
+    color: var(--text-color);
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.research-stage-progress {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.research-stage-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    padding: 8px 10px;
+    border-radius: var(--border-radius);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.research-stage-btn.is-active {
+    color: var(--text-color);
+    border-color: var(--accent-primary-border);
+    box-shadow: 0 0 0 2px var(--accent-primary-soft);
+}
+
+.research-stage-btn[disabled],
+.research-stage-btn[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}

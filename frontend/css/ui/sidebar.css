@@ -96,6 +96,64 @@
     border-radius: 12px;
     background: color-mix(in srgb, var(--bg-area-secondary) 80%, transparent);
     border: 1px dashed color-mix(in srgb, var(--border-color) 72%, transparent);
+    padding: 10px;
+    overflow: auto;
+}
+
+.app-sidebar-section { display: flex; flex-direction: column; gap: 10px; }
+
+.app-sidebar-section-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+.app-sidebar-list { display: flex; flex-direction: column; gap: 8px; }
+
+.app-sidebar-list-empty {
+    padding: 10px 8px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.app-sidebar-list-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg-area-secondary) 90%, transparent);
+    color: var(--text-color);
+    font-size: 13px;
+    box-shadow: none;
+}
+
+.app-sidebar-list-item.is-active {
+    border-color: var(--accent-primary-border);
+    box-shadow: 0 0 0 2px var(--accent-primary-soft);
+}
+
+.app-sidebar-list-item-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.app-sidebar-badge {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-muted);
+    font-size: 11px;
 }
 
 .app-sidebar-settings-item {

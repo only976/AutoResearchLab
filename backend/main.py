@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api import register_routes
 from api import state as api_state
+from shared.logging_config import configure_backend_file_logging
 
 # Socket.io
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
@@ -25,6 +26,7 @@ app = FastAPI(title="MAARS Backend")
 @app.on_event("startup")
 async def _print_browser_url():
     """Print the URL to open in browser (0.0.0.0 is not openable in browser)."""
+    configure_backend_file_logging()
     import sys
     print("INFO:     Open in browser: http://localhost:3001", file=sys.stderr, flush=True)
 

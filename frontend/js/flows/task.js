@@ -103,6 +103,7 @@
     }
 
     async function runExecution() {
+        if (!executionBtn) return;
         const { ideaId, planId } = await cfg.resolvePlanIds();
         const btn = executionBtn;
         const originalText = btn.textContent;
@@ -110,10 +111,10 @@
         document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'execution' } }));
         startExecutionUI();
         try {
-            let socket = window.MAARS?.state?.socket;
-            if (!socket || !socket.connected) {
-                socket = await window.MAARS.ws?.requireConnected?.();
-                if (!socket || !socket.connected) {
+            let stream = window.MAARS?.state?.es;
+            if (!stream || stream.readyState !== 1) {
+                stream = await window.MAARS.ws?.requireConnected?.();
+                if (!stream || stream.readyState !== 1) {
                     resetExecutionButtons();
                     return;
                 }
