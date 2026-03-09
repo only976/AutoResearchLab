@@ -68,3 +68,6 @@ skills-lock.json
 
 # Ruff
 .ruff_cache/
+
+
+backend/db/*
