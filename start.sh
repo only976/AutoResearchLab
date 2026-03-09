@@ -96,6 +96,8 @@ done
 
 if [[ "$started" == "1" ]]; then
   echo "INFO: Backend started successfully on http://localhost:$PORT (pid=$SERVER_PID)" >&2
+  echo "INFO: Server is running in background. Use 'lsof -ti tcp:$PORT' to find PID, 'kill <pid>' to stop." >&2
+  exit 0
 else
   echo "ERROR: Backend failed to start within ${MAARS_START_BOOT_TIMEOUT_S}s (pid=$SERVER_PID, port=$PORT)" >&2
   if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
@@ -107,4 +109,3 @@ else
   exit 1
 fi
 
-wait "$SERVER_PID"

@@ -54,25 +54,64 @@
 
 .research-stage-progress {
     display: flex;
-    gap: 18px;
+    gap: 10px;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: stretch;
+    width: 100%;
 }
 
 .research-stage-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    align-items: stretch;
+    justify-content: flex-start;
     gap: 12px;
     padding-top: 2px;
 }
 
-.research-runtime-actions {
+.research-stage-item {
     display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 150px;
+    max-width: 220px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--bg-area-tertiary);
+}
+
+.research-stage-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.2;
+    min-height: 14px;
+}
+
+.research-stage-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.research-stage-action-btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-area-secondary);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    font-size: 10px;
+    line-height: 1;
+    padding: 5px 7px;
+    cursor: pointer;
+}
+
+.research-stage-action-btn[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.research-stage-action-btn.is-danger {
+    color: var(--accent-danger);
+    border-color: color-mix(in srgb, var(--accent-danger) 45%, var(--border-color));
 }
 
 .research-stage-btn {
@@ -89,14 +128,7 @@
 }
 
 .research-stage-btn:not(:last-child)::after {
-    content: '→';
-    position: absolute;
-    right: -14px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-muted);
-    font-size: 11px;
-    pointer-events: none;
+    content: '';
 }
 
 .research-stage-btn.is-started {

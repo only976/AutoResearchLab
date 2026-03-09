@@ -415,3 +415,25 @@ async def get_paper(idea_id: str, plan_id: str) -> dict | None:
     _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
     return await sqlite_backend.get_paper(idea_id, plan_id)
+
+
+async def delete_research_cascade(research_id: str) -> dict:
+    """Delete a research and all related data, including filesystem artifacts (sandbox directories)."""
+    result = await sqlite_backend.delete_research_cascade(research_id)
+    
+    if not result.get("success"):
+        return result
+    
+    # Delete filesystem artifacts if idea_id exists
+    idea_id = result.get("ideaId")
+    if idea_id:
+        idea_dir = _get_idea_dir(idea_id)
+        if idea_dir.exists():
+            try:
+                shutil.rmtree(idea_dir)
+                logger.info("Deleted filesystem artifacts for idea_id={}", idea_id)
+            except Exception as e:
+                logger.warning("Failed to delete directory {}: {}", idea_dir, e)
+    
+    return result
+

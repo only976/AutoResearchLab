@@ -51,11 +51,45 @@
                     const status = it.stageStatus || 'idle';
                     const badge = `${stage}${status ? ' · ' + status : ''}`;
                     const activeClass = rid && currentId && rid === currentId ? ' is-active' : '';
-                    return `<button type="button" class="app-sidebar-list-item${activeClass}" data-research-id="${rid}"><span class="app-sidebar-list-item-title">${title || 'Research'}</span><span class="app-sidebar-badge">${badge}</span></button>`;
+                    return `<div class="app-sidebar-list-item${activeClass}" data-research-id="${rid}">
+                        <div class="app-sidebar-list-item-title">${title || 'Research'}</div>
+                        <div class="app-sidebar-list-item-footer">
+                            <span class="app-sidebar-badge">${badge}</span>
+                            <button type="button" class="app-sidebar-delete-btn" data-research-id="${rid}" data-action="delete" aria-label="Delete research" title="Delete">×</button>
+                        </div>
+                    </div>`;
                 }).join('');
             } catch (e) {
                 console.warn('Failed to load research list', e);
                 listEl.innerHTML = '<div class="app-sidebar-list-empty">Failed to load</div>';
+            }
+        }
+
+        async function handleDeleteResearch(researchId) {
+            if (!confirm('确定要删除这个研究吗？所有相关数据（包括代码和执行结果）都将被永久删除。')) {
+                return;
+            }
+            
+            try {
+                const api = window.MAARS?.api;
+                if (!api?.deleteResearch) {
+                    console.error('deleteResearch API not available');
+                    return;
+                }
+                
+                await api.deleteResearch(researchId);
+                
+                // Refresh the list
+                await refreshResearchList();
+                
+                // If we're currently viewing this research, navigate to home
+                const currentId = window.MAARS?.config?.getCurrentResearchId?.() || '';
+                if (currentId === researchId) {
+                    window.MAARS?.research?.navigateToCreateResearch?.();
+                }
+            } catch (e) {
+                console.error('Failed to delete research:', e);
+                alert('删除失败：' + e.message);
             }
         }
 
@@ -98,8 +132,19 @@
 
             const listEl = document.getElementById('appSidebarResearchList');
             listEl?.addEventListener('click', (e) => {
-                const btn = e.target.closest('.app-sidebar-list-item');
-                const rid = btn?.getAttribute('data-research-id') || '';
+                // Handle delete button click
+                const deleteBtn = e.target.closest('.app-sidebar-delete-btn');
+                if (deleteBtn) {
+                    e.stopPropagation();
+                    const rid = deleteBtn.getAttribute('data-research-id') || '';
+                    if (!rid) return;
+                    handleDeleteResearch(rid);
+                    return;
+                }
+                
+                // Handle item click
+                const item = e.target.closest('.app-sidebar-list-item');
+                const rid = item?.getAttribute('data-research-id') || '';
                 if (!rid) return;
                 window.MAARS?.research?.navigateToResearch?.(rid);
                 closeSidebar();

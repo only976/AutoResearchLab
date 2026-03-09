@@ -22,9 +22,38 @@
         execute: document.getElementById('stageBtnExecute'),
         paper: document.getElementById('stageBtnPaper'),
     };
-
-    const pauseBtn = document.getElementById('researchPauseBtn');
-    const retryBtn = document.getElementById('researchRetryBtn');
+    const stageMetaEls = {
+        refine: document.getElementById('stageMetaRefine'),
+        plan: document.getElementById('stageMetaPlan'),
+        execute: document.getElementById('stageMetaExecute'),
+        paper: document.getElementById('stageMetaPaper'),
+    };
+    const stageActionBtns = {
+        refine: {
+            run: document.getElementById('stageRunRefine'),
+            resume: document.getElementById('stageResumeRefine'),
+            retry: document.getElementById('stageRetryRefine'),
+            stop: document.getElementById('stageStopRefine'),
+        },
+        plan: {
+            run: document.getElementById('stageRunPlan'),
+            resume: document.getElementById('stageResumePlan'),
+            retry: document.getElementById('stageRetryPlan'),
+            stop: document.getElementById('stageStopPlan'),
+        },
+        execute: {
+            run: document.getElementById('stageRunExecute'),
+            resume: document.getElementById('stageResumeExecute'),
+            retry: document.getElementById('stageRetryExecute'),
+            stop: document.getElementById('stageStopExecute'),
+        },
+        paper: {
+            run: document.getElementById('stageRunPaper'),
+            resume: document.getElementById('stageResumePaper'),
+            retry: document.getElementById('stageRetryPaper'),
+            stop: document.getElementById('stageStopPaper'),
+        },
+    };
 
     const panelRefine = document.getElementById('researchPanelRefine');
     const panelWorkbench = document.getElementById('researchDetailHost');
@@ -73,6 +102,12 @@
         execute: { started: false },
         paper: { started: false },
     };
+    let stageStatusDetails = {
+        refine: { status: 'idle', message: 'idle' },
+        plan: { status: 'idle', message: 'idle' },
+        execute: { status: 'idle', message: 'idle' },
+        paper: { status: 'idle', message: 'idle' },
+    };
 
     function setStageStarted(stage, started) {
         if (!currentStageState[stage]) return;
@@ -94,6 +129,31 @@
             btn.classList.toggle('is-started', started);
             btn.classList.toggle('is-active', stage === current);
             btn.classList.toggle('is-completed', started && currentRank >= 0 && stageRank >= 0 && stageRank < currentRank);
+        });
+        renderStageStatusDetails();
+    }
+
+    function renderStageStatusDetails() {
+        const runningStage = Object.entries(stageStatusDetails).find(([, info]) => String(info?.status || '') === 'running')?.[0] || '';
+        Object.entries(stageMetaEls).forEach(([stage, metaEl]) => {
+            if (!metaEl) return;
+            const info = stageStatusDetails[stage] || { status: 'idle', message: 'idle' };
+            const status = String(info.status || 'idle').trim() || 'idle';
+            const message = String(info.message || status).trim() || status;
+            metaEl.textContent = `${status} · ${message}`;
+        });
+
+        Object.entries(stageActionBtns).forEach(([stage, actions]) => {
+            const info = stageStatusDetails[stage] || { status: 'idle' };
+            const status = String(info.status || 'idle').trim() || 'idle';
+            const stageStarted = !!currentStageState?.[stage]?.started;
+            const isRunningSelf = status === 'running';
+            const hasOtherRunning = !!runningStage && runningStage !== stage;
+            const blocked = hasOtherRunning;
+            if (actions?.run) actions.run.disabled = blocked;
+            if (actions?.resume) actions.resume.disabled = blocked || !(status === 'stopped' || status === 'failed');
+            if (actions?.retry) actions.retry.disabled = blocked || !(stageStarted || status === 'failed' || status === 'stopped');
+            if (actions?.stop) actions.stop.disabled = blocked || !isRunningSelf;
         });
     }
 
@@ -386,6 +446,48 @@
         if (executeState.messages.length > 240) executeState.messages = executeState.messages.slice(-240);
     }
 
+    function _upsertExecuteThinkingMessage(taskId, operation, body, scheduleInfo) {
+        const id = String(taskId || '').trim();
+        if (!id) return;
+        const op = String(operation || 'Execute').trim() || 'Execute';
+        const text = String(body || '').trim();
+        if (!text) return;
+
+        const turn = Number(scheduleInfo?.turn);
+        const maxTurns = Number(scheduleInfo?.max_turns);
+        const toolName = String(scheduleInfo?.tool_name || '').trim();
+
+        let title = `${id} · ${op}`;
+        if (toolName) title += ` · ${toolName}`;
+
+        const dedupeKey = `thinking:${id}:${op}`;
+        const idx = executeState.messages.findIndex((m) => m?.dedupeKey === dedupeKey);
+        const bodyText = Number.isFinite(turn) && Number.isFinite(maxTurns)
+            ? `[${turn}/${maxTurns}] ${text}`
+            : text;
+
+        if (idx >= 0) {
+            const prev = executeState.messages[idx] || {};
+            executeState.messages[idx] = {
+                ...prev,
+                at: Date.now(),
+                title,
+                body: bodyText,
+                status: executeState.statuses.get(id) || prev.status || 'doing',
+            };
+            return;
+        }
+
+        _appendExecuteMessage({
+            taskId: id,
+            kind: 'assistant',
+            title,
+            body: bodyText,
+            status: executeState.statuses.get(id) || 'doing',
+            dedupeKey,
+        });
+    }
+
     function _seedExecutionState(treeData, execution, outputs) {
         executeState.order = [];
         executeState.statuses = new Map();
@@ -674,6 +776,17 @@
             execute: { started: !!(execution && Array.isArray(execution.tasks) && execution.tasks.length) },
             paper: { started: !!(paper && String(paper.content || '').trim()) },
         };
+        stageStatusDetails = {
+            refine: { status: 'idle', message: 'idle' },
+            plan: { status: 'idle', message: 'idle' },
+            execute: { status: 'idle', message: 'idle' },
+            paper: { status: 'idle', message: 'idle' },
+        };
+        const rs = String(research.stage || 'refine').trim() || 'refine';
+        const rss = String(research.stageStatus || 'idle').trim() || 'idle';
+        if (stageStatusDetails[rs]) {
+            stageStatusDetails[rs] = { status: rss, message: rss };
+        }
         renderStageButtons();
 
         const ideaId = research.currentIdeaId || '';
@@ -768,37 +881,41 @@
     }
 
     function initDetailControls(researchId) {
-        if (pauseBtn) {
-            pauseBtn.addEventListener('click', async () => {
+        const bindStageAction = (stage, action, handler) => {
+            const btn = stageActionBtns?.[stage]?.[action];
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
                 if (!researchId) return;
-                pauseBtn.disabled = true;
+                btn.disabled = true;
                 try {
-                    await api.stopResearch(researchId);
+                    await handler();
                     document.dispatchEvent(new CustomEvent('maars:research-list-refresh'));
                 } catch (e) {
                     console.error(e);
-                    alert(e?.message || 'Failed to pause research');
+                    alert(e?.message || `Failed to ${action} stage`);
                 } finally {
-                    pauseBtn.disabled = false;
+                    renderStageStatusDetails();
                 }
             });
-        }
+        };
 
-        if (retryBtn) {
-            retryBtn.addEventListener('click', async () => {
-                if (!researchId) return;
-                retryBtn.disabled = true;
-                try {
-                    await api.retryResearch(researchId);
-                    document.dispatchEvent(new CustomEvent('maars:research-list-refresh'));
-                } catch (e) {
-                    console.error(e);
-                    alert(e?.message || 'Failed to retry research');
-                } finally {
-                    retryBtn.disabled = false;
-                }
+        ['refine', 'plan', 'execute', 'paper'].forEach((stage) => {
+            bindStageAction(stage, 'run', async () => {
+                await api.runResearchStage(researchId, stage);
+                setActiveStage(stage);
             });
-        }
+            bindStageAction(stage, 'resume', async () => {
+                await api.resumeResearchStage(researchId, stage);
+                setActiveStage(stage);
+            });
+            bindStageAction(stage, 'retry', async () => {
+                await api.retryResearchStage(researchId, stage);
+                setActiveStage(stage);
+            });
+            bindStageAction(stage, 'stop', async () => {
+                await api.stopResearchStage(researchId, stage);
+            });
+        });
     }
 
     function initEventBridges() {
@@ -812,9 +929,21 @@
         document.addEventListener('maars:research-stage', (e) => {
             const d = e?.detail || {};
             if (d.researchId && currentResearchId && d.researchId !== currentResearchId) return;
-            if (d.stage && currentStageState[d.stage] != null) {
-                setStageStarted(d.stage, true);
-                renderStageButtons(d.stage);
+            const stage = String(d.stage || '').trim();
+            const status = String(d.status || '').trim() || 'idle';
+            const error = String(d.error || '').trim();
+            if (stage && currentStageState[stage] != null) {
+                if (status === 'running' || status === 'completed' || status === 'stopped' || status === 'failed') {
+                    setStageStarted(stage, true);
+                }
+                stageStatusDetails[stage] = {
+                    status,
+                    message: error || status,
+                };
+                renderStageButtons(stage);
+                if (status === 'running' || status === 'completed') {
+                    setActiveStage(stage);
+                }
             }
             document.dispatchEvent(new CustomEvent('maars:research-list-refresh'));
         });
@@ -892,6 +1021,25 @@
                     });
                 }
             });
+            if (activeStage === 'execute') {
+                renderExecuteStream();
+            }
+        });
+
+        document.addEventListener('maars:task-thinking', (e) => {
+            const d = e?.detail || {};
+            const taskId = String(d.taskId || d.task_id || '').trim();
+            const chunk = String(d.chunk || '').trim();
+            if (!taskId || !chunk) return;
+
+            _ensureTaskInOrder(taskId);
+            _upsertExecuteThinkingMessage(
+                taskId,
+                d.operation || 'Execute',
+                chunk,
+                d.scheduleInfo || null,
+            );
+
             if (activeStage === 'execute') {
                 renderExecuteStream();
             }

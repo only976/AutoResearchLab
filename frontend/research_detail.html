@@ -227,15 +227,47 @@
                     <h2 class="research-title" id="researchTitle">Research</h2>
                     <div class="research-stage-row">
                         <nav class="research-stage-progress" aria-label="Research pipeline stages">
-                            <button type="button" class="research-stage-btn" id="stageBtnRefine" data-stage="refine" aria-disabled="true" disabled>Refine</button>
-                            <button type="button" class="research-stage-btn" id="stageBtnPlan" data-stage="plan" aria-disabled="true" disabled>Plan</button>
-                            <button type="button" class="research-stage-btn" id="stageBtnExecute" data-stage="execute" aria-disabled="true" disabled>Execute</button>
-                            <button type="button" class="research-stage-btn" id="stageBtnPaper" data-stage="paper" aria-disabled="true" disabled>Paper</button>
+                            <div class="research-stage-item" data-stage-item="refine">
+                                <button type="button" class="research-stage-btn" id="stageBtnRefine" data-stage="refine" aria-disabled="true" disabled>Refine</button>
+                                <div class="research-stage-meta" id="stageMetaRefine">idle</div>
+                                <div class="research-stage-actions">
+                                    <button type="button" class="research-stage-action-btn" id="stageRunRefine">Run</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageResumeRefine">Resume</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageRetryRefine">Retry</button>
+                                    <button type="button" class="research-stage-action-btn is-danger" id="stageStopRefine">Stop</button>
+                                </div>
+                            </div>
+                            <div class="research-stage-item" data-stage-item="plan">
+                                <button type="button" class="research-stage-btn" id="stageBtnPlan" data-stage="plan" aria-disabled="true" disabled>Plan</button>
+                                <div class="research-stage-meta" id="stageMetaPlan">idle</div>
+                                <div class="research-stage-actions">
+                                    <button type="button" class="research-stage-action-btn" id="stageRunPlan">Run</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageResumePlan">Resume</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageRetryPlan">Retry</button>
+                                    <button type="button" class="research-stage-action-btn is-danger" id="stageStopPlan">Stop</button>
+                                </div>
+                            </div>
+                            <div class="research-stage-item" data-stage-item="execute">
+                                <button type="button" class="research-stage-btn" id="stageBtnExecute" data-stage="execute" aria-disabled="true" disabled>Execute</button>
+                                <div class="research-stage-meta" id="stageMetaExecute">idle</div>
+                                <div class="research-stage-actions">
+                                    <button type="button" class="research-stage-action-btn" id="stageRunExecute">Run</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageResumeExecute">Resume</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageRetryExecute">Retry</button>
+                                    <button type="button" class="research-stage-action-btn is-danger" id="stageStopExecute">Stop</button>
+                                </div>
+                            </div>
+                            <div class="research-stage-item" data-stage-item="paper">
+                                <button type="button" class="research-stage-btn" id="stageBtnPaper" data-stage="paper" aria-disabled="true" disabled>Paper</button>
+                                <div class="research-stage-meta" id="stageMetaPaper">idle</div>
+                                <div class="research-stage-actions">
+                                    <button type="button" class="research-stage-action-btn" id="stageRunPaper">Run</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageResumePaper">Resume</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageRetryPaper">Retry</button>
+                                    <button type="button" class="research-stage-action-btn is-danger" id="stageStopPaper">Stop</button>
+                                </div>
+                            </div>
                         </nav>
-                        <div class="research-runtime-actions" aria-label="Research controls">
-                            <button type="button" class="btn-danger" id="researchPauseBtn">Pause</button>
-                            <button type="button" class="btn-default" id="researchRetryBtn">Retry</button>
-                        </div>
                     </div>
                 </div>
 

@@ -557,3 +557,49 @@ async def get_paper(idea_id: str, plan_id: str) -> dict | None:
         if not row:
             return None
         return {"format": row["format"], "content": row["content"]}
+
+
+async def delete_research_cascade(research_id: str) -> dict:
+    """Delete a research and all related data (idea, plan, execution, artifacts, papers, etc.)."""
+    # Get the research to find associated idea_id and plan_id
+    research = await get_research(research_id)
+    if not research:
+        return {"success": False, "error": "Research not found"}
+    
+    idea_id = research.get("currentIdeaId")
+    plan_id = research.get("currentPlanId")
+    
+    async with _db() as db:
+        # Delete research entry
+        await db.execute("DELETE FROM researches WHERE research_id = ?", (research_id,))
+        
+        # If there's associated idea/plan data, cascade delete
+        if idea_id:
+            # Delete idea
+            await db.execute("DELETE FROM ideas WHERE idea_id = ?", (idea_id,))
+            
+            if plan_id:
+                # Delete plan
+                await db.execute("DELETE FROM plans WHERE idea_id = ? AND plan_id = ?", (idea_id, plan_id))
+                # Delete execution
+                await db.execute("DELETE FROM executions WHERE idea_id = ? AND plan_id = ?", (idea_id, plan_id))
+                # Delete task artifacts
+                await db.execute("DELETE FROM task_artifacts WHERE idea_id = ? AND plan_id = ?", (idea_id, plan_id))
+                # Delete validation reports
+                await db.execute("DELETE FROM validation_reports WHERE idea_id = ? AND plan_id = ?", (idea_id, plan_id))
+                # Delete AI responses
+                await db.execute("DELETE FROM ai_responses WHERE idea_id = ? AND plan_id = ?", (idea_id, plan_id))
+                # Delete papers
+                await db.execute("DELETE FROM papers WHERE idea_id = ? AND plan_id = ?", (idea_id, plan_id))
+            else:
+                # If no specific plan_id, delete all plans associated with this idea
+                await db.execute("DELETE FROM plans WHERE idea_id = ?", (idea_id,))
+                await db.execute("DELETE FROM executions WHERE idea_id = ?", (idea_id,))
+                await db.execute("DELETE FROM task_artifacts WHERE idea_id = ?", (idea_id,))
+                await db.execute("DELETE FROM validation_reports WHERE idea_id = ?", (idea_id,))
+                await db.execute("DELETE FROM ai_responses WHERE idea_id = ?", (idea_id,))
+                await db.execute("DELETE FROM papers WHERE idea_id = ?", (idea_id,))
+        
+        await db.commit()
+    
+    return {"success": True, "ideaId": idea_id, "planId": plan_id}

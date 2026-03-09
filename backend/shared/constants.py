@@ -25,7 +25,10 @@ TEMP_RETRY = 0.5
 TEMP_DETERMINISTIC = 0.0
 
 # ── Agent Loop 最大轮数 ──────────────────────────────────────────
-IDEA_AGENT_MAX_TURNS = 15
+# ADK 中每个 event (tool call/response/text) 都计为一轮
+# Idea agent workflow 需要 20-30+ events (ListSkills, LoadSkill*N, ExtractKeywords, 
+# SearchArxiv, EvaluatePapers, FilterPapers, AnalyzePapers, RefineIdea, ValidateRefinedIdea, FinishIdea)
+IDEA_AGENT_MAX_TURNS = 50
 PLAN_AGENT_MAX_TURNS = 30
 TASK_AGENT_MAX_TURNS = 15
 ADK_IDLE_TIMEOUT_SECONDS = int(os.getenv("MAARS_ADK_IDLE_TIMEOUT_SECONDS", "45"))

@@ -120,9 +120,9 @@
 .app-sidebar-list-item {
     width: 100%;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
     padding: 10px 10px;
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -144,10 +144,47 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: left;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.app-sidebar-list-item-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .app-sidebar-badge {
     flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-input);
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.app-sidebar-delete-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.app-sidebar-delete-btn:hover {
+    background: color-mix(in srgb, var(--accent-danger) 15%, transparent);
+    color: var(--accent-danger);
+}
     padding: 3px 8px;
     border-radius: 999px;
     border: 1px solid var(--border-color);
