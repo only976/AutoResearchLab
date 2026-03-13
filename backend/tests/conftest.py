@@ -1,9 +1,15 @@
 import os
+import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
 
 from tests.data_manager import FixtureDataManager
+
+
+_TEST_SANDBOX_DIR = Path(tempfile.mkdtemp(prefix="maars_test_sandbox_"))
+os.environ.setdefault("MAARS_SANDBOX_DIR", str(_TEST_SANDBOX_DIR))
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -23,6 +29,20 @@ def _isolate_logs_dir(tmp_path_factory):
     logs_dir = tmp_path_factory.mktemp("maars_test_logs")
     os.environ["MAARS_LOGS_DIR"] = str(logs_dir)
     yield
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_sandbox_dir():
+    """Force execution sandbox files to a temp dir during tests and remove them afterwards."""
+    os.environ["MAARS_SANDBOX_DIR"] = str(_TEST_SANDBOX_DIR)
+    try:
+        import db  # type: ignore
+
+        db.SANDBOX_DIR = _TEST_SANDBOX_DIR.resolve()
+    except Exception:
+        pass
+    yield
+    shutil.rmtree(_TEST_SANDBOX_DIR, ignore_errors=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -80,6 +100,22 @@ def clear_db_between_tests(client):
     client.post("/api/db/clear")
     yield
     client.post("/api/db/clear")
+
+
+@pytest.fixture(autouse=True)
+def clear_sandbox_between_tests():
+    """Remove test sandbox residue before and after each test."""
+    shutil.rmtree(_TEST_SANDBOX_DIR, ignore_errors=True)
+    _TEST_SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        import db  # type: ignore
+
+        db.SANDBOX_DIR = _TEST_SANDBOX_DIR.resolve()
+    except Exception:
+        pass
+    yield
+    shutil.rmtree(_TEST_SANDBOX_DIR, ignore_errors=True)
+    _TEST_SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _mock_settings_payload():

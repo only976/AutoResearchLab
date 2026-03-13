@@ -375,12 +375,33 @@
 }
 
 .research-execute-stream-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 10px 12px;
     font-size: 12px;
     font-weight: 600;
     color: var(--text-color);
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-area-secondary);
+}
+
+.research-execute-stream-toggle-all {
+    border: 1px solid var(--border-color);
+    background: var(--bg-area-tertiary);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 6px 8px;
+    cursor: pointer;
+}
+
+.research-execute-stream-toggle-all:hover {
+    background: var(--bg-area-elevated);
+    color: var(--text-color);
 }
 
 .research-execute-stream-body {
@@ -470,6 +491,14 @@
     margin-bottom: 6px;
     font-weight: 700;
     color: var(--text-color);
+}
+
+.research-execute-message-token-meta {
+    margin-top: -2px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--text-muted);
 }
 
 .research-execute-message-body {

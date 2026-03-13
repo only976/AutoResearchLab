@@ -3,12 +3,10 @@ Test single task execution to diagnose agent output vs frontend display issues.
 Execute task "1" (Data Preparation) and trace complete flow.
 """
 
-import asyncio
 import json
 import time
-from pathlib import Path
 
-from db import DB_DIR
+from db import get_execution_task_src_dir, get_execution_task_step_dir
 
 
 def test_single_task_1_data_preparation_execution_debug(
@@ -135,17 +133,18 @@ def test_single_task_1_data_preparation_execution_debug(
 
     async def mock_ensure_execution_container(**kwargs):
         task_id = kwargs.get("task_id", target_task_id)
+        execution_run_id = kwargs.get("execution_run_id")
         return {
             "enabled": True,
             "available": True,
             "connected": True,
             "containerRunning": True,
-            "containerName": f"maars-task-{kwargs.get('execution_run_id')}-{task_id}",
+            "containerName": f"maars-task-{execution_run_id}-{task_id}",
             "image": "python:3.11-slim",
             "taskId": task_id,
-            "srcDir": str((DB_DIR / idea_id / plan_id / task_id / "src").resolve()),
-            "stepDir": str((DB_DIR / idea_id / plan_id / task_id / "step").resolve()),
-            "planDir": str((DB_DIR / idea_id / plan_id).resolve()),
+            "srcDir": str(get_execution_task_src_dir(execution_run_id, task_id).resolve()),
+            "stepDir": str(get_execution_task_step_dir(execution_run_id, task_id).resolve()),
+            "sandboxRoot": str(get_execution_task_step_dir(execution_run_id, task_id).resolve().parent.parent.parent),
         }
 
     async def mock_stop_execution_container(container_name):
@@ -163,9 +162,22 @@ def test_single_task_1_data_preparation_execution_debug(
             "serverVersion": "test",
         }
 
+    async def mock_prepare_execution_runtime(*, enabled=True, image=None):
+        return {
+            "enabled": enabled,
+            "available": True,
+            "connected": True,
+            "containerRunning": False,
+            "containerName": "",
+            "image": image or "maars-task-python:latest",
+            "dockerPath": "docker",
+            "serverVersion": "test",
+        }
+
     monkeypatch.setattr(runner_mod.ExecutionRunner, "_emit", capture_emit)
     monkeypatch.setattr(runner_mod, "run_task_agent", mock_run_task_agent)
     monkeypatch.setattr(runner_mod, "validate_task_output_with_llm", mock_validate_task_output_with_llm)
+    monkeypatch.setattr(runner_mod, "prepare_execution_runtime", mock_prepare_execution_runtime)
     monkeypatch.setattr(runner_mod, "ensure_execution_container", mock_ensure_execution_container)
     monkeypatch.setattr(runner_mod, "stop_execution_container", mock_stop_execution_container)
     monkeypatch.setattr(runner_mod, "get_local_docker_status", mock_get_local_docker_status)
@@ -207,7 +219,9 @@ def test_single_task_1_data_preparation_execution_debug(
         print(f"{i}. {event}: {data_str[:150]}...", flush=True)
 
     # 8. Check step events file
-    step_file = (DB_DIR / idea_id / plan_id / target_task_id / "step" / "events.jsonl").resolve()
+    run_id = next((json.loads(data).get("executionRunId") for event, data in captured_events if event == "execution-runtime-status"), None)
+    assert run_id, "No executionRunId captured from runtime status"
+    step_file = (get_execution_task_step_dir(run_id, target_task_id) / "events.jsonl").resolve()
     print(f"\n=== CHECKING STEP EVENTS FILE ===")
     print(f"Path: {step_file}", flush=True)
     print(f"Exists: {step_file.exists()}", flush=True)

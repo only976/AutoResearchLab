@@ -64,3 +64,6 @@ skills-lock.json
 # Ruff
 .ruff_cache/
 
+#sandbox
+sandbox/
+

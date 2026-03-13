@@ -4,6 +4,8 @@ Storage is SQLite-backed (see `db/sqlite_backend.py`), including settings.
 """
 
 import asyncio
+import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -14,6 +16,7 @@ from loguru import logger
 from . import sqlite_backend
 
 DB_DIR = Path(__file__).parent
+SANDBOX_DIR = Path(os.environ.get("MAARS_SANDBOX_DIR", str(DB_DIR.parent.parent / "sandbox"))).resolve()
 DEFAULT_IDEA_ID = "test"
 DEFAULT_PLAN_ID = "test"
 SETTINGS_FILE = "settings.json"
@@ -80,42 +83,98 @@ async def ensure_sandbox_dir(idea_id: str, plan_id: str, task_id: str) -> Path:
     return sandbox
 
 
-def get_execution_runs_dir(idea_id: str, plan_id: str) -> Path:
-    """Return db/{idea_id}/{plan_id}/execution_runs/."""
-    _validate_idea_id(idea_id)
-    _validate_plan_id(plan_id)
-    return _get_plan_dir(idea_id, plan_id) / "execution_runs"
-
-
-def get_execution_run_dir(idea_id: str, plan_id: str, execution_run_id: str) -> Path:
-    """Return db/{idea_id}/{plan_id}/execution_runs/{execution_run_id}/."""
-    _validate_idea_id(idea_id)
-    _validate_plan_id(plan_id)
+def get_execution_sandbox_root(execution_run_id: str) -> Path:
+    """Return sandbox/{execution_run_id}/ for container-backed execution data."""
     if not execution_run_id or not isinstance(execution_run_id, str):
         raise ValueError("execution_run_id must be a non-empty string")
     if ".." in execution_run_id or "/" in execution_run_id or "\\" in execution_run_id:
         raise ValueError("execution_run_id must not contain path separators")
-    return get_execution_runs_dir(idea_id, plan_id) / execution_run_id
+    return SANDBOX_DIR / execution_run_id
 
 
-async def ensure_execution_run_dir(idea_id: str, plan_id: str, execution_run_id: str) -> Path:
-    """Create execution run dir if not exists. Returns the run path."""
-    run_dir = get_execution_run_dir(idea_id, plan_id, execution_run_id)
-    run_dir.mkdir(parents=True, exist_ok=True)
-    return run_dir
-
-
-def get_task_workspace_dir(idea_id: str, plan_id: str, execution_run_id: str, task_id: str) -> Path:
-    """Return db/{idea_id}/{plan_id}/execution_runs/{execution_run_id}/{task_id}/workspace/."""
+def get_execution_task_dir(execution_run_id: str, task_id: str) -> Path:
+    """Return sandbox/{execution_run_id}/step/{task_id}/ for one task's step data."""
     _validate_task_id(task_id)
-    return get_execution_run_dir(idea_id, plan_id, execution_run_id) / task_id / "workspace"
+    return get_execution_sandbox_root(execution_run_id) / "step" / task_id
 
 
-async def ensure_task_workspace_dir(idea_id: str, plan_id: str, execution_run_id: str, task_id: str) -> Path:
-    """Create task workspace dir if not exists. Returns the workspace path."""
-    workspace = get_task_workspace_dir(idea_id, plan_id, execution_run_id, task_id)
-    workspace.mkdir(parents=True, exist_ok=True)
-    return workspace
+def get_execution_src_dir(execution_run_id: str) -> Path:
+    """Return sandbox/{execution_run_id}/src/ shared by all tasks in one execution."""
+    return get_execution_sandbox_root(execution_run_id) / "src"
+
+
+def get_execution_step_root_dir(execution_run_id: str) -> Path:
+    """Return sandbox/{execution_run_id}/step/ containing per-task step state."""
+    return get_execution_sandbox_root(execution_run_id) / "step"
+
+
+def get_execution_task_src_dir(execution_run_id: str, task_id: str) -> Path:
+    _validate_task_id(task_id)
+    return get_execution_src_dir(execution_run_id)
+
+
+def get_execution_task_step_dir(execution_run_id: str, task_id: str) -> Path:
+    return get_execution_task_dir(execution_run_id, task_id)
+
+
+async def ensure_execution_task_dirs(execution_run_id: str, task_id: str) -> tuple[Path, Path]:
+    src_dir = get_execution_src_dir(execution_run_id)
+    step_dir = get_execution_task_step_dir(execution_run_id, task_id)
+    src_dir.mkdir(parents=True, exist_ok=True)
+    step_dir.mkdir(parents=True, exist_ok=True)
+    return src_dir, step_dir
+
+
+def _iter_execution_run_roots() -> list[Path]:
+    if not SANDBOX_DIR.exists() or not SANDBOX_DIR.is_dir():
+        return []
+    return [p for p in SANDBOX_DIR.iterdir() if p.is_dir() and p.name.startswith("exec_")]
+
+
+def find_execution_run_ids_for_research(idea_id: str | None, plan_id: str | None) -> list[str]:
+    """Best-effort discovery of execution_run_ids for a given research (idea/plan)."""
+    idea = str(idea_id or "").strip()
+    plan = str(plan_id or "").strip()
+    if not idea:
+        return []
+
+    matched: list[str] = []
+    for run_root in _iter_execution_run_roots():
+        run_id = run_root.name
+        step_root = run_root / "step"
+        if not step_root.exists() or not step_root.is_dir():
+            continue
+        found = False
+        for meta in step_root.glob("*/container-meta.json"):
+            try:
+                payload = json.loads(meta.read_text(encoding="utf-8", errors="replace") or "{}")
+            except Exception:
+                continue
+            if str(payload.get("ideaId") or "").strip() != idea:
+                continue
+            payload_plan = str(payload.get("planId") or "").strip()
+            if plan and payload_plan and payload_plan != plan:
+                continue
+            found = True
+            break
+        if found:
+            matched.append(run_id)
+    return matched
+
+
+def remove_execution_sandbox_root(execution_run_id: str) -> bool:
+    try:
+        path = get_execution_sandbox_root(execution_run_id)
+    except Exception:
+        return False
+    if not path.exists():
+        return False
+    try:
+        shutil.rmtree(path)
+        return True
+    except Exception as e:
+        logger.warning("Failed to remove sandbox root {}: {}", path, e)
+        return False
 
 
 async def get_task_artifact(idea_id: str, plan_id: str, task_id: str):
@@ -368,6 +427,15 @@ async def clear_db() -> dict:
                 removed.append(p.name)
             except OSError as e:
                 logger.warning("Failed to remove %s: %s", p, e)
+    if SANDBOX_DIR.exists() and SANDBOX_DIR.is_dir():
+        for p in SANDBOX_DIR.iterdir():
+            if not p.is_dir() or p.name.startswith("."):
+                continue
+            try:
+                shutil.rmtree(p)
+                removed.append(f"sandbox/{p.name}")
+            except OSError as e:
+                logger.warning("Failed to remove %s: %s", p, e)
     return {"success": True, "removed": removed}
 
 
@@ -417,6 +485,21 @@ async def get_paper(idea_id: str, plan_id: str) -> dict | None:
     return await sqlite_backend.get_paper(idea_id, plan_id)
 
 
+async def clear_research_stage_data_for_retry(idea_id: str | None, plan_id: str | None, stage: str) -> dict:
+    """Clear current-stage and downstream data for retry; also removes matching execution sandbox runs."""
+    idea = str(idea_id or "").strip()
+    plan = str(plan_id or "").strip()
+    result = await sqlite_backend.clear_research_stage_data_for_retry(idea, plan, stage)
+    run_ids = find_execution_run_ids_for_research(idea, plan)
+    removed_runs: list[str] = []
+    for run_id in run_ids:
+        if remove_execution_sandbox_root(run_id):
+            removed_runs.append(run_id)
+    result["executionRunIds"] = run_ids
+    result["sandboxRunsRemoved"] = removed_runs
+    return result
+
+
 async def delete_research_cascade(research_id: str) -> dict:
     """Delete a research and all related data, including filesystem artifacts (sandbox directories)."""
     result = await sqlite_backend.delete_research_cascade(research_id)
@@ -426,6 +509,15 @@ async def delete_research_cascade(research_id: str) -> dict:
     
     # Delete filesystem artifacts if idea_id exists
     idea_id = result.get("ideaId")
+    plan_id = result.get("planId")
+    run_ids = find_execution_run_ids_for_research(idea_id, plan_id)
+    removed_runs: list[str] = []
+    for run_id in run_ids:
+        if remove_execution_sandbox_root(run_id):
+            removed_runs.append(run_id)
+    result["executionRunIds"] = run_ids
+    result["sandboxRunsRemoved"] = removed_runs
+
     if idea_id:
         idea_dir = _get_idea_dir(idea_id)
         if idea_dir.exists():
@@ -436,4 +528,27 @@ async def delete_research_cascade(research_id: str) -> dict:
                 logger.warning("Failed to delete directory {}: {}", idea_dir, e)
     
     return result
+
+
+async def save_task_attempt_memory(research_id: str, task_id: str, attempt: int, value: dict) -> dict:
+    if not research_id or not isinstance(research_id, str):
+        raise ValueError("research_id must be a non-empty string")
+    _validate_task_id(task_id)
+    return await sqlite_backend.save_task_attempt_memory(research_id, task_id, attempt, value)
+
+
+async def list_task_attempt_memories(research_id: str, task_id: str | None = None) -> list[dict]:
+    if not research_id or not isinstance(research_id, str):
+        raise ValueError("research_id must be a non-empty string")
+    if task_id:
+        _validate_task_id(task_id)
+    return await sqlite_backend.list_task_attempt_memories(research_id, task_id)
+
+
+async def delete_task_attempt_memories(research_id: str, task_id: str | None = None) -> int:
+    if not research_id or not isinstance(research_id, str):
+        raise ValueError("research_id must be a non-empty string")
+    if task_id:
+        _validate_task_id(task_id)
+    return await sqlite_backend.delete_task_attempt_memories(research_id, task_id)
 

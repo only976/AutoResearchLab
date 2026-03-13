@@ -29,6 +29,7 @@ def _start_execution_background(
             await runner.start_execution(
                 api_config=config,
                 resume_from_task_id=resume_from_task_id,
+                research_id=None,
             )
         except Exception as e:
             logger.exception("Error in execution: {}", e)
@@ -85,6 +86,11 @@ async def get_execution_runtime_status(request: Request, idea_id: str | None = Q
     runner = session.runner
     enabled = bool((runner.api_config or {}).get("taskAgentMode"))
     status = await get_local_docker_status(enabled=enabled, container_name=runner.docker_container_name or None)
+    runner_runtime = runner.docker_runtime_status if isinstance(getattr(runner, "docker_runtime_status", None), dict) else {}
+    for key in ("image", "taskId", "srcDir", "stepDir", "sandboxRoot", "error"):
+        value = runner_runtime.get(key)
+        if value not in (None, ""):
+            status[key] = value
     if runner.execution_run_id:
         status["executionRunId"] = runner.execution_run_id
     if runner.idea_id:

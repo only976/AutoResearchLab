@@ -20,6 +20,14 @@ def test_settings_roundtrip(client):
 
 
 def test_db_clear(client):
+    from db import SANDBOX_DIR
+
+    sandbox_case = SANDBOX_DIR / 'exec_clear_db_case'
+    (sandbox_case / 'step' / '1_1').mkdir(parents=True, exist_ok=True)
+    (sandbox_case / 'step' / '1_1' / 'events.jsonl').write_text('{}\n', encoding='utf-8')
+    assert sandbox_case.exists()
+
     r = client.post('/api/db/clear')
     assert r.status_code == 200
     assert r.json().get('success') is True
+    assert not sandbox_case.exists()

@@ -66,6 +66,7 @@
 
     const executeStreamEl = document.getElementById('researchExecuteStream');
     const executeStreamBodyEl = document.getElementById('researchExecuteStreamBody');
+    const executeToggleAllBtnEl = document.getElementById('researchExecuteToggleAllBtn');
     const executeRuntimeBadgeEl = document.getElementById('researchExecutionRuntimeBadge');
     const executeRuntimeMetaEl = document.getElementById('researchExecutionRuntimeMeta');
 
@@ -92,6 +93,7 @@
         recentOutputsByTask: new Map(),
         taskMetaById: new Map(),
         messages: [],
+        taskExpandedById: new Map(),
     };
     let executionRuntimeStatus = null;
     let runtimeStatusRequestId = 0;
@@ -319,7 +321,27 @@
         const id = String(taskId || '').trim();
         if (!id) return '';
         if (!executeState.order.includes(id)) executeState.order.push(id);
+        if (!executeState.taskExpandedById.has(id)) executeState.taskExpandedById.set(id, true);
         return id;
+    }
+
+    function _updateExecuteToggleAllButton() {
+        if (!executeToggleAllBtnEl) return;
+        const taskIds = executeState.order || [];
+        if (!taskIds.length) {
+            executeToggleAllBtnEl.textContent = 'Collapse All';
+            return;
+        }
+        const allCollapsed = taskIds.every((taskId) => executeState.taskExpandedById.get(taskId) === false);
+        executeToggleAllBtnEl.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
+    }
+
+    function _setAllExecuteTaskExpanded(expanded) {
+        (executeState.order || []).forEach((taskId) => {
+            executeState.taskExpandedById.set(taskId, !!expanded);
+        });
+        _updateExecuteToggleAllButton();
+        if (activeStage === 'execute') renderExecuteStream();
     }
 
     function _upsertTaskMeta(task) {
@@ -412,7 +434,11 @@
         const metaParts = [];
         if (next.serverVersion) metaParts.push(`Engine ${next.serverVersion}`);
         if (next.image) metaParts.push(`Image ${next.image}`);
+        if (next.volumeName) metaParts.push(`Volume ${next.volumeName}`);
         if (next.executionRunId) metaParts.push(`Run ${next.executionRunId}`);
+        if (next.srcDir) metaParts.push(`Src ${next.srcDir}`);
+        if (next.stepDir) metaParts.push(`Step ${next.stepDir}`);
+        else if (next.executionRunId) metaParts.push('Step per task');
         if (next.error) metaParts.push(String(next.error).trim());
         if (!metaParts.length && !enabled) metaParts.push('Enable Task Agent mode to use Docker-backed execution.');
         executeRuntimeMetaEl.textContent = metaParts.join(' · ');
@@ -469,9 +495,25 @@
         const turn = Number(scheduleInfo?.turn);
         const maxTurns = Number(scheduleInfo?.max_turns);
         const toolName = String(scheduleInfo?.tool_name || '').trim();
+        const tokenUsage = scheduleInfo?.token_usage || {};
+        const totalTokens = Number(tokenUsage?.total);
+        const deltaTokens = Number(tokenUsage?.deltaTotal);
+        const inputTokens = Number(tokenUsage?.input);
+        const outputTokens = Number(tokenUsage?.output);
+        const contextTokens = Number(tokenUsage?.contextInputEst);
 
         let title = `${id} · ${op}`;
         if (toolName) title += ` · ${toolName}`;
+
+        let tokenMetaText = '';
+        if (Number.isFinite(inputTokens) && Number.isFinite(outputTokens) && (inputTokens > 0 || outputTokens > 0)) {
+            const tokenBits = [`in ${inputTokens || 0}`, `out ${outputTokens || 0}`];
+            if (Number.isFinite(deltaTokens) && deltaTokens > 0) tokenBits.push(`Δ ${deltaTokens}`);
+            if (Number.isFinite(totalTokens) && totalTokens > 0) tokenBits.push(`total ${totalTokens}`);
+            tokenMetaText = tokenBits.join(' · ');
+        } else if (Number.isFinite(contextTokens) && contextTokens > 0) {
+            tokenMetaText = `ctx ~${contextTokens}`;
+        }
 
         const bodyText = Number.isFinite(turn) && Number.isFinite(maxTurns)
             ? `[${turn}/${maxTurns}] ${text}`
@@ -484,6 +526,7 @@
             && last.kind === 'assistant'
             && String(last.title || '') === title
             && String(last.body || '') === bodyText
+            && String(last.tokenMetaText || '') === tokenMetaText
         ) {
             const nextRepeat = Number(last.repeatCount || 1) + 1;
             last.repeatCount = nextRepeat;
@@ -496,6 +539,7 @@
             kind: 'assistant',
             title,
             body: bodyText,
+            tokenMetaText,
             status: executeState.statuses.get(id) || 'doing',
             repeatCount: 1,
         });
@@ -507,6 +551,7 @@
         executeState.recentOutputsByTask = new Map();
         executeState.taskMetaById = new Map();
         executeState.messages = [];
+        executeState.taskExpandedById = new Map();
 
         const treeTasks = Array.isArray(treeData) ? treeData : [];
         const execTasks = Array.isArray(execution?.tasks) ? execution.tasks : [];
@@ -672,7 +717,9 @@
                 // Task details (collapsible)
                 const detailsEl = document.createElement('div');
                 detailsEl.className = 'research-execute-task-details';
-                let isExpanded = false;
+                let isExpanded = executeState.taskExpandedById.get(taskId);
+                if (typeof isExpanded !== 'boolean') isExpanded = true;
+                executeState.taskExpandedById.set(taskId, isExpanded);
 
                 const contentEl = document.createElement('div');
                 contentEl.className = 'research-execute-task-content';
@@ -707,6 +754,13 @@
                         const repeatCount = Number(msg.repeatCount || 1);
                         titleEl.textContent = repeatCount > 1 ? `${msg.title} ×${repeatCount}` : msg.title;
                         bubbleEl.appendChild(titleEl);
+                    if (msg.tokenMetaText) {
+                        const tokenMetaEl = document.createElement('div');
+                        tokenMetaEl.className = 'research-execute-message-token-meta';
+                        tokenMetaEl.textContent = String(msg.tokenMetaText || '').trim();
+                        bubbleEl.appendChild(tokenMetaEl);
+                    }
+
                     }
 
                     const bodyEl = document.createElement('div');
@@ -726,16 +780,21 @@
                 toggleEl.addEventListener('click', (e) => {
                     e.stopPropagation();
                     isExpanded = !isExpanded;
+                    executeState.taskExpandedById.set(taskId, isExpanded);
                     toggleEl.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
                     detailsEl.style.display = isExpanded ? 'block' : 'none';
+                    _updateExecuteToggleAllButton();
                 });
 
-                // Initially collapsed
-                detailsEl.style.display = 'none';
+                // Keep user-controlled expanded state (default: expanded)
+                detailsEl.style.display = isExpanded ? 'block' : 'none';
+                toggleEl.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
                 headerEl.addEventListener('click', () => {
                     isExpanded = !isExpanded;
+                    executeState.taskExpandedById.set(taskId, isExpanded);
                     toggleEl.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
                     detailsEl.style.display = isExpanded ? 'block' : 'none';
+                    _updateExecuteToggleAllButton();
                 });
 
                 executeStreamBodyEl.appendChild(cardEl);
@@ -768,6 +827,18 @@
         if (wasNearBottom || executeStreamBodyEl.childElementCount <= 2) {
             executeStreamBodyEl.scrollTop = executeStreamBodyEl.scrollHeight;
         }
+        _updateExecuteToggleAllButton();
+    }
+
+    function initExecuteStreamControls() {
+        if (!executeToggleAllBtnEl) return;
+        executeToggleAllBtnEl.addEventListener('click', () => {
+            const taskIds = executeState.order || [];
+            if (!taskIds.length) return;
+            const allCollapsed = taskIds.every((taskId) => executeState.taskExpandedById.get(taskId) === false);
+            _setAllExecuteTaskExpanded(allCollapsed);
+        });
+        _updateExecuteToggleAllButton();
     }
 
     function _getQueryParam(name) {
@@ -930,8 +1001,23 @@
         };
         const rs = String(research.stage || 'refine').trim() || 'refine';
         const rss = String(research.stageStatus || 'idle').trim() || 'idle';
-        if (stageStatusDetails[rs]) {
-            stageStatusDetails[rs] = { status: rss, message: rss };
+        const order = ['refine', 'plan', 'execute', 'paper'];
+        const rank = order.indexOf(rs);
+        if (rank >= 0) {
+            if (rss === 'completed') {
+                for (let i = 0; i <= rank; i += 1) {
+                    const s = order[i];
+                    stageStatusDetails[s] = { status: 'completed', message: 'completed' };
+                }
+            } else if (rss === 'running' || rss === 'stopped' || rss === 'failed') {
+                for (let i = 0; i < rank; i += 1) {
+                    const s = order[i];
+                    stageStatusDetails[s] = { status: 'completed', message: 'completed' };
+                }
+                stageStatusDetails[rs] = { status: rss, message: rss };
+            } else {
+                stageStatusDetails[rs] = { status: rss, message: rss };
+            }
         }
         renderStageButtons();
 
@@ -1303,18 +1389,55 @@
             const d = e?.detail || {};
             const taskId = String(d.taskId || d.task_id || '').trim();
             const errorText = String(d.error || '').trim();
+            const phase = String(d.phase || '').trim();
+            const attempt = Number(d.attempt);
+            const maxAttempts = Number(d.maxAttempts);
+            const willRetry = d.willRetry === true;
             if (!taskId && !errorText) return;
             const meta = _getTaskMetaById(taskId) || {};
+            const detailParts = [];
+            if (phase) detailParts.push(`Phase: ${phase}`);
+            if (Number.isFinite(attempt) && Number.isFinite(maxAttempts)) {
+                detailParts.push(`Attempt ${attempt}/${maxAttempts}`);
+            }
+            if (typeof d.willRetry === 'boolean') {
+                detailParts.push(willRetry ? 'Retry scheduled' : 'No more automatic retries');
+            }
+            const detailPrefix = detailParts.length ? `${detailParts.join(' · ')}\n` : '';
             _appendExecuteMessage({
                 taskId: taskId || '',
                 kind: 'error',
                 title: meta.title || taskId || 'Execution Error',
-                body: errorText || 'Unknown execution error.',
+                body: `${detailPrefix}${errorText || 'Unknown execution error.'}`,
                 status: taskId ? (executeState.statuses.get(taskId) || 'execution-failed') : 'execution-failed',
             });
             if (taskId) executeState.statuses.set(taskId, 'execution-failed');
             if (activeStage === 'execute') renderExecuteStream();
             refreshExecutionRuntimeStatus();
+        });
+
+        document.addEventListener('maars:task-retry', (e) => {
+            const d = e?.detail || {};
+            const taskId = String(d.taskId || d.task_id || '').trim();
+            if (!taskId) return;
+            _ensureTaskInOrder(taskId);
+            const phase = String(d.phase || '').trim() || 'execution';
+            const reason = String(d.reason || '').trim() || 'Retry requested';
+            const attempt = Number(d.attempt);
+            const nextAttempt = Number(d.nextAttempt);
+            const maxAttempts = Number(d.maxAttempts);
+            const detailParts = [`Phase: ${phase}`];
+            if (Number.isFinite(attempt) && Number.isFinite(nextAttempt) && Number.isFinite(maxAttempts)) {
+                detailParts.push(`Retry ${nextAttempt}/${maxAttempts} (failed ${attempt}/${maxAttempts})`);
+            }
+            _appendExecuteMessage({
+                taskId,
+                kind: 'system',
+                title: `${taskId} retrying`,
+                body: `${detailParts.join(' · ')}\n${reason}`,
+                status: executeState.statuses.get(taskId) || 'execution-failed',
+            });
+            if (activeStage === 'execute') renderExecuteStream();
         });
 
         document.addEventListener('maars:execution-runtime-status', (e) => {
@@ -1339,6 +1462,7 @@
         initStageNav();
         initTreeTabs();
         initExecuteSplitter();
+        initExecuteStreamControls();
         initEventBridges();
 
         // Create page (index.html / research.html)

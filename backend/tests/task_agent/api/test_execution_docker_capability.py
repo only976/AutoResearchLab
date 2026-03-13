@@ -1,7 +1,7 @@
 import json
 import time
 
-from db import DB_DIR
+from db import get_execution_task_step_dir, get_execution_task_src_dir
 
 
 def _agent_mode_settings_payload() -> dict:
@@ -77,6 +77,18 @@ def test_execution_run_uses_task_docker_flow_and_writes_step_events(
             "serverVersion": "test",
         }
 
+    async def fake_prepare_execution_runtime(*, enabled=True, image=None):
+        return {
+            "enabled": enabled,
+            "available": True,
+            "connected": True,
+            "containerRunning": False,
+            "containerName": "",
+            "image": image or "maars-task-python:latest",
+            "dockerPath": "docker",
+            "serverVersion": "test",
+        }
+
     async def fake_ensure_execution_container(
         *,
         execution_run_id,
@@ -92,6 +104,8 @@ def test_execution_run_uses_task_docker_flow_and_writes_step_events(
                 "idea_id": idea_id,
                 "plan_id": plan_id,
                 "task_id": task_id,
+                "src_dir": str(get_execution_task_src_dir(execution_run_id, task_id).resolve()),
+                "step_dir": str(get_execution_task_step_dir(execution_run_id, task_id).resolve()),
             }
         )
         return {
@@ -102,9 +116,9 @@ def test_execution_run_uses_task_docker_flow_and_writes_step_events(
             "containerName": f"maars-task-{execution_run_id}-{task_id}",
             "image": image or "python:3.11-slim",
             "taskId": task_id,
-            "srcDir": str((DB_DIR / idea_id / plan_id / task_id / "src").resolve()),
-            "stepDir": str((DB_DIR / idea_id / plan_id / task_id / "step").resolve()),
-            "planDir": str((DB_DIR / idea_id / plan_id).resolve()),
+            "srcDir": str(get_execution_task_src_dir(execution_run_id, task_id).resolve()),
+            "stepDir": str(get_execution_task_step_dir(execution_run_id, task_id).resolve()),
+            "sandboxRoot": str(get_execution_task_step_dir(execution_run_id, task_id).resolve().parent.parent.parent),
         }
 
     async def fake_run_task_agent(**kwargs):
@@ -119,6 +133,7 @@ def test_execution_run_uses_task_docker_flow_and_writes_step_events(
         stop_calls.append(container_name)
 
     monkeypatch.setattr(runner_mod, "get_local_docker_status", fake_get_local_docker_status)
+    monkeypatch.setattr(runner_mod, "prepare_execution_runtime", fake_prepare_execution_runtime)
     monkeypatch.setattr(runner_mod, "ensure_execution_container", fake_ensure_execution_container)
     monkeypatch.setattr(runner_mod, "run_task_agent", fake_run_task_agent)
     monkeypatch.setattr(runner_mod, "validate_task_output_with_llm", fake_validate_task_output_with_llm)
@@ -154,6 +169,7 @@ def test_execution_run_uses_task_docker_flow_and_writes_step_events(
     assert ensure_calls, "Expected per-task container provisioning calls"
     assert run_agent_calls, "Expected task agent calls"
     assert stop_calls, "Expected task containers to be stopped"
+    assert len({c["src_dir"] for c in ensure_calls}) == 1, "One execution should share a single src directory"
 
     first_call = run_agent_calls[0]
     assert first_call.get("docker_container_name"), "Task agent call should receive docker container name"
@@ -161,7 +177,8 @@ def test_execution_run_uses_task_docker_flow_and_writes_step_events(
 
     # Step event persistence checks
     first_task_id = ensure_calls[0]["task_id"]
-    step_file = (DB_DIR / idea_id / plan_id / first_task_id / "step" / "events.jsonl").resolve()
+    execution_run_id = ensure_calls[0]["execution_run_id"]
+    step_file = (get_execution_task_step_dir(execution_run_id, first_task_id) / "events.jsonl").resolve()
     assert step_file.exists(), f"Missing step events file: {step_file}"
 
     lines = [line for line in step_file.read_text(encoding="utf-8").splitlines() if line.strip()]

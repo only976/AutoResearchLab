@@ -14,7 +14,8 @@ from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
 
-from db import DB_DIR, delete_task_artifact, get_idea, save_execution, save_task_artifact, save_validation_report
+from db import DB_DIR, delete_task_artifact, get_execution_task_step_dir, get_idea, save_execution, save_task_artifact, save_validation_report
+from db import delete_task_attempt_memories, list_task_attempt_memories, save_task_attempt_memory
 from shared.constants import (
     MAX_EXECUTION_CONCURRENCY,
     MAX_FAILURES,
@@ -27,7 +28,7 @@ from .pools import worker_manager
 from .artifact_resolver import resolve_artifacts
 from .agent import run_task_agent
 from .agent_tools import SKILLS_ROOT
-from .docker_runtime import ensure_execution_container, get_local_docker_status, stop_execution_container
+from .docker_runtime import ensure_execution_container, get_local_docker_status, prepare_execution_runtime, stop_execution_container
 from .llm.executor import execute_task
 from .llm.validation import validate_task_output_with_llm
 from shared.reflection import self_evaluate, generate_skill_from_reflection, save_learned_skill
@@ -75,6 +76,8 @@ class ExecutionRunner:
         self.docker_container_name: str = ""
         self.task_docker_containers: Dict[str, str] = {}
         self.docker_runtime_status: Dict[str, Any] = {"enabled": False, "available": False, "connected": False}
+        self.task_attempt_history: Dict[str, List[Dict[str, Any]]] = {}
+        self.research_id: str = ""
 
     def _emit_runtime_status(self) -> None:
         payload = dict(self.docker_runtime_status or {})
@@ -132,10 +135,144 @@ class ExecutionRunner:
         collect(task_id)
         return result
 
+    async def _record_task_attempt_failure(
+        self,
+        *,
+        task_id: str,
+        phase: str,
+        attempt: int,
+        error: str,
+        will_retry: bool,
+    ) -> None:
+        history = self.task_attempt_history.setdefault(task_id, [])
+        history.append({
+            "attempt": attempt,
+            "phase": phase,
+            "error": (error or "").strip(),
+            "willRetry": bool(will_retry),
+            "ts": int(time.time() * 1000),
+        })
+        if len(history) > 8:
+            self.task_attempt_history[task_id] = history[-8:]
+        if self.research_id:
+            latest = self.task_attempt_history.get(task_id, [])[-1]
+            await save_task_attempt_memory(
+                self.research_id,
+                task_id,
+                int(attempt),
+                {
+                    "attempt": int(attempt),
+                    "phase": phase,
+                    "error": latest.get("error") or "",
+                    "willRetry": bool(will_retry),
+                    "ts": latest.get("ts"),
+                },
+            )
+
+    async def _load_task_attempt_memories(self) -> None:
+        self.task_attempt_history.clear()
+        if not self.research_id:
+            return
+        try:
+            rows = await list_task_attempt_memories(self.research_id)
+        except Exception:
+            logger.exception("Failed to load task attempt memories research_id={}", self.research_id)
+            return
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for row in rows or []:
+            task_id = str(row.get("taskId") or "").strip()
+            if not task_id:
+                continue
+            data = row.get("data") or {}
+            grouped.setdefault(task_id, []).append(
+                {
+                    "attempt": int(data.get("attempt") or row.get("attempt") or 0),
+                    "phase": str(data.get("phase") or "execution"),
+                    "error": str(data.get("error") or ""),
+                    "willRetry": bool(data.get("willRetry")),
+                    "ts": int(data.get("ts") or 0),
+                }
+            )
+        for task_id, items in grouped.items():
+            self.task_attempt_history[task_id] = sorted(items, key=lambda x: (x.get("attempt") or 0, x.get("ts") or 0))[-8:]
+
+    def _build_task_execution_context(
+        self,
+        task: Dict[str, Any],
+        resolved_inputs: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        task_id = task.get("task_id") or ""
+        deps = task.get("dependencies") or []
+        completed = sorted([tid for tid in self.completed_tasks if tid in set(deps)])
+        pending = sorted([tid for tid in deps if tid not in self.completed_tasks])
+        history = self.task_attempt_history.get(task_id, [])
+        latest_failure = history[-1] if history else None
+
+        done_count = 0
+        running_count = 0
+        failed_count = 0
+        for t in self.chain_cache:
+            status = str((t or {}).get("status") or "undone")
+            if status == "done":
+                done_count += 1
+            elif status == "doing":
+                running_count += 1
+            elif status in ("execution-failed", "validation-failed"):
+                failed_count += 1
+
+        output_spec = task.get("output") or {}
+        validation_spec = task.get("validation") or {}
+        input_keys = sorted(list((resolved_inputs or {}).keys())) if isinstance(resolved_inputs, dict) else []
+
+        context: Dict[str, Any] = {
+            "globalGoal": (self._idea_text or "").strip(),
+            "planContext": {
+                "executionRunId": self.execution_run_id,
+                "currentTaskId": task_id,
+                "progress": {
+                    "done": done_count,
+                    "running": running_count,
+                    "failed": failed_count,
+                    "total": len(self.chain_cache),
+                },
+                "dependencies": {
+                    "all": deps,
+                    "completed": completed,
+                    "pending": pending,
+                },
+            },
+            "taskContract": {
+                "description": task.get("description") or "",
+                "inputKeys": input_keys,
+                "outputFormat": output_spec.get("format") or "",
+                "outputDescription": output_spec.get("description") or "",
+                "validationCriteria": (validation_spec.get("criteria") or []) if isinstance(validation_spec, dict) else [],
+            },
+        }
+
+        if latest_failure:
+            context["retryMemory"] = {
+                "attempt": latest_failure.get("attempt"),
+                "phase": latest_failure.get("phase") or "execution",
+                "lastFailure": latest_failure.get("error") or "",
+                "historyCount": len(history),
+                "doNext": [
+                    "Reuse existing files and artifacts before creating new ones",
+                    "Take the shortest path to produce required output and call Finish",
+                ],
+                "dontNext": [
+                    "Do not repeat identical failing commands without a change",
+                    "Do not keep exploring once output spec is satisfied",
+                ],
+            }
+
+        return context
+
     async def start_execution(
         self,
         api_config: Optional[Dict] = None,
         resume_from_task_id: Optional[str] = None,
+        research_id: Optional[str] = None,
     ) -> None:
         if api_config is not None:
             self.api_config = api_config
@@ -148,6 +285,7 @@ class ExecutionRunner:
                 raise ValueError("No execution layout cache found. Please generate layout first.")
             self.is_running = True
         self.abort_event = asyncio.Event()
+        self.research_id = str(research_id or self.research_id or "").strip()
         self._idea_text = ""
         self.execution_run_id = f"exec_{int(time.time() * 1000)}"
         self.docker_container_name = ""
@@ -169,7 +307,10 @@ class ExecutionRunner:
             api_cfg = self.api_config or {}
             docker_enabled = bool(api_cfg.get("taskAgentMode"))
             if docker_enabled:
-                self.docker_runtime_status = await get_local_docker_status(enabled=True)
+                self.docker_runtime_status = await prepare_execution_runtime(
+                    enabled=True,
+                    image=api_cfg.get("taskDockerImage"),
+                )
             else:
                 self.docker_runtime_status = await get_local_docker_status(enabled=False)
             self._emit_runtime_status()
@@ -182,6 +323,7 @@ class ExecutionRunner:
             self.task_map.clear()
             self.reverse_dependency_index.clear()
             self.task_failure_count.clear()
+            await self._load_task_attempt_memories()
 
             for task in self.chain_cache:
                 self.task_map[task["task_id"]] = task
@@ -346,6 +488,7 @@ class ExecutionRunner:
             output_spec = task.get("output") or {}
             if not output_spec:
                 raise ValueError(f"Task {task['task_id']} has no output spec")
+            execution_error_message = ""
             try:
                 resolved_inputs = await resolve_artifacts(task, self.task_map, self.idea_id or "", self.plan_id or "")
                 logger.info(
@@ -369,6 +512,7 @@ class ExecutionRunner:
 
                 api_cfg = self.api_config or {}
                 task_container_name = ""
+                execution_context = self._build_task_execution_context(task, resolved_inputs)
                 if api_cfg.get("taskAgentMode"):
                     if not (self.idea_id and self.plan_id):
                         raise ValueError("Docker task execution requires idea_id and plan_id")
@@ -406,6 +550,7 @@ class ExecutionRunner:
                         docker_container_name=task_container_name,
                         validation_spec=task.get("validation"),
                         idea_context=self._idea_text,
+                        execution_context=execution_context,
                     )
                 else:
                     result = await execute_task(
@@ -428,25 +573,54 @@ class ExecutionRunner:
                 execution_passed = True
             except Exception as exec_err:
                 logger.exception("LLM execution failed for task {}", task["task_id"])
-                await self._append_step_event(task["task_id"], "task-execution-error", {"error": str(exec_err)})
+                execution_error_message = str(exec_err)
+                await self._append_step_event(task["task_id"], "task-execution-error", {"error": execution_error_message})
                 execution_passed = False
 
             if not execution_passed:
                 self._update_task_status(task["task_id"], "execution-failed")
                 failure_count = self.task_failure_count.get(task["task_id"], 0)
                 self.task_failure_count[task["task_id"]] = failure_count + 1
+                attempt = failure_count + 1
+                will_retry = failure_count < self.MAX_FAILURES - 1
                 logger.warning(
                     "Task execution failed task_id={} attempt={}/{}",
                     task["task_id"],
-                    failure_count + 1,
+                    attempt,
                     self.MAX_FAILURES,
+                )
+                self._emit("task-error", {
+                    "taskId": task["task_id"],
+                    "phase": "execution",
+                    "attempt": attempt,
+                    "maxAttempts": self.MAX_FAILURES,
+                    "willRetry": will_retry,
+                    "error": execution_error_message or "Task execution failed",
+                })
+                await self._record_task_attempt_failure(
+                    task_id=task["task_id"],
+                    phase="execution",
+                    attempt=attempt,
+                    error=execution_error_message or "Task execution failed",
+                    will_retry=will_retry,
                 )
                 async with self._worker_lock:
                     worker_manager["release_worker_by_task_id"](task["task_id"])
                 self._broadcast_worker_states()
                 await asyncio.sleep(1.0)
-                if failure_count < self.MAX_FAILURES - 1:
-                    logger.info("Task retry scheduled task_id={} next_attempt={}", task["task_id"], failure_count + 2)
+                if will_retry:
+                    next_attempt = failure_count + 2
+                    logger.info("Task retry scheduled task_id={} next_attempt={}", task["task_id"], next_attempt)
+                    retry_payload = {
+                        "taskId": task["task_id"],
+                        "phase": "execution",
+                        "reason": execution_error_message or "Task execution failed",
+                        "attempt": attempt,
+                        "nextAttempt": next_attempt,
+                        "maxAttempts": self.MAX_FAILURES,
+                    }
+                    self._emit("task-retry", retry_payload)
+                    await self._append_step_event(task["task_id"], "task-retry", retry_payload)
                     self.running_tasks.discard(task["task_id"])
                     self.completed_tasks.discard(task["task_id"])
                     await self._execute_task(task)
@@ -535,18 +709,49 @@ class ExecutionRunner:
                 self._update_task_status(task["task_id"], "validation-failed")
                 failure_count = self.task_failure_count.get(task["task_id"], 0)
                 self.task_failure_count[task["task_id"]] = failure_count + 1
+                attempt = failure_count + 1
+                will_retry = failure_count < self.MAX_FAILURES - 1
+                validation_reason = "Validation failed"
+                if report:
+                    validation_reason = report[:500]
                 logger.warning(
                     "Task validation failed task_id={} attempt={}/{}",
                     task_id,
-                    failure_count + 1,
+                    attempt,
                     self.MAX_FAILURES,
+                )
+                self._emit("task-error", {
+                    "taskId": task_id,
+                    "phase": "validation",
+                    "attempt": attempt,
+                    "maxAttempts": self.MAX_FAILURES,
+                    "willRetry": will_retry,
+                    "error": validation_reason,
+                })
+                await self._record_task_attempt_failure(
+                    task_id=task_id,
+                    phase="validation",
+                    attempt=attempt,
+                    error=validation_reason,
+                    will_retry=will_retry,
                 )
                 await asyncio.sleep(1.0)
                 async with self._worker_lock:
                     worker_manager["release_worker_by_task_id"](task["task_id"])
                 self._broadcast_worker_states()
-                if failure_count < self.MAX_FAILURES - 1:
-                    logger.info("Task retry after validation failure task_id={} next_attempt={}", task_id, failure_count + 2)
+                if will_retry:
+                    next_attempt = failure_count + 2
+                    logger.info("Task retry after validation failure task_id={} next_attempt={}", task_id, next_attempt)
+                    retry_payload = {
+                        "taskId": task_id,
+                        "phase": "validation",
+                        "reason": validation_reason,
+                        "attempt": attempt,
+                        "nextAttempt": next_attempt,
+                        "maxAttempts": self.MAX_FAILURES,
+                    }
+                    self._emit("task-retry", retry_payload)
+                    await self._append_step_event(task["task_id"], "task-retry", retry_payload)
                     self.running_tasks.discard(task["task_id"])
                     self.completed_tasks.discard(task["task_id"])
                     await self._execute_task(task)
@@ -579,6 +784,9 @@ class ExecutionRunner:
         self.pending_tasks.discard(task["task_id"])
         self._update_task_status(task["task_id"], "done")
         self.task_failure_count.pop(task["task_id"], None)
+        self.task_attempt_history.pop(task["task_id"], None)
+        if self.research_id:
+            await delete_task_attempt_memories(self.research_id, task["task_id"])
         logger.info("Task complete task_id={} completed={} remaining_pending={}", task["task_id"], len(self.completed_tasks), len(self.pending_tasks))
 
         dependents = self.reverse_dependency_index.get(task["task_id"], [])
@@ -653,6 +861,12 @@ class ExecutionRunner:
 
     async def _handle_task_error(self, task: Dict, error: Exception) -> None:
         logger.exception("Error executing task %s", task["task_id"])
+        self._emit("task-error", {
+            "taskId": task["task_id"],
+            "phase": "execution",
+            "willRetry": False,
+            "error": str(error),
+        })
         async with self._worker_lock:
             worker_manager["release_worker_by_task_id"](task["task_id"])
         self._broadcast_worker_states()
@@ -681,10 +895,10 @@ class ExecutionRunner:
         self._broadcast_task_states()
 
     async def _append_step_event(self, task_id: str, event: str, payload: Dict[str, Any]) -> None:
-        if not self.idea_id or not self.plan_id or not task_id:
+        if not self.execution_run_id or not task_id:
             return
         try:
-            step_dir = (DB_DIR / self.idea_id / self.plan_id / task_id / "step").resolve()
+            step_dir = get_execution_task_step_dir(self.execution_run_id, task_id).resolve()
             step_dir.mkdir(parents=True, exist_ok=True)
             path = step_dir / "events.jsonl"
             record = {
@@ -722,12 +936,10 @@ class ExecutionRunner:
         """Broadcast execution concurrency stats. (Frontend uses syncExecutionStateOnConnect for stats.)"""
 
     async def _rollback_task(self, task: Dict) -> None:
-        """Rollback task and all affected: upstream deps + downstream dependents.
-        Once a task is undone, its downstream results are unreliable and must be undone too."""
+        """Rollback failed task and all downstream dependents.
+        Upstream dependencies remain completed and are reused for retry."""
         tasks_to_rollback: Set[str] = set()
         tasks_to_rollback.add(task["task_id"])
-        for dep_id in (task.get("dependencies") or []):
-            tasks_to_rollback.add(dep_id)
 
         visited: Set[str] = set()
 
@@ -740,8 +952,6 @@ class ExecutionRunner:
                     tasks_to_rollback.add(dep_id)
                     find_downstream(dep_id)
 
-        for dep_id in (task.get("dependencies") or []):
-            find_downstream(dep_id)
         # Downstream of the rolled-back task: all dependents become unreliable
         find_downstream(task["task_id"])
 

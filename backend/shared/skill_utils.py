@@ -24,12 +24,29 @@ def parse_skill_frontmatter(content: str) -> dict:
         return result or {}
     except yaml.YAMLError:
         pass
+
+    def _supports_simple_fallback(value: str) -> bool:
+        stripped = value.strip()
+        if not stripped:
+            return True
+        # Only fall back for plain scalar-like values. If the value starts with YAML
+        # collection / block syntax, parsing errors should be treated as invalid
+        # frontmatter rather than silently accepting a truncated result.
+        return not stripped.startswith(("[", "{", "|", ">", "&", "*", "!"))
+
     # Fallback: simple line-by-line key: value parser (handles unquoted colons in values)
     result: dict = {}
     for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
         m = re.match(r'^(\w[\w-]*):\s*(.*)', line)
-        if m:
-            result[m.group(1)] = m.group(2).strip()
+        if not m:
+            return {}
+        value = m.group(2).strip()
+        if not _supports_simple_fallback(value):
+            return {}
+        result[m.group(1)] = value
     return result
 
 

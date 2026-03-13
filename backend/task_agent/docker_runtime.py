@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import shlex
@@ -12,9 +13,15 @@ from typing import Any
 
 from loguru import logger
 
-DEFAULT_DOCKER_IMAGE = os.getenv("MAARS_DOCKER_IMAGE", "python:3.11-slim")
+from db import get_execution_sandbox_root, get_execution_src_dir, get_execution_task_step_dir
+
+DEFAULT_DOCKER_IMAGE = os.getenv("MAARS_DOCKER_IMAGE", "maars-task-python:latest")
 DOCKER_COMMAND_TIMEOUT = int(os.getenv("MAARS_DOCKER_COMMAND_TIMEOUT", "120"))
 _DOCKER_KEEPALIVE_CMD = "trap : TERM INT; while sleep 3600; do :; done"
+_MANAGED_LABEL = "maars.managed=true"
+_MANAGED_KIND_LABEL = "maars.kind=task-execution"
+_DOCKERFILE_PATH = Path(__file__).resolve().parent / "docker" / "Dockerfile"
+_IMAGE_BUILD_LOCK = asyncio.Lock()
 
 
 def _bootstrap_keepalive_cmd() -> str:
@@ -95,6 +102,89 @@ def build_container_name(execution_run_id: str, task_id: str) -> str:
     return f"maars-task-{_sanitize_name(execution_run_id)}-{_sanitize_name(task_id)}"
 
 
+async def cleanup_stale_execution_containers() -> None:
+    docker = _docker_bin()
+    if not docker:
+        raise RuntimeError("Docker CLI not found in PATH")
+
+    args = [
+        docker,
+        "ps",
+        "-aq",
+        "--filter",
+        f"label={_MANAGED_LABEL}",
+        "--filter",
+        "status=created",
+        "--filter",
+        "status=exited",
+        "--filter",
+        "status=dead",
+    ]
+    listed = await _run_docker_cmd(args, timeout=20)
+    if not listed["ok"]:
+        raise RuntimeError(listed.get("stderr") or listed.get("stdout") or "Failed to list stale Docker containers")
+
+    container_ids = [line.strip() for line in (listed.get("stdout") or "").splitlines() if line.strip()]
+    for container_id in container_ids:
+        removed = await _run_docker_cmd([docker, "rm", "-f", container_id], timeout=20)
+        if removed["ok"]:
+            logger.info("Removed stale managed Docker container {}", container_id)
+
+
+async def ensure_execution_image(image: str | None = None) -> str:
+    docker = _docker_bin()
+    if not docker:
+        raise RuntimeError("Docker CLI not found in PATH")
+
+    image_name = (image or DEFAULT_DOCKER_IMAGE).strip() or DEFAULT_DOCKER_IMAGE
+    async with _IMAGE_BUILD_LOCK:
+        inspect = await _run_docker_cmd([docker, "image", "inspect", image_name], timeout=20)
+        if inspect["ok"]:
+            return image_name
+
+        if not _DOCKERFILE_PATH.exists():
+            raise RuntimeError(f"Dockerfile not found: {_DOCKERFILE_PATH}")
+
+        build_cmd = [
+            docker,
+            "build",
+            "--progress=plain",
+            "-f",
+            str(_DOCKERFILE_PATH),
+            "-t",
+            image_name,
+            "--label",
+            _MANAGED_LABEL,
+            "--label",
+            _MANAGED_KIND_LABEL,
+            str(_DOCKERFILE_PATH.parent),
+        ]
+        built = await _run_docker_cmd(build_cmd, timeout=max(DOCKER_COMMAND_TIMEOUT, 600))
+        if built["ok"]:
+            return image_name
+
+        err_text = (built.get("stderr") or built.get("stdout") or "").strip()
+        if "already exists" in err_text.lower():
+            inspect_after = await _run_docker_cmd([docker, "image", "inspect", image_name], timeout=20)
+            if inspect_after["ok"]:
+                logger.info("Docker image build raced but image now exists: {}", image_name)
+                return image_name
+
+        raise RuntimeError(err_text or "Failed to build Docker image")
+
+
+async def prepare_execution_runtime(*, enabled: bool, image: str | None = None) -> dict[str, Any]:
+    status = await get_local_docker_status(enabled=enabled)
+    if not enabled:
+        return status
+    if not status.get("connected"):
+        raise RuntimeError(status.get("error") or "Docker daemon unavailable")
+    await cleanup_stale_execution_containers()
+    image_name = (image or DEFAULT_DOCKER_IMAGE).strip() or DEFAULT_DOCKER_IMAGE
+    status["image"] = image_name
+    return status
+
+
 async def ensure_execution_container(
     *,
     execution_run_id: str,
@@ -108,19 +198,26 @@ async def ensure_execution_container(
     if not docker:
         raise RuntimeError("Docker CLI not found in PATH")
 
-    from db import DB_DIR
+    plan_meta = {
+        "ideaId": idea_id,
+        "planId": plan_id,
+        "taskId": task_id,
+        "executionRunId": execution_run_id,
+    }
 
-    plan_dir = (DB_DIR / idea_id / plan_id).resolve()
-    task_root_dir = (plan_dir / task_id).resolve()
-    src_dir = (task_root_dir / "src").resolve()
-    step_dir = (task_root_dir / "step").resolve()
+    sandbox_root = get_execution_sandbox_root(execution_run_id).resolve()
+    src_dir = get_execution_src_dir(execution_run_id).resolve()
+    step_dir = get_execution_task_step_dir(execution_run_id, task_id).resolve()
     skills_dir = skills_dir.resolve()
     src_dir.mkdir(parents=True, exist_ok=True)
     step_dir.mkdir(parents=True, exist_ok=True)
-    plan_dir.mkdir(parents=True, exist_ok=True)
+    sandbox_root.mkdir(parents=True, exist_ok=True)
 
-    image_name = (image or DEFAULT_DOCKER_IMAGE).strip() or DEFAULT_DOCKER_IMAGE
+    image_name = await ensure_execution_image(image=image)
     container_name = build_container_name(execution_run_id, task_id)
+
+    metadata_path = step_dir / "container-meta.json"
+    metadata_path.write_text(json.dumps(plan_meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     status = await get_local_docker_status(enabled=True, container_name=container_name)
     if not status.get("connected"):
@@ -133,7 +230,7 @@ async def ensure_execution_container(
             "taskId": task_id,
             "srcDir": str(src_dir),
             "stepDir": str(step_dir),
-            "planDir": str(plan_dir),
+            "sandboxRoot": str(sandbox_root),
         }
 
     inspect = await _run_docker_cmd([docker, "inspect", container_name], timeout=10)
@@ -150,7 +247,7 @@ async def ensure_execution_container(
             "taskId": task_id,
             "srcDir": str(src_dir),
             "stepDir": str(step_dir),
-            "planDir": str(plan_dir),
+            "sandboxRoot": str(sandbox_root),
         }
     
     run_cmd = [
@@ -159,17 +256,20 @@ async def ensure_execution_container(
         "-d",
         "--name",
         container_name,
+        "--label",
+        _MANAGED_LABEL,
+        "--label",
+        _MANAGED_KIND_LABEL,
+        "--label",
+        f"maars.execution_run_id={_sanitize_name(execution_run_id)}",
+        "--label",
+        f"maars.task_id={_sanitize_name(task_id)}",
         "--workdir",
         "/workdir/src",
-        # src: code execution & artifacts
         "--mount",
         f"type=bind,src={src_dir},dst=/workdir/src",
-        # step: task step states / intermediate info
         "--mount",
         f"type=bind,src={step_dir},dst=/workdir/step",
-        # plan dir for shared read access when needed
-        "--mount",
-        f"type=bind,src={plan_dir},dst=/plan",
         "--mount",
         f"type=bind,src={skills_dir},dst=/skills,readonly",
         "--mount",
@@ -202,7 +302,7 @@ async def ensure_execution_container(
         "taskId": task_id,
         "srcDir": str(src_dir),
         "stepDir": str(step_dir),
-        "planDir": str(plan_dir),
+        "sandboxRoot": str(sandbox_root),
     }
 
 

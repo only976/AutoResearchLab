@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from db import (
+    clear_research_stage_data_for_retry,
     create_research,
     delete_research_cascade,
     get_effective_config,
@@ -150,6 +151,13 @@ async def delete_research_route(research_id: str, request: Request):
     for (sid, rid), entry in list(_RUNNING.items()):
         if rid != research_id:
             continue
+        session = api_state.sessions.get(sid)
+        runner = getattr(session, "runner", None) if session else None
+        if runner and getattr(runner, "is_running", False):
+            try:
+                await runner.stop_async()
+            except Exception:
+                logger.exception("Failed to stop runner during research deletion research_id={} session_id={}", research_id, sid)
         task = entry.get("task")
         if task and not task.done():
             task.cancel()
@@ -254,7 +262,7 @@ async def _run_stage_execute(session_id: str, session, research_id: str, idea_id
     layout = build_layout_from_execution(execution)
     session.runner.set_layout(layout, idea_id=idea_id, plan_id=plan_id, execution=execution)
     config = await get_effective_config()
-    await session.runner.start_execution(api_config=config)
+    await session.runner.start_execution(api_config=config, research_id=research_id)
     await update_research_stage(research_id, stage="execute", stage_status="completed")
     await _emit_stage(session_id, research_id, "execute", "completed")
 
@@ -382,6 +390,12 @@ async def run_research_route(research_id: str, body: ResearchRunRequest, request
     if paper_format not in ("markdown", "latex"):
         paper_format = "markdown"
 
+    await clear_research_stage_data_for_retry(
+        research.get("currentIdeaId"),
+        research.get("currentPlanId"),
+        "refine",
+    )
+
     _start_stage_pipeline_task(
         session_id=session_id,
         session=session,
@@ -448,6 +462,11 @@ async def retry_research_route(research_id: str, body: ResearchRunRequest, reque
         paper_format = "markdown"
 
     start_stage = _normalize_stage(research.get("stage") or "refine")
+    await clear_research_stage_data_for_retry(
+        research.get("currentIdeaId"),
+        research.get("currentPlanId"),
+        start_stage,
+    )
     _start_stage_pipeline_task(
         session_id=session_id,
         session=session,
@@ -495,6 +514,18 @@ async def resume_research_stage_route(research_id: str, stage: str, body: Resear
     prereq_err = _check_stage_prerequisites(research, stage)
     if prereq_err:
         return JSONResponse(status_code=400, content={"error": prereq_err})
+    current_stage = _normalize_stage(research.get("stage") or "refine")
+    current_status = str(research.get("stageStatus") or "idle").strip().lower()
+    if current_stage != stage or current_status not in ("stopped", "failed"):
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": (
+                    f"Resume only applies to the same stage in stopped/failed state "
+                    f"(current: {current_stage} · {current_status})."
+                )
+            },
+        )
     if _is_session_busy(session_id):
         return JSONResponse(status_code=409, content={"error": "Another research pipeline is already running in this session"})
     paper_format = (body.format or "markdown").lower().strip()
@@ -526,6 +557,11 @@ async def retry_research_stage_route(research_id: str, stage: str, body: Researc
     paper_format = (body.format or "markdown").lower().strip()
     if paper_format not in ("markdown", "latex"):
         paper_format = "markdown"
+    await clear_research_stage_data_for_retry(
+        research.get("currentIdeaId"),
+        research.get("currentPlanId"),
+        stage,
+    )
     _start_stage_pipeline_task(
         session_id=session_id,
         session=session,

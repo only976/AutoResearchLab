@@ -63,6 +63,9 @@ def test_single_first_task_basic_execution(
     async def fake_validate_task_output_with_llm(*args, **kwargs):
         return True, "Valid"
 
+    async def fake_prepare_execution_runtime(*, enabled=True, image=None):
+        return {"enabled": enabled, "available": True, "connected": True, "image": image or "maars-task-python:latest"}
+
     async def mock_ensure_execution_container(**kwargs):
         return {
             "enabled": True,
@@ -73,9 +76,14 @@ def test_single_first_task_basic_execution(
 
     monkeypatch.setattr(runner_mod, "run_task_agent", fake_run_task_agent)
     monkeypatch.setattr(runner_mod, "validate_task_output_with_llm", fake_validate_task_output_with_llm)
+    monkeypatch.setattr(runner_mod, "prepare_execution_runtime", fake_prepare_execution_runtime)
     monkeypatch.setattr(runner_mod, "ensure_execution_container", mock_ensure_execution_container)
-    monkeypatch.setattr(runner_mod, "stop_execution_container", lambda x: None)
-    monkeypatch.setattr(runner_mod, "get_local_docker_status", lambda **k: {"enabled": True, "available": True})
+    async def fake_stop_execution_container(_container_name):
+        return None
+    monkeypatch.setattr(runner_mod, "stop_execution_container", fake_stop_execution_container)
+    async def fake_get_local_docker_status(**k):
+        return {"enabled": True, "available": True, "connected": True}
+    monkeypatch.setattr(runner_mod, "get_local_docker_status", fake_get_local_docker_status)
 
     # Run
     run_resp = client.post(
