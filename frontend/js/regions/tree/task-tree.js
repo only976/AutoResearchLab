@@ -13,8 +13,112 @@
 
     const escapeHtml = (window.MAARS?.utils?.escapeHtml) || ((s) => (s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')));
 
+    function deriveDisplayTitle(task) {
+        const explicit = String(task?.title || '').replace(/\s+/g, ' ').trim();
+        const raw = explicit || String(task?.description || task?.objective || '').replace(/\s+/g, ' ').trim();
+        if (!raw) return String(task?.task_id || 'Task');
+        const first = raw.split(/[\n\.;:!?]/, 1)[0].trim() || raw;
+
+        // Chinese text: short phrase (~12 chars)
+        if (/[\u4e00-\u9fff]/.test(first)) {
+            if (first.length <= 12) return first;
+            return first.slice(0, 12).replace(/[，。；：、\s]+$/g, '') + '…';
+        }
+
+        // Space-separated text: ~8 words
+        const words = first.split(/\s+/).filter(Boolean);
+        if (words.length > 8) return words.slice(0, 8).join(' ') + '…';
+        if (first.length <= 48) return first;
+        return first.slice(0, 47).trimEnd() + '…';
+    }
+
     let planAgentTreeData = [];
     let planAgentLayout = null;
+    let treeZoomLevel = 1.0;  // User-controlled zoom factor
+
+    // Load saved zoom level from sessionStorage
+    function loadZoomLevel() {
+        const saved = sessionStorage.getItem('maars-tree-zoom-level');
+        if (saved) {
+            treeZoomLevel = parseFloat(saved) || 1.0;
+        }
+    }
+
+    function saveZoomLevel() {
+        sessionStorage.setItem('maars-tree-zoom-level', String(treeZoomLevel));
+    }
+
+    function calculateAdaptiveScale(treeData, baseLayout, areaSelector) {
+        if (!baseLayout) return treeZoomLevel;
+
+        const ctx = getTreeContainer(areaSelector);
+        if (!ctx) return treeZoomLevel;
+
+        const containerWidth = ctx.area.clientWidth || 800;
+        const containerHeight = ctx.area.clientHeight || 600;
+
+        // Base layout dimensions (from backend, unscaled)
+        const baseWidth = baseLayout.width || 500;
+        const baseHeight = baseLayout.height || 400;
+
+        // Calculate scale to fit within container with some padding
+        const scaleByWidth = (containerWidth - 40) / baseWidth;
+        const scaleByHeight = (containerHeight - 40) / baseHeight;
+        const fitScale = Math.min(scaleByWidth, scaleByHeight, 2.0);  // Cap at 2.0x
+
+        // Title-based scaling: ensure nodes are wide enough for titles
+        // Estimate: each character needs ~7px for English, ~8px for Chinese
+        // Node base width is 180px in backend constants
+        let titleScale = 1.0;
+        if (treeData && Array.isArray(treeData)) {
+            treeData.forEach((task) => {
+                const title = deriveDisplayTitle(task) || '';
+                const isChinese = /[\u4e00-\u9fff]/.test(title);
+                const charWidth = isChinese ? 8 : 7;
+                const requiredWidth = Math.min(title.length * charWidth + 20, 350);  // Cap at 350px
+                if (requiredWidth > 180) {
+                    titleScale = Math.max(titleScale, requiredWidth / 180);
+                }
+            });
+        }
+
+        // Combine: use the larger of fit-to-viewport or title-based scale
+        const baseScale = Math.max(fitScale, titleScale);
+        return baseScale * treeZoomLevel;
+    }
+
+    function scaleLayout(layout, factor) {
+        if (!layout || !factor || factor === 1) return layout;
+        const nodes = layout.nodes || {};
+        const edges = Array.isArray(layout.edges) ? layout.edges : [];
+
+        const scaledNodes = {};
+        Object.entries(nodes).forEach(([id, n]) => {
+            scaledNodes[id] = {
+                ...n,
+                x: Number((n.x * factor).toFixed(1)),
+                y: Number((n.y * factor).toFixed(1)),
+                w: Number((n.w * factor).toFixed(1)),
+                h: Number((n.h * factor).toFixed(1)),
+            };
+        });
+
+        const scaledEdges = edges.map((e) => ({
+            ...e,
+            points: (e.points || []).map((pt) => [
+                Number(((pt?.[0] || 0) * factor).toFixed(1)),
+                Number(((pt?.[1] || 0) * factor).toFixed(1)),
+            ]),
+        }));
+
+        return {
+            ...layout,
+            nodes: scaledNodes,
+            edges: scaledEdges,
+            width: Number(((layout.width || 0) * factor).toFixed(1)),
+            height: Number(((layout.height || 0) * factor).toFixed(1)),
+        };
+    }
 
     function getTreeContainer(areaSelector) {
         const area = document.querySelector(areaSelector);
@@ -25,6 +129,7 @@
     function getTaskDataForPopover(task) {
         return {
             task_id: task.task_id,
+            title: task.title,
             description: task.description,
             objective: task.objective,
             dependencies: task.dependencies,
@@ -43,12 +148,18 @@
     function createTaskNodeEl(task) {
         const tid = task.task_id;
         const desc = (task.description || task.objective || '').trim() || tid || 'Task';
+        const title = deriveDisplayTitle(task);
 
         const el = document.createElement('div');
         el.className = 'tree-task';
         el.setAttribute('data-task-id', tid);
         el.setAttribute('data-task-data', JSON.stringify(getTaskDataForPopover(task)));
         el.setAttribute('title', desc);
+
+        const label = document.createElement('span');
+        label.className = 'tree-task-label';
+        label.textContent = title;
+        el.appendChild(label);
 
         return el;
     }
@@ -108,7 +219,9 @@
 
         if (tasks.length === 0 || !layout) return;
 
-        const { nodes, edges, width, height } = layout;
+        const adaptiveScale = calculateAdaptiveScale(treeData, layout, areaSelector);
+        const scaledLayout = scaleLayout(layout, adaptiveScale);
+        const { nodes, edges, width, height } = scaledLayout;
         if (!nodes) return;
 
         ctx.tree.style.width = width + 'px';
@@ -199,9 +312,96 @@
         ctx.tree.style.minHeight = '';
     }
 
+    function initZoomControls(areaSelector) {
+        // Create zoom controls if they don't exist
+        const ctx = getTreeContainer(areaSelector);
+        if (!ctx || ctx.area.querySelector('.tree-zoom-controls')) return;  // Already exists
+
+        const controlsDiv = document.createElement('div');
+        controlsDiv.className = 'tree-zoom-controls';
+        controlsDiv.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 4px;
+            font-size: 12px;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 100;
+        `;
+
+        const minusBtn = document.createElement('button');
+        minusBtn.className = 'tree-zoom-button';
+        minusBtn.textContent = '−';
+        minusBtn.style.cssText = `padding: 4px 8px; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5; border-radius: 3px;`;
+        minusBtn.onclick = () => changeZoomLevel(-0.1, areaSelector);
+
+        const zoomLabel = document.createElement('span');
+        zoomLabel.className = 'tree-zoom-label';
+        zoomLabel.textContent = `100%`;
+        zoomLabel.style.cssText = `width: 35px; text-align: center;`;
+
+        const plusBtn = document.createElement('button');
+        plusBtn.className = 'tree-zoom-button';
+        plusBtn.textContent = '+';
+        plusBtn.style.cssText = `padding: 4px 8px; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5; border-radius: 3px;`;
+        plusBtn.onclick = () => changeZoomLevel(0.1, areaSelector);
+
+        const resetBtn = document.createElement('button');
+        resetBtn.className = 'tree-zoom-reset';
+        resetBtn.textContent = 'Reset';
+        resetBtn.style.cssText = `padding: 4px 8px; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5; border-radius: 3px; font-size: 11px;`;
+        resetBtn.onclick = () => resetZoomLevel(areaSelector);
+
+        controlsDiv.appendChild(minusBtn);
+        controlsDiv.appendChild(zoomLabel);
+        controlsDiv.appendChild(plusBtn);
+        controlsDiv.appendChild(resetBtn);
+
+        ctx.area.style.position = 'relative';
+        ctx.area.appendChild(controlsDiv);
+    }
+
+    function changeZoomLevel(delta, areaSelector) {
+        treeZoomLevel = Math.max(0.5, Math.min(2.0, treeZoomLevel + delta));
+        saveZoomLevel();
+        updateZoomDisplay(areaSelector);
+        
+        // Re-render the tree with new zoom level
+        if (areaSelector === AREA.decomposition) {
+            renderFull(planAgentTreeData, planAgentLayout, areaSelector);
+        }
+    }
+
+    function resetZoomLevel(areaSelector) {
+        treeZoomLevel = 1.0;
+        saveZoomLevel();
+        updateZoomDisplay(areaSelector);
+        
+        // Re-render the tree with new zoom level
+        if (areaSelector === AREA.decomposition) {
+            renderFull(planAgentTreeData, planAgentLayout, areaSelector);
+        }
+    }
+
+    function updateZoomDisplay(areaSelector) {
+        const ctx = getTreeContainer(areaSelector);
+        if (!ctx) return;
+        const label = ctx.area.querySelector('.tree-zoom-label');
+        if (label) {
+            label.textContent = `${Math.round(treeZoomLevel * 100)}%`;
+        }
+    }
+
     function renderPlanAgentTree(treeData, layout) {
         if (!Array.isArray(treeData)) return;
+        loadZoomLevel();  // Load saved zoom before rendering
         renderFull(treeData, layout, AREA.decomposition);
+        initZoomControls(AREA.decomposition);
+        updateZoomDisplay(AREA.decomposition);
     }
 
     let popoverEl = null;
@@ -210,6 +410,7 @@
     let popoverKeydownHandler = null;
 
     function buildTaskDetailBody(task) {
+        const title = deriveDisplayTitle(task);
         const desc = (task.description || task.objective || '').trim() || '-';
         const deps = (task.dependencies || []).length > 0 ? (task.dependencies || []).join(', ') : 'None';
         const hasStatus = task.status != null;
@@ -236,7 +437,8 @@
             const optionalHtml = optionalList ? `<ul class="validation-optional">${optionalList}</ul>` : '';
             return `<div class="task-detail-row task-detail-validation"><span class="task-detail-label">Validation:</span><div class="task-detail-value">${vdesc}${criteriaHtml}${optionalHtml}</div></div>`;
         })() : '';
-        return `<div class="task-detail-row"><span class="task-detail-label">Description:</span><span class="task-detail-value">${escapeHtml(desc)}</span></div>
+        return `<div class="task-detail-row"><span class="task-detail-label">Title:</span><span class="task-detail-value">${escapeHtml(title)}</span></div>
+            <div class="task-detail-row"><span class="task-detail-label">Description:</span><span class="task-detail-value">${escapeHtml(desc)}</span></div>
                 <div class="task-detail-row"><span class="task-detail-label">Dependencies:</span><span class="task-detail-value">${escapeHtml(deps)}</span></div>
                 ${statusRow}
                 ${inputRow}
@@ -441,21 +643,37 @@
     });
 
     document.addEventListener('maars:restore-complete', (e) => {
-        const { treePayload, plan } = e.detail || {};
+        const { treePayload, plan, execution } = e.detail || {};
         if (treePayload?.treeData?.length) {
             renderPlanAgentTree(treePayload.treeData, treePayload.layout);
             if (plan?.qualityScore != null) updatePlanAgentQualityBadge(plan.qualityScore, plan.qualityComment);
+        }
+
+        // On page reload, execution may be idle so no realtime task-state events arrive.
+        // Apply persisted execution statuses from snapshot to restore node colors immediately.
+        const snapshotTasks = Array.isArray(execution?.tasks) ? execution.tasks : [];
+        if (snapshotTasks.length) {
+            updateTaskStates(snapshotTasks.map((t) => ({
+                task_id: t?.task_id,
+                status: t?.status || 'undone',
+            })).filter((t) => t.task_id));
         }
     });
 
     window.MAARS.taskTree = {
         aggregateStatus,
         renderPlanAgentTree,
-        renderExecutionTree: (data, layout) => renderFull(data, layout, AREA.execution),
+        renderExecutionTree: (data, layout) => {
+            loadZoomLevel();
+            renderFull(data, layout, AREA.execution);
+            initZoomControls(AREA.execution);
+            updateZoomDisplay(AREA.execution);
+        },
         clearPlanAgentTree: () => { clear(AREA.decomposition); updatePlanAgentQualityBadge(null); },
         clearExecutionTree: () => clear(AREA.execution),
         initClickHandlers,
         updatePlanAgentQualityBadge,
         updateTaskStates,
+        setTreeZoom: (level) => { treeZoomLevel = Math.max(0.5, Math.min(2.0, level)); saveZoomLevel(); },
     };
 })();

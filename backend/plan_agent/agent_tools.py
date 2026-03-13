@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import orjson
 
 from shared.graph import get_ancestor_path, get_parent_id
+from shared.task_title import ensure_task_title
 from shared.skill_utils import list_skills as _list_skills, load_skill as _load_skill, read_skill_file as _read_skill_file
 
 # Plan skills root: MAARS_PLAN_SKILLS_DIR env or backend/plan_agent/skills/
@@ -113,22 +114,23 @@ PLAN_AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "AddTasks",
-            "description": "Add child tasks to the plan after Decompose. Each task must have task_id, description, dependencies.",
+            "description": "Add child tasks to the plan after Decompose. Each task must have task_id, title, description, dependencies.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "parent_id": {"type": "string", "description": "Parent task ID (e.g. 0, 1)"},
                     "tasks": {
                         "type": "array",
-                        "description": "List of {task_id, description, dependencies}",
+                        "description": "List of {task_id, title, description, dependencies}. title is a 2-4 word phrase capturing the phase's core logic.",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "task_id": {"type": "string"},
+                                "title": {"type": "string", "description": "2-4 word title capturing the task's core logic (e.g. 'Data Collection', 'Model Training', '定义范围')"},
                                 "description": {"type": "string"},
                                 "dependencies": {"type": "array", "items": {"type": "string"}},
                             },
-                            "required": ["task_id", "description", "dependencies"],
+                            "required": ["task_id", "title", "description", "dependencies"],
                         },
                     },
                 },
@@ -289,6 +291,7 @@ async def execute_plan_agent_tool(
             deps = t.get("dependencies")
             if not isinstance(deps, list):
                 t["dependencies"] = []
+            ensure_task_title(t)
             all_tasks.append(t)
             pending_queue.append(t["task_id"])
         if on_tasks_batch:
@@ -320,6 +323,10 @@ async def execute_plan_agent_tool(
         description = args.get("description", "")
         ctx = args.get("context") or {}
         task = {"task_id": task_id, "description": description, "dependencies": []}
+        maybe_title = args.get("title")
+        if isinstance(maybe_title, str) and maybe_title.strip():
+            task["title"] = maybe_title.strip()
+        ensure_task_title(task)
         siblings = ctx.get("siblings") or []
         depth = ctx.get("depth", 0)
         atomicity_context = {
@@ -341,6 +348,10 @@ async def execute_plan_agent_tool(
         description = args.get("description", "")
         ctx = args.get("context") or {}
         parent_task = {"task_id": task_id, "description": description, "dependencies": []}
+        maybe_title = args.get("title")
+        if isinstance(maybe_title, str) and maybe_title.strip():
+            parent_task["title"] = maybe_title.strip()
+        ensure_task_title(parent_task)
         depth = ctx.get("depth", 0)
         siblings = ctx.get("siblings") or []
         try:
@@ -356,6 +367,10 @@ async def execute_plan_agent_tool(
         task_id = args.get("task_id", "")
         description = args.get("description", "")
         task = {"task_id": task_id, "description": description, "dependencies": []}
+        maybe_title = args.get("title")
+        if isinstance(maybe_title, str) and maybe_title.strip():
+            task["title"] = maybe_title.strip()
+        ensure_task_title(task)
         try:
             result = await format_fn(
                 task, on_thinking, abort_event, use_mock=use_mock, api_config=api_config, idea_id=idea_id, plan_id=plan_id,

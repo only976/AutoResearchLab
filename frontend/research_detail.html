@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research · Detail</title>
+    <script>
+        (function() {
+            document.documentElement.setAttribute('data-theme', 'black');
+        })();
+    </script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+    <button
+        id="appSidebarToggle"
+        class="app-sidebar-toggle"
+        type="button"
+        aria-label="Toggle sidebar"
+        aria-controls="appSidebar"
+        aria-expanded="false"
+    >
+        <span class="app-sidebar-toggle-icon" aria-hidden="true"></span>
+    </button>
+    <aside id="appSidebar" class="app-sidebar" aria-hidden="true">
+        <div id="appSidebarContent" class="app-sidebar-content" hidden></div>
+    </aside>
+
+    <div class="container">
+        <div id="settingsModal" class="modal">
+            <div class="modal-content modal-content--settings">
+                <div id="settingsForm" class="settings-form">
+                    <div class="settings-body">
+                        <aside class="settings-sidebar">
+                            <nav class="settings-nav" role="navigation">
+                                <button type="button" class="settings-nav-item" data-item="theme">
+                                    <span class="settings-nav-item-name">Theme</span>
+                                </button>
+                                <button type="button" class="settings-nav-item" data-item="ai">
+                                    <span class="settings-nav-item-name">AI Config</span>
+                                </button>
+                                <button type="button" class="settings-nav-item" data-item="db">
+                                    <span class="settings-nav-item-name">Data</span>
+                                </button>
+                            </nav>
+                            <button type="button" class="btn-ghost settings-save-btn" id="settingsSaveBtn">Save</button>
+                        </aside>
+                        <main class="settings-main" id="settingsMain">
+                            <!-- Theme -->
+                            <div class="settings-panel" id="settingsPanelTheme" data-panel="theme">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Theme</h3>
+                                    <div class="settings-theme-grid">
+                                        <button type="button" class="settings-theme-card" data-pick="light">
+                                            <div class="settings-theme-preview" data-preview="light">
+                                                <div class="stp-sidebar">
+                                                    <div class="stp-nav-line"></div>
+                                                    <div class="stp-nav-line stp-nav-active"></div>
+                                                    <div class="stp-nav-line"></div>
+                                                </div>
+                                                <div class="stp-main">
+                                                    <div class="stp-header"></div>
+                                                    <div class="stp-body">
+                                                        <div class="stp-line"></div>
+                                                        <div class="stp-line stp-line--short"></div>
+                                                        <div class="stp-line stp-line--med"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span class="settings-theme-label">Light</span>
+                                        </button>
+                                        <button type="button" class="settings-theme-card" data-pick="dark">
+                                            <div class="settings-theme-preview" data-preview="dark">
+                                                <div class="stp-sidebar">
+                                                    <div class="stp-nav-line"></div>
+                                                    <div class="stp-nav-line stp-nav-active"></div>
+                                                    <div class="stp-nav-line"></div>
+                                                </div>
+                                                <div class="stp-main">
+                                                    <div class="stp-header"></div>
+                                                    <div class="stp-body">
+                                                        <div class="stp-line"></div>
+                                                        <div class="stp-line stp-line--short"></div>
+                                                        <div class="stp-line stp-line--med"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span class="settings-theme-label">Dark</span>
+                                        </button>
+                                        <button type="button" class="settings-theme-card" data-pick="black">
+                                            <div class="settings-theme-preview" data-preview="black">
+                                                <div class="stp-sidebar">
+                                                    <div class="stp-nav-line"></div>
+                                                    <div class="stp-nav-line stp-nav-active"></div>
+                                                    <div class="stp-nav-line"></div>
+                                                </div>
+                                                <div class="stp-main">
+                                                    <div class="stp-header"></div>
+                                                    <div class="stp-body">
+                                                        <div class="stp-line"></div>
+                                                        <div class="stp-line stp-line--short"></div>
+                                                        <div class="stp-line stp-line--med"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span class="settings-theme-label">Black</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- AI Config (Mode + Preset) -->
+                            <div class="settings-panel" id="settingsPanelAi" data-panel="ai">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Agent Mode</h3>
+                                    <p class="settings-mode-desc">Select mode per agent: Mock (simulated), LLM (single-turn), Agent (ReAct loop).</p>
+                                    <div class="settings-mode-matrix" id="settingsModeMatrix">
+                                        <div class="settings-mode-matrix-header">
+                                            <span class="settings-mode-matrix-corner"></span>
+                                            <span class="settings-mode-matrix-col" data-col="mock">Mock</span>
+                                            <span class="settings-mode-matrix-col" data-col="llm">LLM</span>
+                                            <span class="settings-mode-matrix-col" data-col="agent">Agent</span>
+                                        </div>
+                                        <div class="settings-mode-matrix-row" data-row="ideaAgent">
+                                            <span class="settings-mode-matrix-label">Idea Agent</span>
+                                            <button type="button" class="settings-mode-cell" data-row="ideaAgent" data-col="mock">Mock</button>
+                                            <button type="button" class="settings-mode-cell" data-row="ideaAgent" data-col="llm">LLM</button>
+                                            <button type="button" class="settings-mode-cell" data-row="ideaAgent" data-col="agent">Agent</button>
+                                        </div>
+                                        <div class="settings-mode-matrix-row" data-row="planAgent">
+                                            <span class="settings-mode-matrix-label">Plan Agent</span>
+                                            <button type="button" class="settings-mode-cell" data-row="planAgent" data-col="mock">Mock</button>
+                                            <button type="button" class="settings-mode-cell" data-row="planAgent" data-col="llm">LLM</button>
+                                            <button type="button" class="settings-mode-cell" data-row="planAgent" data-col="agent">Agent</button>
+                                        </div>
+                                        <div class="settings-mode-matrix-row" data-row="taskAgent">
+                                            <span class="settings-mode-matrix-label">Task Agent</span>
+                                            <button type="button" class="settings-mode-cell" data-row="taskAgent" data-col="mock">Mock</button>
+                                            <button type="button" class="settings-mode-cell" data-row="taskAgent" data-col="llm">LLM</button>
+                                            <button type="button" class="settings-mode-cell" data-row="taskAgent" data-col="agent">Agent</button>
+                                        </div>
+                                        <div class="settings-mode-matrix-row" data-row="paperAgent">
+                                            <span class="settings-mode-matrix-label">Paper Agent</span>
+                                            <button type="button" class="settings-mode-cell" data-row="paperAgent" data-col="mock">Mock</button>
+                                            <button type="button" class="settings-mode-cell" data-row="paperAgent" data-col="llm">LLM</button>
+                                            <button type="button" class="settings-mode-cell" data-row="paperAgent" data-col="agent">Agent</button>
+                                        </div>
+                                    </div>
+                                    <div class="settings-idea-rag-row">
+                                        <label class="settings-toggle-row">
+                                            <input type="checkbox" id="ideaRAGEnabled" />
+                                            <span>Enable Idea Agent PDF RAG (index paper body for semantic search)</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Self-Reflection</h3>
+                                    <p class="settings-mode-desc">Agents self-evaluate and learn skills after task completion to improve quality over time.</p>
+                                    <div class="settings-reflection-controls">
+                                        <label class="settings-toggle-row">
+                                            <input type="checkbox" id="reflectionEnabled" />
+                                            <span>Enable self-reflection</span>
+                                        </label>
+                                        <div class="settings-field settings-field-inline">
+                                            <label for="reflectionMaxIterations">Max iterations</label>
+                                            <input type="number" id="reflectionMaxIterations" min="1" max="5" value="2" style="width:60px" />
+                                        </div>
+                                        <div class="settings-field settings-field-inline">
+                                            <label for="reflectionQualityThreshold">Quality threshold</label>
+                                            <input type="number" id="reflectionQualityThreshold" min="0" max="100" value="70" style="width:60px" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">API Preset</h3>
+                                    <div class="settings-preset-row">
+                                        <div class="settings-preset-list" id="settingsPresetList"></div>
+                                        <button type="button" class="settings-preset-add" id="settingsPresetAddBtn">+ New</button>
+                                    </div>
+                                    <div class="settings-preset-edit" id="settingsPresetEdit">
+                                        <h4 class="settings-preset-edit-title" id="settingsPresetEditTitle">Select preset</h4>
+                                        <div class="settings-fields">
+                                            <div class="settings-field">
+                                                <label for="presetLabel">Name</label>
+                                                <input type="text" id="presetLabel" placeholder="My Config" />
+                                            </div>
+                                            <div class="settings-field">
+                                                <label for="presetBaseUrl">Base URL</label>
+                                                <input type="url" id="presetBaseUrl" placeholder="https://api.openai.com/v1" />
+                                            </div>
+                                            <div class="settings-field">
+                                                <label for="presetApiKey">API Key</label>
+                                                <input type="password" id="presetApiKey" placeholder="sk-..." autocomplete="off" />
+                                            </div>
+                                            <div class="settings-field">
+                                                <label for="presetModel">Model</label>
+                                                <input type="text" id="presetModel" placeholder="gpt-4o" />
+                                            </div>
+                                        </div>
+                                        <div class="settings-actions">
+                                            <button type="button" id="settingsPresetDeleteBtn" class="btn-ghost">Delete preset</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Data -->
+                            <div class="settings-panel" id="settingsPanelDb" data-panel="db">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Data</h3>
+                                    <div class="settings-db-actions">
+                                        <button type="button" class="btn-default" id="settingsRestoreBtn">Restore recent plan</button>
+                                        <button type="button" class="btn-danger" id="settingsClearDbBtn">Clear all data</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <main class="main-content">
+            <section id="researchView" class="research-view">
+                <div class="research-topbar">
+                    <div class="research-breadcrumb" id="researchBreadcrumb">Research</div>
+                    <h2 class="research-title" id="researchTitle">Research</h2>
+                    <div class="research-stage-row">
+                        <nav class="research-stage-progress" aria-label="Research pipeline stages">
+                            <div class="research-stage-item" data-stage-item="refine">
+                                <button type="button" class="research-stage-btn" id="stageBtnRefine" data-stage="refine" aria-disabled="true" disabled>Refine</button>
+                                <div class="research-stage-meta" id="stageMetaRefine">idle</div>
+                                <div class="research-stage-actions">
+                                    <button type="button" class="research-stage-action-btn" id="stageRunRefine">Run</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageResumeRefine">Resume</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageRetryRefine">Retry</button>
+                                    <button type="button" class="research-stage-action-btn is-danger" id="stageStopRefine">Stop</button>
+                                </div>
+                            </div>
+                            <div class="research-stage-item" data-stage-item="plan">
+                                <button type="button" class="research-stage-btn" id="stageBtnPlan" data-stage="plan" aria-disabled="true" disabled>Plan</button>
+                                <div class="research-stage-meta" id="stageMetaPlan">idle</div>
+                                <div class="research-stage-actions">
+                                    <button type="button" class="research-stage-action-btn" id="stageRunPlan">Run</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageResumePlan">Resume</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageRetryPlan">Retry</button>
+                                    <button type="button" class="research-stage-action-btn is-danger" id="stageStopPlan">Stop</button>
+                                </div>
+                            </div>
+                            <div class="research-stage-item" data-stage-item="execute">
+                                <button type="button" class="research-stage-btn" id="stageBtnExecute" data-stage="execute" aria-disabled="true" disabled>Execute</button>
+                                <div class="research-stage-meta" id="stageMetaExecute">idle</div>
+                                <div class="research-stage-actions">
+                                    <button type="button" class="research-stage-action-btn" id="stageRunExecute">Run</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageResumeExecute">Resume</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageRetryExecute">Retry</button>
+                                    <button type="button" class="research-stage-action-btn is-danger" id="stageStopExecute">Stop</button>
+                                </div>
+                            </div>
+                            <div class="research-stage-item" data-stage-item="paper">
+                                <button type="button" class="research-stage-btn" id="stageBtnPaper" data-stage="paper" aria-disabled="true" disabled>Paper</button>
+                                <div class="research-stage-meta" id="stageMetaPaper">idle</div>
+                                <div class="research-stage-actions">
+                                    <button type="button" class="research-stage-action-btn" id="stageRunPaper">Run</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageResumePaper">Resume</button>
+                                    <button type="button" class="research-stage-action-btn" id="stageRetryPaper">Retry</button>
+                                    <button type="button" class="research-stage-action-btn is-danger" id="stageStopPaper">Stop</button>
+                                </div>
+                            </div>
+                        </nav>
+                    </div>
+                </div>
+
+                <div class="research-stage-panel" id="researchPanelRefine" data-stage-panel="refine" aria-label="Refine stage">
+                    <div class="research-stage-panel-inner">
+                        <div class="research-stage-card">
+                            <div class="research-stage-card-header">Refine Result</div>
+                            <div class="research-stage-card-body markdown-body" id="researchRefineLogic">—</div>
+                        </div>
+                        <details class="research-appendix" id="researchRefineAppendix">
+                            <summary class="research-appendix-summary">Appendix · References</summary>
+                            <div class="research-appendix-body markdown-body" id="researchRefineReferences">—</div>
+                        </details>
+                    </div>
+                </div>
+
+                <div class="plan-agent-thinking-tree-row research-stage-panel" id="researchDetailHost" data-stage-panel="workbench" aria-label="Plan and Execute workbench">
+                    <div class="plan-agent-tree-area" data-tree-area="plan">
+                        <div class="tree-view-tabs">
+                            <button type="button" class="tree-view-tab active" data-view="decomposition" aria-pressed="true">Decomposition</button>
+                            <button type="button" class="tree-view-tab" data-view="execution" aria-pressed="false">Execution</button>
+                            <button type="button" class="tree-view-tab" data-view="output" aria-pressed="false">Output</button>
+                        </div>
+                        <div class="tree-view-panel view-decomposition active" data-view-panel="decomposition">
+                            <div class="plan-agent-quality-badge" id="planAgentQualityBadge" title="" style="display: none;"></div>
+                            <div class="tree-container">
+                                <div class="tasks-tree plan-agent-tasks-tree"></div>
+                            </div>
+                        </div>
+                        <div class="tree-view-panel view-execution" data-view-panel="execution">
+                            <div class="plan-agent-execution-tree-area" data-tree-area="execution">
+                                <div class="research-execution-runtime" id="researchExecutionRuntime">
+                                    <span class="research-execution-runtime-badge" id="researchExecutionRuntimeBadge">Docker: checking…</span>
+                                    <span class="research-execution-runtime-meta" id="researchExecutionRuntimeMeta"></span>
+                                </div>
+                                <div class="tree-container">
+                                    <div class="tasks-tree plan-agent-execution-tree"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tree-view-panel view-output" data-view-panel="output">
+                            <div class="task-agent-output-area plan-agent-output-area" id="taskAgentOutputArea">
+                                <div class="task-agent-output-content markdown-body" id="taskAgentOutputContent"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="research-execute-splitter" id="researchExecuteSplitter" role="separator" aria-orientation="vertical" aria-label="Resize execution layout"></div>
+                    <div class="plan-agent-thinking-area" id="planAgentThinkingArea">
+                        <div class="plan-agent-thinking-content markdown-body" id="planAgentThinkingContent"></div>
+                        <div class="plan-agent-thinking-placeholder" id="planAgentThinkingPlaceholder">Thinking shows reasoning; Output shows final artifacts.</div>
+
+                        <div class="research-execute-stream" id="researchExecuteStream" hidden>
+                            <div class="research-execute-stream-header">
+                                <span>Execution Stream</span>
+                                <button type="button" class="research-execute-stream-toggle-all" id="researchExecuteToggleAllBtn">Collapse All</button>
+                            </div>
+                            <div class="research-execute-stream-body" id="researchExecuteStreamBody">—</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="research-stage-panel" id="researchPanelPaper" data-stage-panel="paper" aria-label="Paper stage">
+                    <div class="research-stage-panel-inner">
+                        <div class="research-stage-card research-stage-card--fill">
+                            <div class="research-stage-card-header">Paper</div>
+                            <div class="research-stage-card-body markdown-body" id="researchPaperBody">—</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="taskAgentOutputModal" class="task-agent-output-modal" aria-hidden="true">
+        <div class="task-agent-output-modal-backdrop"></div>
+        <div class="task-agent-output-modal-dialog">
+            <div class="task-agent-output-modal-header">
+                <span class="task-agent-output-modal-title" id="taskAgentOutputModalTitle">Task Output</span>
+                <span class="task-agent-output-modal-actions">
+                    <button type="button" class="task-agent-output-modal-download" id="taskAgentOutputModalDownload" aria-label="Download" title="Download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16"/><path d="M7 15l5 5 5-5"/></svg></button>
+                    <button type="button" class="task-agent-output-modal-close" id="taskAgentOutputModalClose" aria-label="Close">×</button>
+                </span>
+            </div>
+            <div class="task-agent-output-modal-body markdown-body" id="taskAgentOutputModalBody"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="js/core/utils.js"></script>
+    <script src="js/ui/toast.js"></script>
+    <script src="js/core/config.js"></script>
+    <script src="js/core/logger.js"></script>
+    <script src="js/core/state.js"></script>
+    <script src="js/regions/tree/task-tree.js"></script>
+    <script src="js/ui/theme.js"></script>
+    <script src="js/api/api.js"></script>
+    <script src="js/flows/task.js"></script>
+    <script src="js/flows/research.js"></script>
+    <script src="js/regions/output.js"></script>
+    <script src="js/regions/thinking.js"></script>
+    <script src="js/ws/handlers/thinking-handler.js"></script>
+    <script src="js/ws/websocket.js"></script>
+    <script src="js/ui/settings.js"></script>
+    <script src="js/ui/sidebar.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

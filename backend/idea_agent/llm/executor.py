@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import orjson
+from loguru import logger
 
 from shared.constants import TEMP_CREATIVE, TEMP_EXTRACT
 from shared.llm_client import chat_completion, merge_phase_config
@@ -242,7 +243,8 @@ async def refine_idea_from_papers(
         )
         text = response if isinstance(response, str) else str(response)
         return (text or "").strip()
-    except Exception:
+    except Exception as e:
+        logger.warning("Refine idea (non-stream) failed: {}", e)
         return ""
 
 
@@ -306,5 +308,6 @@ async def refine_idea_from_papers_stream(
         )
         text = full_content if isinstance(full_content, str) else str(full_content)
         return (text or "").strip()
-    except Exception:
+    except Exception as e:
+        logger.warning("Refine idea (stream) failed: {}", e)
         return ""

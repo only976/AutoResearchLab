@@ -28,6 +28,14 @@ async def get_idea_route(idea_id: str = Query("test", alias="ideaId")):
 async def _run_collect_inner(session_id: str, state, idea_id: str, idea: str, limit: int, abort_event=None):
     """后台执行文献收集，通过 WebSocket 回传数据。"""
     config = await get_effective_config()
+    logger.info(
+        "Idea run start session_id={} idea_id={} chars={} limit={} mode={}",
+        session_id,
+        idea_id,
+        len((idea or "").strip()),
+        limit,
+        "agent" if config.get("ideaAgentMode") else ("mock" if config.get("ideaUseMock") else "llm"),
+    )
     on_thinking = build_thinking_emitter(
         api_state.sio,
         event_name="idea-thinking",
@@ -77,6 +85,14 @@ async def _run_collect_inner(session_id: str, state, idea_id: str, idea: str, li
         )
         result = reflected["output"]
         reflection_data = reflected.get("reflection")
+        logger.info(
+            "Idea run result idea_id={} keywords={} papers={} refined_chars={} reflection_iterations={}",
+            idea_id,
+            len(result.get("keywords", []) or []),
+            len(result.get("papers", []) or []),
+            len((result.get("refined_idea") or "").strip()),
+            (reflection_data or {}).get("iterations", 0),
+        )
 
         idea_data = {
             "idea": idea,
@@ -98,7 +114,9 @@ async def _run_collect_inner(session_id: str, state, idea_id: str, idea: str, li
                 "skillsCreated": [s["name"] for s in reflection_data.get("skills_created", [])],
             }
         await api_state.emit(session_id, "idea-complete", complete_payload)
+        logger.info("Idea run complete session_id={} idea_id={}", session_id, idea_id)
     except asyncio.CancelledError:
+        logger.warning("Idea run cancelled session_id={} idea_id={}", session_id, idea_id)
         await api_state.emit_safe(
             session_id,
             "idea-error",
@@ -107,7 +125,7 @@ async def _run_collect_inner(session_id: str, state, idea_id: str, idea: str, li
         )
         raise
     except Exception as e:
-        logger.warning("Idea Agent error: %s", e)
+        logger.exception("Idea Agent error session_id={} idea_id={}", session_id, idea_id)
         await api_state.emit_safe(
             session_id,
             "idea-error",

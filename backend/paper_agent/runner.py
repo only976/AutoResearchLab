@@ -1,6 +1,9 @@
 """
-Paper Agent - 单轮 LLM 管道实现。
-与 idea/plan/task 对齐：Mock 模式依赖 test/mock-ai/paper.json，使用 mock_chat_completion 流式输出。
+Paper Agent implementation.
+
+- Mock mode: stream fixed output from test/mock-ai/paper.json
+- LLM mode: single-pass full paper drafting
+- Agent mode: outline -> section drafting -> assembly MVP
 """
 
 import json
@@ -18,6 +21,21 @@ MOCK_AI_DIR = PAPER_DIR.parent / "test" / "mock-ai"
 MOCK_KEY = "_default"
 
 _mock_cache: Dict[str, dict] = {}
+
+
+async def _emit_thinking(on_thinking: Optional[Callable[..., Any]], chunk: str, operation: str = "Paper") -> None:
+    if not on_thinking or not chunk:
+        return
+    r = on_thinking(chunk, None, operation, None)
+    if hasattr(r, "__await__"):
+        await r
+
+
+def _truncate_text(value: Any, limit: int = 1200) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
 
 
 def _get_mock_cached() -> dict:
@@ -70,6 +88,250 @@ def _synthesize_conclusion_from_outputs(outputs: dict) -> dict:
     }
 
 
+def _build_output_digest(outputs: dict) -> list[dict]:
+    digest = []
+    for task_id, out in (outputs or {}).items():
+        if isinstance(out, dict):
+            content = out.get("content") or out.get("summary") or json.dumps(out, ensure_ascii=False)
+        else:
+            content = str(out)
+        digest.append({
+            "task_id": task_id,
+            "summary": _truncate_text(content, 1000),
+        })
+    return digest[:24]
+
+
+def _format_instruction(format_type: str) -> str:
+    if format_type.lower() == "latex":
+        return """Output the paper in LaTeX format.
+Use standard LaTeX syntax with proper sectioning.
+Use \\section{}, \\subsection{}, and academic writing style.
+Include placeholders like \\includegraphics{filename.png} where suitable.
+"""
+    return """Output the paper in Markdown format.
+Use markdown headers (#, ##, ###) and academic writing style.
+Include placeholders like `[Figure: filename.png]` where suitable.
+"""
+
+
+async def _run_single_pass_llm(
+    *,
+    plan: dict,
+    outputs: dict,
+    api_config: dict,
+    format_type: str,
+    on_thinking: Optional[Callable[..., Any]],
+    abort_event: Optional[Any],
+) -> str:
+    plan_fmt = _maars_plan_to_paper_format(plan)
+    conclusion = _synthesize_conclusion_from_outputs(outputs or {})
+    artifacts = [f"{tid}_output" for tid in (outputs or {}).keys()]
+
+    system_instruction = """You are an academic writing assistant.
+Your task is to write a comprehensive research paper based on the provided plan and task outputs.
+The paper should follow a standard academic structure:
+1. Title
+2. Abstract
+3. Introduction
+4. Methodology
+5. Results
+6. Discussion
+7. Conclusion
+8. References
+
+Prefer concrete findings from the outputs over generic filler text.
+If some evidence is missing, explicitly state the limitation instead of fabricating results.
+
+""" + _format_instruction(format_type)
+
+    user_prompt = f"""
+Experiment Title: {plan_fmt.get('title', 'Untitled')}
+Goal: {plan_fmt.get('goal', 'N/A')}
+
+Methodology Steps:
+{json.dumps(plan_fmt.get('steps', []), ensure_ascii=False, indent=2)}
+
+Conclusion & Findings:
+{json.dumps(conclusion, ensure_ascii=False, indent=2)}
+
+Task Output Digest:
+{json.dumps(_build_output_digest(outputs or {}), ensure_ascii=False, indent=2)}
+
+Available Artifacts (Figures/Tables):
+{', '.join(artifacts)}
+
+Please write the full paper.
+"""
+
+    messages = [
+        {"role": "system", "content": system_instruction},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    cfg = merge_phase_config(api_config, "paper")
+
+    async def on_chunk(chunk: str):
+        await _emit_thinking(on_thinking, chunk, "Paper")
+
+    result = await chat_completion(
+        messages,
+        cfg,
+        on_chunk=on_chunk,
+        abort_event=abort_event,
+        stream=True,
+    )
+    return result if isinstance(result, str) else str(result or "")
+
+
+async def _run_agent_mvp(
+    *,
+    plan: dict,
+    outputs: dict,
+    api_config: dict,
+    format_type: str,
+    on_thinking: Optional[Callable[..., Any]],
+    abort_event: Optional[Any],
+) -> str:
+    cfg = merge_phase_config(api_config, "paper")
+    plan_fmt = _maars_plan_to_paper_format(plan)
+    output_digest = _build_output_digest(outputs or {})
+
+    await _emit_thinking(on_thinking, "[Paper Agent] Building paper outline...\n", "PaperPlan")
+
+    outline_messages = [
+        {
+            "role": "system",
+            "content": """You are a paper-planning agent.
+Create a compact JSON outline for an academic paper.
+Return JSON only with this schema:
+{
+  \"title\": string,
+  \"abstract_focus\": string,
+  \"sections\": [
+    {\"heading\": string, \"purpose\": string, \"task_ids\": [string]}
+  ]
+}
+Rules:
+- Produce 5 to 7 sections.
+- Use task_ids only from the provided digest when relevant.
+- Keep headings academic and specific.
+""",
+        },
+        {
+            "role": "user",
+            "content": f"""
+Research Goal:
+{plan_fmt.get('goal', 'N/A')}
+
+Plan Steps:
+{json.dumps(plan_fmt.get('steps', []), ensure_ascii=False, indent=2)}
+
+Task Output Digest:
+{json.dumps(output_digest, ensure_ascii=False, indent=2)}
+""",
+        },
+    ]
+
+    outline_raw = await chat_completion(
+        outline_messages,
+        cfg,
+        abort_event=abort_event,
+        stream=False,
+        response_format={"type": "json_object"},
+    )
+
+    if not isinstance(outline_raw, str):
+        outline_raw = str(outline_raw or "")
+    try:
+        outline = json.loads(outline_raw)
+    except json.JSONDecodeError:
+        logger.warning("Paper Agent outline JSON parse failed; falling back to single-pass LLM")
+        return await _run_single_pass_llm(
+            plan=plan,
+            outputs=outputs,
+            api_config=api_config,
+            format_type=format_type,
+            on_thinking=on_thinking,
+            abort_event=abort_event,
+        )
+
+    title = str(outline.get("title") or plan_fmt.get("title") or "Untitled").strip()
+    abstract_focus = str(outline.get("abstract_focus") or plan_fmt.get("goal") or "").strip()
+    sections = outline.get("sections") or []
+    if not isinstance(sections, list) or not sections:
+        return await _run_single_pass_llm(
+            plan=plan,
+            outputs=outputs,
+            api_config=api_config,
+            format_type=format_type,
+            on_thinking=on_thinking,
+            abort_event=abort_event,
+        )
+
+    rendered_sections: list[str] = []
+    for idx, section in enumerate(sections, start=1):
+        heading = str(section.get("heading") or f"Section {idx}").strip()
+        purpose = str(section.get("purpose") or "").strip()
+        task_ids = [str(tid).strip() for tid in (section.get("task_ids") or []) if str(tid).strip()]
+        relevant_outputs = [item for item in output_digest if item.get("task_id") in task_ids] or output_digest[:6]
+
+        await _emit_thinking(on_thinking, f"[Paper Agent] Drafting section {idx}/{len(sections)}: {heading}\n", "PaperWrite")
+
+        section_messages = [
+            {
+                "role": "system",
+                "content": """You are a research-writing agent drafting one section of a paper.
+Write only the requested section content.
+Be evidence-grounded, concise, and academic.
+Do not invent experiments or citations not supported by the inputs.
+""" + _format_instruction(format_type),
+            },
+            {
+                "role": "user",
+                "content": f"""
+Paper Title: {title}
+Paper Goal: {plan_fmt.get('goal', 'N/A')}
+Abstract Focus: {abstract_focus}
+Section Heading: {heading}
+Section Purpose: {purpose}
+Relevant Task Outputs:
+{json.dumps(relevant_outputs, ensure_ascii=False, indent=2)}
+
+Write only this section.
+""",
+            },
+        ]
+
+        section_text = await chat_completion(
+            section_messages,
+            cfg,
+            on_chunk=None,
+            abort_event=abort_event,
+            stream=False,
+        )
+        section_text = section_text if isinstance(section_text, str) else str(section_text or "")
+
+        if format_type.lower() == "latex":
+            rendered_sections.append(f"\\section{{{heading}}}\n{section_text.strip()}\n")
+        else:
+            rendered_sections.append(f"## {heading}\n\n{section_text.strip()}\n")
+
+    await _emit_thinking(on_thinking, "[Paper Agent] Assembling final draft...\n", "PaperAssemble")
+
+    if format_type.lower() == "latex":
+        return (
+            f"\\section*{{Abstract}}\n{abstract_focus}\n\n"
+            + "\n".join(rendered_sections)
+        ).strip()
+
+    return (
+        f"# {title}\n\n"
+        f"> Abstract focus: {abstract_focus}\n\n"
+        + "\n".join(rendered_sections)
+    ).strip()
+
+
 async def run_paper_agent(
     plan: dict,
     outputs: dict,
@@ -78,11 +340,7 @@ async def run_paper_agent(
     on_thinking: Optional[Callable[..., Any]] = None,
     abort_event: Optional[Any] = None,
 ) -> str:
-    """
-    单轮 LLM 生成论文草稿。
-    返回 Markdown 或 LaTeX 格式的论文内容。
-    Mock 模式：从 test/mock-ai/paper.json 加载，通过 mock_chat_completion 流式输出。
-    """
+    """Generate paper draft in mock / llm / agent mode."""
     use_mock = api_config.get("paperUseMock", True)
     if use_mock:
         mock = _load_mock_response()
@@ -103,77 +361,25 @@ async def run_paper_agent(
             abort_event=abort_event,
         )
         return content or ""
-
-    # Agent 模式占位：paperAgentMode=True 时暂回退到 LLM 管道，待 Phase 3 实现工具调用
-    if api_config.get("paperAgentMode", False):
-        logger.info("Paper Agent mode selected but not yet implemented; falling back to LLM pipeline")
-
-    plan_fmt = _maars_plan_to_paper_format(plan)
-    conclusion = _synthesize_conclusion_from_outputs(outputs or {})
-    artifacts = [f"{tid}_output" for tid in (outputs or {}).keys()]
-
-    if format_type.lower() == "latex":
-        format_instruction = """Output the paper in LaTeX format.
-Use standard LaTeX syntax with proper document structure.
-Include placeholders for figures like \\includegraphics{filename.png} where appropriate based on the available artifacts.
-"""
-    else:
-        format_instruction = """Output the paper in Markdown format.
-Use standard markdown headers (#, ##, ###).
-Include placeholders for figures like `[Figure: filename.png]` where appropriate based on the available artifacts.
-"""
-
-    system_instruction = """You are an academic writing assistant.
-Your task is to write a comprehensive research paper based on the provided experiment plan, results, and conclusion.
-The paper should follow standard academic structure:
-1. Title
-2. Abstract
-3. Introduction (Background & Motivation)
-4. Methodology (Experimental Setup)
-5. Results (Key Findings & Evidence)
-6. Discussion (Implications & Limitations)
-7. Conclusion
-8. References (Mocked if necessary, but strictly written according to APA format)
-
-""" + format_instruction
-
-    user_prompt = f"""
-Experiment Title: {plan_fmt.get('title', 'Untitled')}
-Goal: {plan_fmt.get('goal', 'N/A')}
-
-Methodology Steps:
-{json.dumps(plan_fmt.get('steps', []), indent=2)}
-
-Conclusion & Findings:
-{json.dumps(conclusion, indent=2)}
-
-Available Artifacts (Figures/Tables):
-{', '.join(artifacts)}
-
-Please write the full paper.
-"""
-
-    messages = [
-        {"role": "system", "content": system_instruction},
-        {"role": "user", "content": user_prompt},
-    ]
-
-    cfg = merge_phase_config(api_config, "paper")
-
-    async def on_chunk(chunk: str):
-        if on_thinking and chunk:
-            r = on_thinking(chunk, None, "Paper", None)
-            if hasattr(r, "__await__"):
-                await r
-
     try:
-        result = await chat_completion(
-            messages,
-            cfg,
-            on_chunk=on_chunk,
+        if api_config.get("paperAgentMode", False):
+            logger.info("Paper Agent mode selected; running agent-style MVP pipeline")
+            return await _run_agent_mvp(
+                plan=plan,
+                outputs=outputs,
+                api_config=api_config,
+                format_type=format_type,
+                on_thinking=on_thinking,
+                abort_event=abort_event,
+            )
+
+        return await _run_single_pass_llm(
+            plan=plan,
+            outputs=outputs,
+            api_config=api_config,
+            format_type=format_type,
+            on_thinking=on_thinking,
             abort_event=abort_event,
-            stream=True,
         )
-        return result if isinstance(result, str) else str(result or "")
     except Exception as e:
         return f"Error generating paper: {str(e)}"

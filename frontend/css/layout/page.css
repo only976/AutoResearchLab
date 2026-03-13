@@ -11,6 +11,14 @@
     gap: 12px;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
 .header-title { flex: 1; min-width: 0; }
 .header-title h1, .header-title .subtitle { text-align: center; }
 .header-title .subtitle { margin-bottom: 0; }

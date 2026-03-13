@@ -103,17 +103,22 @@
     }
 
     async function runExecution() {
+        if (!executionBtn) return;
         const { ideaId, planId } = await cfg.resolvePlanIds();
+        if (!ideaId || !planId) {
+            alert('Current research has no valid plan yet. Please finish Refine/Plan first.');
+            return;
+        }
         const btn = executionBtn;
         const originalText = btn.textContent;
         document.dispatchEvent(new CustomEvent('maars:task-start'));
         document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'execution' } }));
         startExecutionUI();
         try {
-            let socket = window.MAARS?.state?.socket;
-            if (!socket || !socket.connected) {
-                socket = await window.MAARS.ws?.requireConnected?.();
-                if (!socket || !socket.connected) {
+            let stream = window.MAARS?.state?.es;
+            if (!stream || stream.readyState !== 1) {
+                stream = await window.MAARS.ws?.requireConnected?.();
+                if (!stream || stream.readyState !== 1) {
                     resetExecutionButtons();
                     return;
                 }
@@ -147,9 +152,21 @@
         if (stopExecutionBtn) stopExecutionBtn.style.display = 'none';
     }
 
-    async function generateExecutionLayout() {
+    async function generateExecutionLayout(explicitIds) {
         try {
-            const { ideaId, planId } = await cfg.resolvePlanIds();
+            if (state.executionRunning) {
+                console.warn('Skip layout update: execution is running');
+                return;
+            }
+            const ids = explicitIds && explicitIds.ideaId && explicitIds.planId
+                ? explicitIds
+                : await cfg.resolvePlanIds();
+            const ideaId = ids?.ideaId || '';
+            const planId = ids?.planId || '';
+            if (!ideaId || !planId) {
+                console.warn('Skip execution layout generation: missing ideaId/planId', { ideaId, planId });
+                return;
+            }
             const genRes = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/execution/generate-from-plan`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -159,7 +176,7 @@
             if (!genRes.ok) throw new Error(genData.error || 'Failed to generate execution from plan');
             const execData = genData.execution;
             if (!execData || !execData.tasks?.length) {
-                alert('No atomic tasks. Plan first.');
+                alert('Current plan has no executable atomic tasks. Refine/Plan must finish successfully first.');
                 return;
             }
             const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/plan/layout`, {
@@ -169,7 +186,13 @@
             });
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.error || 'Failed to generate layout');
+                const msg = String(error.error || 'Failed to generate layout');
+                // Benign race: backend disallows layout changes during execution.
+                if (msg.includes('Cannot set layout while execution is running')) {
+                    console.warn('Layout update blocked while running; ignoring.');
+                    return;
+                }
+                throw new Error(msg);
             }
             const data = await response.json();
             state.executionLayout = data.layout;
@@ -180,7 +203,12 @@
             if (socket && socket.connected) socket.emit('execution-layout', { layout: state.executionLayout });
         } catch (error) {
             console.error('Error generating layout:', error);
-            alert('Error: ' + error.message);
+            const msg = String(error?.message || error || '');
+            if (msg.includes('Cannot set layout while execution is running')) {
+                console.warn('Layout update blocked while running; ignoring.');
+                return;
+            }
+            alert('Error: ' + msg);
         }
     }
 
@@ -290,12 +318,23 @@
     function onExecutionSync(e) {
         const data = e?.detail;
         if (!data?.tasks?.length) return;
+        // Track running flag so we can avoid layout mutations mid-execution.
+        state.executionRunning = !!data.running;
         handleExecutionSync(data);
     }
 
     function onPlanCompleteForLayout(e) {
         const data = e?.detail;
-        if (data && generateExecutionLayout) generateExecutionLayout();
+        if (!data) return;
+        if (state.executionRunning) return;
+        if (state.executionLayout) return;
+        const ideaId = String(data.ideaId || '').trim();
+        const planId = String(data.planId || '').trim();
+        if (!ideaId || !planId) {
+            console.warn('Skip plan-complete layout generation: missing plan identifiers', data);
+            return;
+        }
+        if (generateExecutionLayout) generateExecutionLayout({ ideaId, planId });
     }
 
     function onTaskRetry(e) {

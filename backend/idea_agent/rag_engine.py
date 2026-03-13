@@ -140,6 +140,10 @@ class IdeaRAGEngine:
         """
         if not self._init():
             return "Error: RAG dependencies not available (qdrant-client, sentence-transformers, pypdf)"
+        try:
+            logger.info("Idea RAG Engine: indexing papers=%d", len(papers or []))
+        except Exception:
+            pass
         from qdrant_client.models import Distance, PointStruct, VectorParams
 
         all_points = []
@@ -165,6 +169,7 @@ class IdeaRAGEngine:
                     )
                 )
         if not all_points:
+            logger.info("Idea RAG Engine: no chunks extracted from PDFs")
             return "No papers indexed (no PDF content extracted)."
         try:
             if self._client.collection_exists(self.COLLECTION_NAME):
@@ -183,7 +188,9 @@ class IdeaRAGEngine:
             u = payload.get("url", "")
             if u:
                 urls.add(u)
-        return f"Indexed {len(urls)} papers."
+        msg = f"Indexed {len(urls)} papers."
+        logger.info("Idea RAG Engine: %s", msg)
+        return msg
 
     async def query(self, query: str, limit: int = 30) -> str:
         """
@@ -192,6 +199,7 @@ class IdeaRAGEngine:
         if not self._init():
             return "Error: RAG not available"
         try:
+            logger.info("Idea RAG Engine: query limit=%d text=%r", limit, (query or "")[:200])
             vector = self._encoder.encode(query).tolist()
             result = self._client.query_points(
                 collection_name=self.COLLECTION_NAME, query_vector=vector, limit=limit
@@ -202,7 +210,9 @@ class IdeaRAGEngine:
                 title = payload.get("title", "Unknown")
                 text = payload.get("text", "")
                 lines.append(f"[Source ID: {i}] (Title: {title})\n{text}")
-            return "\n\n".join(lines) if lines else "No relevant chunks found."
+            out = "\n\n".join(lines) if lines else "No relevant chunks found."
+            logger.info("Idea RAG Engine: query result chars=%d", len(out))
+            return out
         except Exception as e:
             logger.warning("RAG query failed: %s", e)
             return f"Error: {str(e)}"

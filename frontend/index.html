@@ -228,48 +228,14 @@
         </div>
         
         <main class="main-content">
-            <div class="idea-input-row">
-                <input type="text" id="ideaInput" class="idea-input" placeholder="Enter your research idea..." />
-                <button id="refineIdeaBtn">Refine</button>
-                <button id="stopRefineBtn" class="stop-btn" style="display: none;">Stop</button>
-                <button id="generatePlanBtn">Plan</button>
-                <button id="stopPlanBtn" class="stop-btn" style="display: none;">Stop</button>
-                <button id="executionBtn">Execute</button>
-                <button id="stopExecutionBtn" class="stop-btn" style="display: none;">Stop</button>
-                <button id="generatePaperBtn">Write</button>
-                <button id="stopPaperBtn" class="stop-btn" style="display: none;">Stop</button>
-            </div>
-            <div class="plan-agent-thinking-tree-row">
-                <div class="plan-agent-tree-area" data-tree-area="plan">
-                    <div class="tree-view-tabs">
-                        <button type="button" class="tree-view-tab active" data-view="decomposition" aria-pressed="true">Decomposition</button>
-                        <button type="button" class="tree-view-tab" data-view="execution" aria-pressed="false">Execution</button>
-                        <button type="button" class="tree-view-tab" data-view="output" aria-pressed="false">Output</button>
-                    </div>
-                    <div class="tree-view-panel view-decomposition active" data-view-panel="decomposition">
-                        <div class="plan-agent-quality-badge" id="planAgentQualityBadge" title="" style="display: none;"></div>
-                        <div class="tree-container">
-                            <div class="tasks-tree plan-agent-tasks-tree"></div>
-                        </div>
-                    </div>
-                    <div class="tree-view-panel view-execution" data-view-panel="execution">
-                        <div class="plan-agent-execution-tree-area" data-tree-area="execution">
-                            <div class="tree-container">
-                                <div class="tasks-tree plan-agent-execution-tree"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tree-view-panel view-output" data-view-panel="output">
-                        <div class="task-agent-output-area plan-agent-output-area" id="taskAgentOutputArea">
-                            <div class="task-agent-output-content markdown-body" id="taskAgentOutputContent"></div>
-                        </div>
+            <section id="homeView" class="home-view">
+                <div class="home-view-inner">
+                    <div class="home-view-prompt">
+                        <input type="text" id="researchPromptInput" class="idea-input home-view-input" placeholder="Ask anything to start a new research..." />
+                        <button id="createResearchBtn" type="button">Create</button>
                     </div>
                 </div>
-                <div class="plan-agent-thinking-area" id="planAgentThinkingArea">
-                    <div class="plan-agent-thinking-content markdown-body" id="planAgentThinkingContent"></div>
-                    <div class="plan-agent-thinking-placeholder" id="planAgentThinkingPlaceholder">Thinking shows reasoning; Output shows final artifacts.</div>
-                </div>
-            </div>
+            </section>
         </main>
     </div>
 
@@ -288,22 +254,20 @@
         </div>
     </div>
 
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="js/core/utils.js"></script>
     <script src="js/ui/toast.js"></script>
     <script src="js/core/config.js"></script>
+    <script src="js/core/logger.js"></script>
     <script src="js/core/state.js"></script>
     <script src="js/regions/tree/task-tree.js"></script>
     <script src="js/ui/theme.js"></script>
 
     <script src="js/api/api.js"></script>
-    <script src="js/flows/idea.js"></script>
-    <script src="js/flows/plan.js"></script>
     <script src="js/flows/task.js"></script>
-    <script src="js/flows/paper.js"></script>
+    <script src="js/flows/research.js"></script>
     <script src="js/regions/output.js"></script>
     <script src="js/regions/thinking.js"></script>
     <script src="js/ws/handlers/thinking-handler.js"></script>

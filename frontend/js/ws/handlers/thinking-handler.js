@@ -14,25 +14,43 @@
     }
 
     /**
-     * 注册 thinking 相关 Socket 事件。
-     * @param {object} socket - Socket.io 实例
+     * 注册 thinking 相关 realtime 事件。
+     * @param {object} transport - Socket.io 实例 (on) 或 EventSource (addEventListener)
      */
-    function register(socket) {
-        if (!socket) return;
+    function register(transport) {
+        if (!transport) return;
         const thinking = window.MAARS?.thinking;
         if (!thinking?.appendChunk) return;
 
         EVENTS.forEach((eventName) => {
-            socket.on(eventName, (data) => {
-                const source = (data && data.source) || sourceFromEvent(eventName);
-                thinking.appendChunk(
-                    (data && data.chunk) || '',
-                    data && data.taskId,
-                    data && data.operation,
-                    data && data.scheduleInfo,
-                    source
-                );
-            });
+            if (typeof transport.on === 'function') {
+                transport.on(eventName, (data) => {
+                    const source = (data && data.source) || sourceFromEvent(eventName);
+                    thinking.appendChunk(
+                        (data && data.chunk) || '',
+                        data && data.taskId,
+                        data && data.operation,
+                        data && data.scheduleInfo,
+                        source
+                    );
+                });
+            } else if (typeof transport.addEventListener === 'function') {
+                transport.addEventListener(eventName, (e) => {
+                    let data = null;
+                    try { data = e?.data ? JSON.parse(e.data) : null; } catch (_) { data = null; }
+                    const source = (data && data.source) || sourceFromEvent(eventName);
+                    try {
+                        document.dispatchEvent(new CustomEvent(`maars:${eventName}`, { detail: data || {} }));
+                    } catch (_) {}
+                    thinking.appendChunk(
+                        (data && data.chunk) || '',
+                        data && data.taskId,
+                        data && data.operation,
+                        data && data.scheduleInfo,
+                        source
+                    );
+                });
+            }
         });
     }
 

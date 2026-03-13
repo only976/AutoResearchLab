@@ -207,8 +207,8 @@
 .tree-task {
     --node-bg: var(--bg-area-secondary);
     --node-border: var(--border-color);
-    padding: 2px 4px;
-    font-size: 10px;
+    padding: 3px 6px;
+    font-size: 11px;
     background: var(--node-bg);
     border: 1.5px solid var(--node-border);
     border-radius: 6px;
@@ -224,6 +224,19 @@
     flex-shrink: 0;
     z-index: 1;
     box-shadow: var(--tree-node-shadow);
+}
+
+.tree-task-label {
+    display: block;
+    width: 100%;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-color);
+    line-height: 1.25;
+    font-size: 11px;
+    font-weight: 600;
 }
 .tree-task:hover {
     background: var(--interactive-hover);

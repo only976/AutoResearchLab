@@ -1,17 +1,18 @@
 """
-Agent tools for Executor: ReadArtifact, ReadFile, WriteFile, Finish, ListSkills, LoadSkill, ReadSkillFile, RunSkillScript.
+Agent tools for Executor: ReadArtifact, ReadFile, ListFiles, WriteFile, Finish, ListSkills, LoadSkill, ReadSkillFile, RunSkillScript.
 OpenAI function-calling format.
 """
 
 import asyncio
 import json
 import os
+import shlex
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 import orjson
 
-from db import DB_DIR, _validate_idea_id, _validate_plan_id, get_sandbox_dir, get_task_artifact
+from db import DB_DIR, _validate_idea_id, _validate_plan_id, get_execution_task_src_dir, get_sandbox_dir, get_task_artifact
 from shared.skill_utils import (
     list_skills as _list_skills,
     load_skill as _load_skill,
@@ -20,6 +21,7 @@ from shared.skill_utils import (
 )
 
 from . import web_tools
+from .docker_runtime import run_command_in_container, run_skill_script_in_container
 
 # RunSkillScript: allowed extensions, timeout (seconds, configurable via env)
 _RUN_SCRIPT_ALLOWED_EXT = (".py", ".sh", ".js")
@@ -39,6 +41,20 @@ def _get_plan_dir_path(idea_id: str, plan_id: str) -> Path:
     _validate_idea_id(idea_id)
     _validate_plan_id(plan_id)
     return (DB_DIR / idea_id / plan_id).resolve()
+
+
+def _get_task_root_dir(idea_id: str, plan_id: str, task_id: str, execution_run_id: str = "") -> Path:
+    if execution_run_id:
+        return get_execution_task_src_dir(execution_run_id, task_id).resolve()
+    return get_sandbox_dir(idea_id, plan_id, task_id)
+
+
+def _normalize_sandbox_subpath(path: str) -> tuple[str, str]:
+    normalized = (path or "").replace("\\", "/").strip()
+    if not normalized.startswith("sandbox/"):
+        return normalized, ""
+    subpath = normalized[7:].lstrip("/")
+    return normalized, subpath
 
 
 # OpenAI function-calling tool definitions
@@ -64,16 +80,43 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "ReadFile",
-            "description": "Read a file. Use 'sandbox/...' for files in this task's sandbox (e.g. sandbox/result.txt), or a path relative to plan dir for shared files (e.g. 'plan.json', 'task_1/output.json').",
+            "description": "Read a file. Use 'sandbox/...' for files in this task's sandbox (e.g. sandbox/result.txt).",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Path: 'sandbox/X' for sandbox files, or 'X' for plan dir (e.g. plan.json, task_id/output.json)",
+                        "description": "Path under sandbox, e.g. sandbox/result.txt or sandbox/data/output.json",
                     },
                 },
                 "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ListFiles",
+            "description": "List files/directories under a path. Use 'sandbox/' to discover available files before ReadFile.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Directory path to list. Prefer sandbox paths (e.g. sandbox/ or sandbox/data).",
+                        "default": "sandbox/",
+                    },
+                    "max_entries": {
+                        "type": "integer",
+                        "description": "Maximum entries to return (default 200, max 500)",
+                        "default": 200,
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Maximum traversal depth (default 3, max 8)",
+                        "default": 3,
+                    },
+                },
             },
         },
     },
@@ -95,6 +138,28 @@ TOOLS = [
                     },
                 },
                 "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "RunCommand",
+            "description": "Run a shell command inside the local Docker execution container using the current task sandbox as the working directory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to run inside Docker, e.g. 'python script.py' or 'ls -la'",
+                    },
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "description": "Optional timeout in seconds (default 120)",
+                        "default": 120,
+                    },
+                },
+                "required": ["command"],
             },
         },
     },
@@ -165,7 +230,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "RunSkillScript",
-            "description": "Execute a script from a skill. Use for docx/pptx/xlsx validation, conversion, etc. Script runs from skill dir. Use {{sandbox}}/filename in args for sandbox file paths (e.g. {{sandbox}}/output.docx).",
+            "description": "Execute a script from a skill. Use for docx/pptx/xlsx validation, conversion, etc. Script runs from skill dir. Use [[sandbox]]/filename in args for sandbox file paths (e.g. [[sandbox]]/output.docx).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -180,7 +245,7 @@ TOOLS = [
                     "args": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Command-line args. Use {{sandbox}}/file.docx for sandbox file paths.",
+                        "description": "Command-line args. Use [[sandbox]]/file.docx for sandbox file paths.",
                     },
                 },
                 "required": ["skill", "script"],
@@ -247,20 +312,44 @@ async def run_read_artifact(idea_id: str, plan_id: str, task_id: str) -> str:
         return f"Error reading artifact: {e}"
 
 
-async def run_read_file(idea_id: str, plan_id: str, path: str, task_id: str = "") -> str:
-    """Execute ReadFile. Path: 'sandbox/X' for sandbox, or 'X' for plan dir. Returns content or error."""
+async def run_read_file(idea_id: str, plan_id: str, path: str, task_id: str = "", execution_run_id: str = "", docker_container_name: str = "") -> str:
+    """Execute ReadFile. In execution mode only sandbox paths are allowed. Returns content or error."""
     try:
         if not path or not isinstance(path, str):
             return "Error: path must be a non-empty string"
-        path = path.replace("\\", "/").strip()
+        path, subpath = _normalize_sandbox_subpath(path)
         if ".." in path:
             return "Error: path traversal not allowed"
+        if execution_run_id and not path.startswith("sandbox/"):
+            return "Error: execution-mode ReadFile only supports sandbox paths"
+        if path.startswith("sandbox/") and execution_run_id and docker_container_name:
+            if not task_id:
+                return "Error: sandbox path requires task context"
+            if not subpath:
+                return "Error: sandbox path must include filename"
+            import base64
+            import shlex
+
+            target_path = f"/workdir/src/{subpath}"
+            cmd = f"cat {shlex.quote(target_path)} | base64"
+            result = await run_command_in_container(
+                container_name=docker_container_name,
+                command=cmd,
+                workdir="/workdir/src",
+            )
+            if result.get("code") != 0:
+                return f"Error reading file from docker: {result.get('stderr')}"
+            out_b64 = result.get("stdout", "").strip()
+            try:
+                return base64.b64decode(out_b64).decode("utf-8", errors="replace")
+            except Exception as e:
+                return f"Error decoding file from docker: {str(e)}"
+
         plan_dir = _get_plan_dir_path(idea_id, plan_id)
         if path.startswith("sandbox/"):
             if not task_id:
                 return "Error: sandbox path requires task context"
-            sandbox_dir = get_sandbox_dir(idea_id, plan_id, task_id)
-            subpath = path[7:].lstrip("/")  # after "sandbox/"
+            sandbox_dir = _get_task_root_dir(idea_id, plan_id, task_id, execution_run_id)
             if not subpath:
                 return "Error: sandbox path must include filename"
             full = (sandbox_dir / subpath).resolve()
@@ -278,36 +367,154 @@ async def run_read_file(idea_id: str, plan_id: str, path: str, task_id: str = ""
             return f"Error: File not found: {path}"
         if not full.is_file():
             return f"Error: Not a file: {path}"
+
         content = full.read_text(encoding="utf-8", errors="replace")
         return content
     except Exception as e:
         return f"Error reading file: {e}"
 
 
-async def run_write_file(idea_id: str, plan_id: str, path: str, content: str, task_id: str = "") -> str:
+async def run_write_file(idea_id: str, plan_id: str, path: str, content: str, task_id: str = "", execution_run_id: str = "", docker_container_name: str = "") -> str:
     """Execute WriteFile. Path must be under sandbox. Returns success or error."""
     try:
         if not task_id:
             return "Error: WriteFile requires task context"
         if not path or not isinstance(path, str):
             return "Error: path must be a non-empty string"
-        path = path.replace("\\", "/").strip()
+        path, subpath = _normalize_sandbox_subpath(path)
         if ".." in path or not path.startswith("sandbox/"):
             return "Error: path must be under sandbox (e.g. sandbox/notes.txt)"
-        sandbox_dir = get_sandbox_dir(idea_id, plan_id, task_id)
-        subpath = path[7:].lstrip("/")
         if not subpath:
             return "Error: path must include filename"
+
+        if execution_run_id and docker_container_name:
+            import base64
+            import shlex
+            from pathlib import Path as PyPath
+            target_path = f"/workdir/src/{subpath}"
+            parent_dir = str(PyPath(target_path).parent).replace('\\', '/')
+            content_b64 = base64.b64encode(content.encode("utf-8")).decode("utf-8")
+            cmd = f"mkdir -p {shlex.quote(parent_dir)} && echo {content_b64} | base64 -d > {shlex.quote(target_path)}"
+            result = await run_command_in_container(
+                container_name=docker_container_name, command=cmd, workdir="/workdir/src"
+            )
+            if result.get("code") != 0:
+                return f"Error writing file in docker: {result.get('stderr')}"
+            return "OK"
+
+        sandbox_dir = _get_task_root_dir(idea_id, plan_id, task_id, execution_run_id)
         full = (sandbox_dir / subpath).resolve()
         try:
             full.relative_to(sandbox_dir.resolve())
         except ValueError:
             return "Error: path traversal not allowed"
+
         full.parent.mkdir(parents=True, exist_ok=True)
         full.write_text(content or "", encoding="utf-8")
         return "OK"
     except Exception as e:
         return f"Error writing file: {e}"
+
+
+async def run_list_files(
+    idea_id: str,
+    plan_id: str,
+    path: str,
+    task_id: str = "",
+    execution_run_id: str = "",
+    docker_container_name: str = "",
+    max_entries: int = 200,
+    max_depth: int = 3,
+) -> str:
+    """Execute ListFiles. In execution mode only sandbox paths are allowed. Returns JSON listing or error."""
+    try:
+        normalized_path = (path or "sandbox/").strip() or "sandbox/"
+        normalized_path, subpath = _normalize_sandbox_subpath(normalized_path)
+        if ".." in normalized_path:
+            return "Error: path traversal not allowed"
+
+        max_entries = max(1, min(int(max_entries or 200), 500))
+        max_depth = max(0, min(int(max_depth or 3), 8))
+
+        if execution_run_id and not normalized_path.startswith("sandbox/"):
+            return "Error: execution-mode ListFiles only supports sandbox paths"
+
+        if execution_run_id and docker_container_name:
+            if not task_id:
+                return "Error: sandbox path requires task context"
+            target_path = "/workdir/src"
+            if subpath:
+                target_path = f"/workdir/src/{subpath}"
+            cmd = (
+                f"if [ -d {shlex.quote(target_path)} ]; then "
+                f"cd {shlex.quote(target_path)} && "
+                f"find . -mindepth 1 -maxdepth {max_depth} | "
+                "sed 's#^\\./##' | "
+                f"head -n {max_entries}; "
+                "else echo '__MAARS_NOT_FOUND_OR_DIR__'; fi"
+            )
+            result = await run_command_in_container(
+                container_name=docker_container_name,
+                command=cmd,
+                workdir="/workdir/src",
+                timeout_seconds=30,
+            )
+            if result.get("code") != 0:
+                return f"Error listing files from docker: {result.get('stderr')}"
+            stdout = (result.get("stdout") or "").strip()
+            if stdout == "__MAARS_NOT_FOUND_OR_DIR__":
+                return f"Error: Path not found or not a directory: {normalized_path}"
+            items = [line.strip() for line in stdout.splitlines() if line.strip()]
+            body = {
+                "path": normalized_path,
+                "count": len(items),
+                "items": items,
+                "truncated": len(items) >= max_entries,
+            }
+            return orjson.dumps(body, option=orjson.OPT_INDENT_2).decode("utf-8")
+
+        plan_dir = _get_plan_dir_path(idea_id, plan_id)
+        if normalized_path.startswith("sandbox/"):
+            if not task_id:
+                return "Error: sandbox path requires task context"
+            sandbox_dir = _get_task_root_dir(idea_id, plan_id, task_id, execution_run_id)
+            target_dir = sandbox_dir if not subpath else (sandbox_dir / subpath).resolve()
+            try:
+                target_dir.relative_to(sandbox_dir.resolve())
+            except ValueError:
+                return "Error: path traversal not allowed"
+        else:
+            target_dir = (plan_dir / normalized_path).resolve()
+            try:
+                target_dir.relative_to(plan_dir)
+            except ValueError:
+                return "Error: path traversal not allowed"
+
+        if not target_dir.exists():
+            return f"Error: Path not found: {normalized_path}"
+        if not target_dir.is_dir():
+            return f"Error: Not a directory: {normalized_path}"
+
+        entries: list[str] = []
+        base_parts = len(target_dir.parts)
+        for item in sorted(target_dir.rglob("*"), key=lambda p: p.as_posix()):
+            rel_parts = len(item.parts) - base_parts
+            if rel_parts <= 0 or rel_parts > max_depth:
+                continue
+            rel = item.relative_to(target_dir).as_posix()
+            entries.append(rel + ("/" if item.is_dir() else ""))
+            if len(entries) >= max_entries:
+                break
+
+        body = {
+            "path": normalized_path,
+            "count": len(entries),
+            "items": entries,
+            "truncated": len(entries) >= max_entries,
+        }
+        return orjson.dumps(body, option=orjson.OPT_INDENT_2).decode("utf-8")
+    except Exception as e:
+        return f"Error listing files: {e}"
 
 
 def run_list_skills() -> str:
@@ -342,9 +549,16 @@ def run_read_skill_file(skill: str, path: str) -> str:
 
 
 async def run_run_skill_script(
-    skill: str, script: str, args: List[str], idea_id: str, plan_id: str, task_id: str
+    skill: str,
+    script: str,
+    args: List[str],
+    idea_id: str,
+    plan_id: str,
+    task_id: str,
+    execution_run_id: str = "",
+    docker_container_name: str = "",
 ) -> str:
-    """Execute RunSkillScript. Runs script from skill dir. {{sandbox}} in args replaced with sandbox path."""
+    """Execute RunSkillScript. Runs script from skill dir. [[sandbox]] or {{sandbox}} in args are replaced with sandbox path."""
     try:
         skill_dir, err = _get_skill_dir(skill)
         if err:
@@ -363,10 +577,25 @@ async def run_run_skill_script(
         if ext not in _RUN_SCRIPT_ALLOWED_EXT:
             return f"Error: Script extension .{ext} not allowed (use .py, .sh, .js)"
 
-        sandbox_dir = get_sandbox_dir(idea_id, plan_id, task_id)
+        if execution_run_id and docker_container_name:
+            result = await run_skill_script_in_container(
+                container_name=docker_container_name,
+                task_id=task_id,
+                skill=skill,
+                script_rel_path=script,
+                args=[str(a) for a in (args or [])],
+                timeout_seconds=_RUN_SCRIPT_TIMEOUT,
+            )
+            out = result.get("stdout", "")
+            err = result.get("stderr", "")
+            if result.get("code") != 0:
+                return f"Exit code {result.get('code')}\nstdout:\n{out}\nstderr:\n{err}"
+            return out + (f"\n{err}" if err else "")
+
+        sandbox_dir = _get_task_root_dir(idea_id, plan_id, task_id, execution_run_id)
         sandbox_str = str(sandbox_dir.resolve())
         resolved_args = [
-            a.replace("{{sandbox}}", sandbox_str) if isinstance(a, str) else str(a)
+            (a.replace("[[sandbox]]", sandbox_str).replace("{{sandbox}}", sandbox_str) if isinstance(a, str) else str(a))
             for a in (args or [])
         ]
 
@@ -403,6 +632,37 @@ async def run_run_skill_script(
         return f"Error running script: {e}"
 
 
+async def run_run_command(
+    command: str,
+    task_id: str,
+    *,
+    docker_container_name: str = "",
+    timeout_seconds: int | None = None,
+) -> str:
+    try:
+        cmd = (command or "").strip()
+        if not cmd:
+            return "Error: command must be a non-empty string"
+        if not docker_container_name:
+            return "Error: Docker execution container is not connected for this task"
+        result = await run_command_in_container(
+            container_name=docker_container_name,
+            command=cmd,
+            workdir="/workdir/src",
+            timeout_seconds=timeout_seconds or _RUN_SCRIPT_TIMEOUT,
+        )
+        stdout = result.get("stdout", "")
+        stderr = result.get("stderr", "")
+        if result.get("code") != 0:
+            return f"Exit code {result.get('code')}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+        body = stdout.strip()
+        if stderr.strip():
+            body = (body + "\n" if body else "") + stderr.strip()
+        return body or "OK"
+    except Exception as e:
+        return f"Error running command: {e}"
+
+
 def run_finish(output: str) -> Tuple[bool, Any]:
     """
     Execute Finish. Returns (True, parsed_output) on success; (False, error_msg) on parse failure.
@@ -424,7 +684,14 @@ def run_finish(output: str) -> Tuple[bool, Any]:
 
 
 async def execute_tool(
-    name: str, arguments: str, idea_id: str, plan_id: str, task_id: str
+    name: str,
+    arguments: str,
+    idea_id: str,
+    plan_id: str,
+    task_id: str,
+    *,
+    execution_run_id: str = "",
+    docker_container_name: str = "",
 ) -> Tuple[Optional[Any], str]:
     """
     Execute a tool by name. Returns (finished_output, tool_result_str).
@@ -443,13 +710,40 @@ async def execute_tool(
 
     if name == "ReadFile":
         path = args.get("path", "")
-        result = await run_read_file(idea_id, plan_id, path, task_id)
+        result = await run_read_file(idea_id, plan_id, path, task_id, execution_run_id, docker_container_name)
+        return None, result
+
+    if name == "ListFiles":
+        path = args.get("path", "sandbox/")
+        max_entries = args.get("max_entries", 200)
+        max_depth = args.get("max_depth", 3)
+        result = await run_list_files(
+            idea_id,
+            plan_id,
+            path,
+            task_id,
+            execution_run_id,
+            docker_container_name,
+            max_entries,
+            max_depth,
+        )
         return None, result
 
     if name == "WriteFile":
         path = args.get("path", "")
         content = args.get("content", "")
-        result = await run_write_file(idea_id, plan_id, path, content, task_id)
+        result = await run_write_file(idea_id, plan_id, path, content, task_id, execution_run_id, docker_container_name)
+        return None, result
+
+    if name == "RunCommand":
+        command = args.get("command", "")
+        timeout_seconds = args.get("timeout_seconds")
+        result = await run_run_command(
+            command,
+            task_id,
+            docker_container_name=docker_container_name,
+            timeout_seconds=timeout_seconds,
+        )
         return None, result
 
     if name == "ListSkills":
@@ -476,7 +770,16 @@ async def execute_tool(
                 script_args = json.loads(script_args) if script_args else []
             except json.JSONDecodeError:
                 script_args = [script_args]
-        result = await run_run_skill_script(skill, script, script_args, idea_id, plan_id, task_id)
+        result = await run_run_skill_script(
+            skill,
+            script,
+            script_args,
+            idea_id,
+            plan_id,
+            task_id,
+            execution_run_id=execution_run_id,
+            docker_container_name=docker_container_name,
+        )
         return None, result
 
     if name == "Finish":

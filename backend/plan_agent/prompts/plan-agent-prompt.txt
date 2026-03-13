@@ -30,6 +30,14 @@ Build context from current plan:
 - dependencies: sibling execution order only (NOT parent)
 - Reference only earlier siblings in the same list
 
+### TITLE GENERATION (Important)
+When you call **Decompose** and then **AddTasks**, you MUST provide a `title` field for each task.
+- **title** is a 2-4 word phrase that captures the **core logic** or **deliverable** of this task.
+- Examples: "Python 后端调研", "对比和总结", "Data Collection", "Model Training", "Result Analysis"
+- Do NOT make title a truncation of description; make it a conceptual summary.
+- The system uses titles to display task nodes in the visualization graph. Clear, concise titles make the graph readable.
+- When you receive decomposition results from Decompose, include the title in each task when calling AddTasks.
+
 ### PAPER AGENT BOUNDARY
 Do not add a task for writing the final research paper. The Paper Agent handles that after task execution. Tasks may produce summaries, synthesis reports, or comparison outputs—these are appropriate. The Paper Agent will compose task outputs into the final paper.
 

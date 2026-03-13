@@ -7,7 +7,7 @@
 - **Idea Agent** (`idea_agent/`)：文献收集（Refine），LLM 单轮或 ADK 驱动
 - **Plan Agent** (`plan_agent/`)：规划分解，LLM 单轮或 ADK 驱动
 - **Task Agent** (`task_agent/`)：任务执行与验证，LLM 单轮或 ADK 驱动
-- **Paper Agent** (`paper_agent/`)：论文草稿生成（Write），LLM 单轮，Mock/LLM 模式
+- **Paper Agent** (`paper_agent/`)：论文草稿生成（Write），支持 Mock / 单轮 LLM / Agent-style MVP
 
 ## 四模式架构
 
@@ -15,9 +15,9 @@
 |------|------|------|
 | **Mock** | 模拟输出，不调用真实 LLM | `*UseMock=True`（含 ideaUseMock、planUseMock、taskUseMock、paperUseMock），走 LLM 管道（mock_chat_completion） |
 | **LLM** | 固定步骤 + 单轮 chat_completion | `*AgentMode=False`，collect_literature / _atomicity_and_decompose_recursive / execute_task |
-| **Agent** | Google ADK 驱动，工具循环 | `*AgentMode=True`，adk_runner.run_*_agent_adk |
+| **Agent** | 多步编排（部分 Agent 为 ADK，Paper 为 Agent-style MVP） | `*AgentMode=True` |
 
-Mock 与 LLM 共用同一 LLM 管道；Agent 模式单独走 ADK。
+Mock 与 LLM 共用同一 LLM 管道；Paper Agent 当前为轻量多步 MVP（outline → sections → assembly）。
 
 ## 会话隔离
 

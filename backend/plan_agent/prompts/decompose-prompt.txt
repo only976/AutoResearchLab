@@ -30,6 +30,7 @@ Given a parent task (task_id and description), output a JSON with a "tasks" arra
   "tasks": [
     {
       "task_id": "1 or <parent_id>_1",
+      "title": "<short 2-4 word title capturing phase core logic>",
       "description": "<phase description - clear responsibility, clear boundary>",
       "dependencies": []
     },
@@ -43,6 +44,13 @@ Given a parent task (task_id and description), output a JSON with a "tasks" arra
 3. **Clear boundaries > equal workload**: Prioritize non-overlapping scope and distinct responsibilities over evenly splitting work. A 2-child split with sharp boundaries is better than a 4-child split with fuzzy overlap.
 4. **Scope**: Each child must be strictly smaller than the parent; no trivial steps (e.g. "open browser"); no overly broad (e.g. "complete entire research").
 5. **Range**: Typically 2–6 children; use 1 only if the task is already atomic; avoid 7+ unless the task genuinely has that many distinct phases.
+
+### TITLE RULES
+- **title** is a 2-4 word phrase that captures the **core logic** or **deliverable** of this task.
+- Use active voice when possible: "Analyze Data", "Implement API", "Validate Results", "定义范围", "收集资料", "整理报告".
+- **title** is NOT a truncation of description; it's a **conceptual summary** of the phase's purpose.
+- Examples: "Data Collection", "Model Training", "Result Analysis", "报告编写" are good titles.
+- Bad titles: "Task", "Subtask", "Process", "步骤1" — too generic or vague.
 
 ### CRITICAL RULES
 1. **task_id**: See TASK_ID RULES above.
@@ -61,16 +69,19 @@ Three natural boundaries: research Python, research JavaScript, compare and summ
   "tasks": [
     {
       "task_id": "1",
+      "title": "Python 后端调研",
       "description": "调研 Python 后端生态：框架、性能、适用场景",
       "dependencies": []
     },
     {
       "task_id": "2",
+      "title": "JavaScript 后端调研",
       "description": "调研 JavaScript 后端生态：框架、性能、适用场景",
       "dependencies": []
     },
     {
       "task_id": "3",
+      "title": "对比和总结",
       "description": "对比两者优缺点并撰写总结报告",
       "dependencies": ["1", "2"]
     }
@@ -89,16 +100,19 @@ Three natural boundaries: research Python, research JavaScript, compare and summ
   "tasks": [
     {
       "task_id": "1_1",
+      "title": "定义范围",
       "description": "确定调研范围：框架列表、评估维度",
       "dependencies": []
     },
     {
       "task_id": "1_2",
+      "title": "收集资料",
       "description": "收集主流框架资料与性能数据",
       "dependencies": ["1_1"]
     },
     {
       "task_id": "1_3",
+      "title": "整理报告",
       "description": "整理要点并撰写 Python 后端调研报告",
       "dependencies": ["1_2"]
     }
@@ -115,9 +129,9 @@ Three natural boundaries: setup (hypothesis + config), execution, analysis. Each
 ```json
 {
   "tasks": [
-    {"task_id": "1", "description": "定义假设、评估指标与实验配置", "dependencies": []},
-    {"task_id": "2", "description": "运行模型A与B并记录结果", "dependencies": ["1"]},
-    {"task_id": "3", "description": "统计分析并撰写实验报告", "dependencies": ["2"]}
+    {"task_id": "1", "title": "实验配置", "description": "定义假设、评估指标与实验配置", "dependencies": []},
+    {"task_id": "2", "title": "运行实验", "description": "运行模型A与B并记录结果", "dependencies": ["1"]},
+    {"task_id": "3", "title": "分析结果", "description": "统计分析并撰写实验报告", "dependencies": ["2"]}
   ]
 }
 ```
@@ -131,8 +145,8 @@ Two natural boundaries: implementation vs. testing. No need to split further.
 ```json
 {
   "tasks": [
-    {"task_id": "2_1", "description": "实现核心预处理逻辑与接口", "dependencies": []},
-    {"task_id": "2_2", "description": "单元测试与集成验证", "dependencies": ["2_1"]}
+    {"task_id": "2_1", "title": "实现逻辑", "description": "实现核心预处理逻辑与接口", "dependencies": []},
+    {"task_id": "2_2", "title": "测试验证", "description": "单元测试与集成验证", "dependencies": ["2_1"]}
   ]
 }
 ```

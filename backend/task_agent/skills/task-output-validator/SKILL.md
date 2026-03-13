@@ -22,7 +22,7 @@ Validate task output against the task's validation criteria **before** calling F
    `LoadSkill("task-output-validator")`
 
 3. **Run validation**  
-   `RunSkillScript(skill="task-output-validator", script="scripts/validate.py", args=["{{sandbox}}/output.json", "--criteria-json", "<JSON string of validation spec>"])`
+   `RunSkillScript(skill="task-output-validator", script="scripts/validate.py", args=["[[sandbox]]/output.json", "--criteria-json", "<JSON string of validation spec>"])`
 
 4. **Interpret result**  
    - If `passed: true` → call `Finish` with the output
@@ -49,7 +49,7 @@ Pass the task's validation spec as JSON. Example:
 python scripts/validate.py <output_file_path> [--criteria-json '{"criteria":[...],"optionalChecks":[...]}']
 ```
 
-- `output_file_path`: Full path to the output file (use `{{sandbox}}/output.json` in RunSkillScript args)
+- `output_file_path`: Full path to the output file (use `[[sandbox]]/output.json` in RunSkillScript args)
 - `--criteria-json`: JSON string of validation spec. If omitted, only format validity is checked.
 
 ## Output Format
@@ -79,5 +79,5 @@ For semantic criteria (e.g. "content is complete"), verify manually before Finis
 Task has validation: `{"criteria": ["Output is valid JSON", "keywords is non-empty array"]}`
 
 1. Write output to `sandbox/search_config.json`
-2. `RunSkillScript("task-output-validator", "scripts/validate.py", ["{{sandbox}}/search_config.json", "--criteria-json", "{\"criteria\":[\"Output is valid JSON\",\"keywords is non-empty array\"]}"])`
+2. `RunSkillScript("task-output-validator", "scripts/validate.py", ["[[sandbox]]/search_config.json", "--criteria-json", "{\"criteria\":[\"Output is valid JSON\",\"keywords is non-empty array\"]}"])`
 3. If passed → `Finish(output)`

@@ -16,6 +16,7 @@ from db import (
     save_plan,
 )
 from shared.idea_utils import get_idea_text
+from shared.task_title import derive_task_title, ensure_task_titles
 from visualization import build_layout_from_execution, compute_decomposition_layout
 from plan_agent.index import run_plan
 from shared.reflection import reflection_loop
@@ -96,15 +97,18 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str, sess
             raise ValueError("Idea not found. Please Refine first to create an idea.")
         raw_idea = idea_data["idea"].strip() if isinstance(idea_data.get("idea"), str) else ""
         refined = idea_data.get("refined_idea")
-        idea = get_idea_text(refined) or raw_idea
+        idea = get_idea_text(refined)
+        if not idea:
+            raise ValueError("Refine result is empty. Planning is blocked until Refine produces a non-empty refined idea.")
 
         config = await get_effective_config()
         use_mock = config.get("planUseMock", True)
 
         plan = {
-            "tasks": [{"task_id": "0", "description": idea, "dependencies": []}],
+            "tasks": [{"task_id": "0", "title": derive_task_title(idea) or "Research Goal", "description": idea, "dependencies": []}],
             "idea": idea,
         }
+        ensure_task_titles(plan["tasks"])
         await save_plan(plan, idea_id, plan_id)
 
         await api_state.emit(session_id, "plan-start", {})
@@ -115,6 +119,7 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str, sess
         def on_tasks_batch(children, parent_task, all_tasks):
             if abort_event and abort_event.is_set():
                 return
+            ensure_task_titles(all_tasks)
             plan["tasks"] = all_tasks
             if plan["tasks"]:
                 api_state.emit_background(session_id, "plan-tree-update", _tree_update_payload(plan))
@@ -141,6 +146,7 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str, sess
             plan_id=plan_id,
         )
         plan["tasks"] = result["tasks"]
+        ensure_task_titles(plan["tasks"])
 
         async def _rerun_plan():
             rerun_plan = {
@@ -194,6 +200,7 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str, sess
             {"error": "Plan Agent stopped by user"},
             warning_label="plan-error emit (cancel)",
         )
+        raise
     except Exception as e:
         err_msg = str(e)
         logger.warning("Plan run error: %s", err_msg)
@@ -203,6 +210,7 @@ async def _run_plan_inner(body: PlanRunRequest, idea_id: str, plan_id: str, sess
             {"error": "Plan Agent stopped by user" if "Aborted" in err_msg else err_msg},
             warning_label="plan-error emit",
         )
+        raise
     finally:
         async with state.lock:
             if state.abort_event is abort_event:
@@ -225,6 +233,11 @@ async def run_plan_route(body: PlanRunRequest, request: Request):
     idea_data = await get_idea(idea_id)
     if not idea_data or not idea_data.get("idea"):
         return JSONResponse(status_code=400, content={"error": "Idea not found. Please Refine first to create an idea."})
+    if not get_idea_text(idea_data.get("refined_idea")):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Refine result is empty. Planning is blocked until Refine produces a non-empty refined idea."},
+        )
 
     plan_id = f"plan_{int(time.time() * 1000)}"
     state.run_task = asyncio.create_task(_run_plan_inner(body, idea_id, plan_id, session_id, state))

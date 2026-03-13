@@ -14,6 +14,7 @@
     async function loadExecution() {
         try {
             const { ideaId, planId } = await cfg.resolvePlanIds();
+            if (!ideaId || !planId) return null;
             const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/execution?ideaId=${encodeURIComponent(ideaId)}&planId=${encodeURIComponent(planId)}`);
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to load execution');
@@ -22,6 +23,18 @@
             console.error('Error loading execution:', error);
             return null;
         }
+    }
+
+    async function getExecutionRuntimeStatus(ideaId, planId) {
+        const params = new URLSearchParams();
+        if (ideaId) params.set('ideaId', ideaId);
+        if (planId) params.set('planId', planId);
+
+        const query = params.toString();
+        const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/execution/runtime-status${query ? `?${query}` : ''}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Failed to load execution runtime status');
+        return data;
     }
 
     async function fetchStatus() {
@@ -167,5 +180,134 @@
         return data;
     }
 
-    window.MAARS.api = { loadExampleIdea, loadExecution, clearDb, fetchStatus, restoreRecentPlan, retryTask, resumeFromTask, refineIdea, stopAgent };
+    async function createResearch(prompt) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: prompt || '' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to create research');
+        return data;
+    }
+
+    async function listResearches() {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to list researches');
+        return data;
+    }
+
+    async function getResearch(researchId) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to load research');
+        return data;
+    }
+
+    async function runResearch(researchId) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format: 'markdown' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to run research');
+        return data;
+    }
+
+    async function stopResearch(researchId) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}/stop`, {
+            method: 'POST',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to stop research');
+        return data;
+    }
+
+    async function retryResearch(researchId) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}/retry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format: 'markdown' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to retry research');
+        return data;
+    }
+
+    async function runResearchStage(researchId, stage) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}/stage/${encodeURIComponent(stage)}/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format: 'markdown' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to run research stage');
+        return data;
+    }
+
+    async function resumeResearchStage(researchId, stage) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}/stage/${encodeURIComponent(stage)}/resume`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format: 'markdown' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to resume research stage');
+        return data;
+    }
+
+    async function retryResearchStage(researchId, stage) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}/stage/${encodeURIComponent(stage)}/retry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format: 'markdown' }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to retry research stage');
+        return data;
+    }
+
+    async function stopResearchStage(researchId, stage) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}/stage/${encodeURIComponent(stage)}/stop`, {
+            method: 'POST',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to stop research stage');
+        return data;
+    }
+
+    async function deleteResearch(researchId) {
+        const res = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/research/${encodeURIComponent(researchId)}`, {
+            method: 'DELETE',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || 'Failed to delete research');
+        return data;
+    }
+
+    window.MAARS.api = {
+        loadExampleIdea,
+        loadExecution,
+        getExecutionRuntimeStatus,
+        clearDb,
+        fetchStatus,
+        restoreRecentPlan,
+        retryTask,
+        resumeFromTask,
+        refineIdea,
+        stopAgent,
+        createResearch,
+        listResearches,
+        getResearch,
+        runResearch,
+        stopResearch,
+        retryResearch,
+        runResearchStage,
+        resumeResearchStage,
+        retryResearchStage,
+        stopResearchStage,
+        deleteResearch,
+    };
 })();

@@ -9,6 +9,7 @@ import asyncio
 from typing import Any, Callable, Dict, List, Optional
 
 from shared.graph import get_ancestor_path, get_parent_id
+from shared.task_title import ensure_task_titles
 
 from .agent import run_plan_agent
 from .agent_tools import _find_task_idx
@@ -101,6 +102,7 @@ async def run_plan(
         raise ValueError("No decomposable task found. Generate plan first.")
 
     all_tasks = list(tasks)
+    ensure_task_titles(all_tasks)
     on_thinking_fn = on_thinking or (lambda *a, **_: None)
     idea = plan.get("idea") or root_task.get("description") or ""
 
@@ -116,6 +118,7 @@ async def run_plan(
             idea=idea, use_mock=use_mock, api_config=api_config, idea_id=idea_id, plan_id=plan_id,
         )
         plan["tasks"] = all_tasks
+    ensure_task_titles(all_tasks)
     if not skip_quality_assessment:
         raise_if_aborted(abort_event)
         quality = await assess_quality(plan, on_thinking_fn, abort_event, use_mock, api_config)

@@ -1,0 +1,598 @@
+{
+  "source": {
+    "dbPath": "/Users/only976/code/maars/backend/db/maars.sqlite3",
+    "capturedAtIdeaUpdatedAt": 1773134626.53935,
+    "capturedAtPlanUpdatedAt": 1773134681.929631
+  },
+  "ideaId": "idea_1773134612394",
+  "planId": "plan_1773134626564",
+  "idea": {
+    "idea": "用公开数据集分析一下pca和lda，pca+lda在主要分类算法下，降维效果的差异，并探究pca+lda结合的最佳实践方案",
+    "keywords": [
+      "Principal Component Analysis",
+      "Linear Discriminant Analysis",
+      "Dimensionality Reduction",
+      "Classification",
+      "Feature Extraction"
+    ],
+    "papers": [
+      {
+        "title": "A randomized algorithm for principal component analysis",
+        "abstract": "Principal component analysis (PCA) requires the computation of a low-rank approximation to a matrix containing the data being analyzed. In many applications of PCA, the best possible accuracy of any rank-deficient approximation is at most a few digits (measured in the spectral norm, relative to the spectral norm of the matrix being approximated). In such circumstances, efficient algorithms have not come with guarantees of good accuracy, unless one or both dimensions of the matrix being approximated are small. We describe an efficient algorithm for the low-rank approximation of matrices that produces accuracy very close to the best possible, for matrices of arbitrary sizes. We illustrate our theoretical results via several numerical examples.",
+        "url": "https://arxiv.org/abs/0809.2274v4",
+        "authors": [
+          "Vladimir Rokhlin",
+          "Arthur Szlam",
+          "Mark Tygert"
+        ],
+        "published": "2008-09-12"
+      },
+      {
+        "title": "Roweis Discriminant Analysis: A Generalized Subspace Learning Method",
+        "abstract": "We present a new method which generalizes subspace learning based on eigenvalue and generalized eigenvalue problems. This method, Roweis Discriminant Analysis (RDA), is named after Sam Roweis to whom the field of subspace learning owes significantly. RDA is a family of infinite number of algorithms where Principal Component Analysis (PCA), Supervised PCA (SPCA), and Fisher Discriminant Analysis (FDA) are special cases. One of the extreme special cases, which we name Double Supervised Discriminant Analysis (DSDA), uses the labels twice; it is novel and has not appeared elsewhere. We propose a dual for RDA for some special cases. We also propose kernel RDA, generalizing kernel PCA, kernel SPCA, and kernel FDA, using both dual RDA and representation theory. Our theoretical analysis explains previously known facts such as why SPCA can use regression but FDA cannot, why PCA and SPCA have duals but FDA does not, why kernel PCA and kernel SPCA use kernel trick but kernel FDA does not, and why PCA is the best linear method for reconstruction. Roweisfaces and kernel Roweisfaces are also proposed generalizing eigenfaces, Fisherfaces, supervised eigenfaces, and their kernel variants. We also report experiments showing the effectiveness of RDA and kernel RDA on some benchmark datasets.",
+        "url": "https://arxiv.org/abs/1910.05437v1",
+        "authors": [
+          "Benyamin Ghojogh",
+          "Fakhri Karray",
+          "Mark Crowley"
+        ],
+        "published": "2019-10-11"
+      },
+      {
+        "title": "Principal Component Analysis Using Structural Similarity Index for Images",
+        "abstract": "Despite the advances of deep learning in specific tasks using images, the principled assessment of image fidelity and similarity is still a critical ability to develop. As it has been shown that Mean Squared Error (MSE) is insufficient for this task, other measures have been developed with one of the most effective being Structural Similarity Index (SSIM). Such measures can be used for subspace learning but existing methods in machine learning, such as Principal Component Analysis (PCA), are based on Euclidean distance or MSE and thus cannot properly capture the structural features of images. In this paper, we define an image structure subspace which discriminates different types of image distortions. We propose Image Structural Component Analysis (ISCA) and also kernel ISCA by using SSIM, rather than Euclidean distance, in the formulation of PCA. This paper provides a bridge between image quality assessment and manifold learning opening a broad new area for future research.",
+        "url": "https://arxiv.org/abs/1908.09287v1",
+        "authors": [
+          "Benyamin Ghojogh",
+          "Fakhri Karray",
+          "Mark Crowley"
+        ],
+        "published": "2019-08-25"
+      },
+      {
+        "title": "When and why are principal component scores a good tool for visualizing high-dimensional data?",
+        "abstract": "Principal component analysis (PCA) is a popular dimension reduction technique often used to visualize high-dimensional data structures. In genomics, this can involve millions of variables, but only tens to hundreds of observations. Theoretically, such extreme high-dimensionality will cause biased or inconsistent eigenvector estimates, but in practice the principal component scores are used for visualization with great success. In this paper, we explore when and why the classical principal component scores can be used to visualize structures in high-dimensional data, even when there are few observations compared to the number of variables. Our argument is two-fold: First, we argue that eigenvectors related to pervasive signals will have eigenvalues scaling linearly with the number of variables. Second, we prove that for linearly increasing eigenvalues, the sample component scores will be scaled and rotated versions of the population scores, asymptotically. Thus the visual information of the sample scores will be unchanged, even though the sample eigenvectors are biased. In the case of pervasive signals, the principal component scores can be used to visualize the population structures, even in extreme high-dimensional situations.",
+        "url": "https://arxiv.org/abs/1401.2781v4",
+        "authors": [
+          "Kristoffer Hellton",
+          "Magne Thoresen"
+        ],
+        "published": "2014-01-13"
+      },
+      {
+        "title": "PCA-Guided Autoencoding for Structured Dimensionality Reduction in Active Infrared Thermography",
+        "abstract": "Active Infrared thermography (AIRT) is a widely adopted non-destructive testing (NDT) technique for detecting subsurface anomalies in industrial components. Due to the high dimensionality of AIRT data, current approaches employ non-linear autoencoders (AEs) for dimensionality reduction. However, the latent space learned by AIRT AEs lacks structure, limiting their effectiveness in downstream defect characterization tasks. To address this limitation, this paper proposes a principal component analysis guided (PCA-guided) autoencoding framework for structured dimensionality reduction to capture intricate, non-linear features in thermographic signals while enforcing a structured latent space. A novel loss function, PCA distillation loss, is introduced to guide AIRT AEs to align the latent representation with structured PCA components while capturing the intricate, non-linear patterns in thermographic signals. To evaluate the utility of the learned, structured latent space, we propose a neural network-based evaluation metric that assesses its suitability for defect characterization. Experimental results show that the proposed PCA-guided AE outperforms state-of-the-art dimensionality reduction methods on PVC, CFRP, and PLA samples in terms of contrast, signal-to-noise ratio (SNR), and neural network-based metrics.",
+        "url": "https://arxiv.org/abs/2508.07773v1",
+        "authors": [
+          "Mohammed Salah",
+          "Numan Saeed",
+          "Davor Svetinovic",
+          "Stefano Sfarra",
+          "Mohammed Omar",
+          "Yusra Abdulrahman"
+        ],
+        "published": "2025-08-11"
+      },
+      {
+        "title": "D0 Regional Analysis Center Concepts",
+        "abstract": "The D0 experiment is facing many exciting challenges providing a computing environment for its worldwide collaboration. Transparent access to data for processing and analysis has been enabled through deployment of its SAM system to collaborating sites and additional functionality will be provided soon with SAMGrid components. In order to maximize access to global storage, computational and intellectual resources, and to enable the system to scale to the large demands soon to be realized, several strategic sites have been identified as Regional Analysis Centers (RAC's). These sites play an expanded role within the system. The philosophy and function of these centers is discussed and details of their composition and operation are outlined. The plan for future additional centers is also addressed.",
+        "url": "https://arxiv.org/abs/cs/0306115v1",
+        "authors": [
+          "L. Lueking",
+          "representing the D0 Remote Analysis Task Force"
+        ],
+        "published": "2003-06-19"
+      },
+      {
+        "title": "Towards semi-classical analysis for sub-elliptic operators",
+        "abstract": "We discuss the recent developments of semi-classical and micro-local analysis in the context of nilpotent Lie groups and for sub-elliptic operators. In particular, we give an overview of pseudo-differential calculi recently defined on nilpotent Lie groups as well as of the notion of quantum limits in the Euclidean and nilpotent cases.",
+        "url": "https://arxiv.org/abs/2111.09854v1",
+        "authors": [
+          "Veronique Fischer"
+        ],
+        "published": "2021-11-18"
+      },
+      {
+        "title": "How Many Genes Are Needed for a Discriminant Microarray Data Analysis ?",
+        "abstract": "The analysis of the leukemia data from Whitehead/MIT group is a discriminant analysis (also called a supervised learning). Among thousands of genes whose expression levels are measured, not all are needed for discriminant analysis: a gene may either not contribute to the separation of two types of tissues/cancers, or it may be redundant because it is highly correlated with other genes. There are two theoretical frameworks in which variable selection (or gene selection in our case) can be addressed. The first is model selection, and the second is model averaging. We have carried out model selection using Akaike information criterion and Bayesian information criterion with logistic regression (discrimination, prediction, or classification) to determine the number of genes that provide the best model. These model selection criteria set upper limits of 22-25 and 12-13 genes for this data set with 38 samples, and the best model consists of only one (no.4847, zyxin) or two genes. We have also carried out model averaging over the best single-gene logistic predictors using three different weights: maximized likelihood, prediction rate on training set, and equal weight. We have observed that the performance of most of these weighted predictors on the testing set is gradually reduced as more genes are included, but a clear cutoff that separates good and bad prediction performance is not found.",
+        "url": "https://arxiv.org/abs/physics/0104029v1",
+        "authors": [
+          "Wentian Li",
+          "Yaning Yang"
+        ],
+        "published": "2001-04-06"
+      },
+      {
+        "title": "OSIRIS-REx Sample Analysis Plan -- Revision 3.0",
+        "abstract": "The Origins, Spectral Interpretation, Resource Identification, and Security Regolith Explorer (OSIRIS-REx) spacecraft arrived at its target, near-Earth asteroid 101955 Bennu, in December 2018. After one year of operating in proximity, the team selected a primary site for sample collection. In October 2020, the spacecraft descended to the surface of Bennu and collected a sample. The spacecraft departed Bennu in May 2021 and will return the sample to Earth in September 2023. The analysis of the returned sample will produce key data to determine the history of this B-type asteroid and that of its components and precursor objects. The main goal of the OSIRIS-REx Sample Analysis Plan is to provide a framework for the Sample Analysis Team to meet the Level 1 mission requirement to analyze the returned sample to determine presolar history, formation age, nebular and parent-body alteration history, relation to known meteorites, organic history, space weathering, resurfacing history, and energy balance in the regolith of Bennu. To achieve this goal, this plan establishes a hypothesis-driven framework for coordinated sample analyses, defines the analytical instrumentation and techniques to be applied to the returned sample, provides guidance on the analysis strategy for baseline, overguide, and threshold amounts of returned sample, including a rare or unique lithology, describes the data storage, management, retrieval, and archiving system, establishes a protocol for the implementation of a micro-geographical information system to facilitate co-registration and coordinated analysis of sample science data, outlines the plans for Sample Analysis Readiness Testing, and provides guidance for the transfer of samples from curation to the Sample Analysis Team.",
+        "url": "https://arxiv.org/abs/2308.11794v1",
+        "authors": [
+          "Dante S. Lauretta",
+          "Harold C. Connolly",
+          "Jeffrey N. Grossman",
+          "Anjani T. Polit",
+          "the OSIRIS-REx Sample Analysis Team"
+        ],
+        "published": "2023-08-22"
+      },
+      {
+        "title": "Nonlinear demixed component analysis for neural population data as a low-rank kernel regression problem",
+        "abstract": "Many studies of neural activity in behaving animals aim to discover interpretable low-dimensional structure in large-scale neural population recordings. One approach to this problem is demixed principal component analysis (dPCA), a supervised linear dimensionality reduction technique to find components that depend on particular experimental parameters. Here, I introduce kernel dPCA (kdPCA) as a nonlinear extension of dPCA by applying kernel least-squares regression to the demixing problem. I consider simulated examples of neural populations with low-dimensional activity to compare the components recovered from dPCA and kdPCA. These simulations demonstrate that neurally relevant nonlinearities, such as stimulus-dependent gain and rotation, interfere with linear demixing of neural activity into components that represent to individual experimental parameters. However, kdPCA can still recover interpretable components in these examples. Finally, I demonstrate kdPCA using two examples of neural populations recorded during perceptual decision-making tasks.",
+        "url": "https://arxiv.org/abs/1812.08238v3",
+        "authors": [
+          "Kenneth W. Latimer"
+        ],
+        "published": "2018-12-19"
+      }
+    ],
+    "refined_idea": "# Research Project: Benchmarking PCA-LDA Hybrid Dimensionality Reduction: Optimization Strategies across Diverse Classifiers and Data Structures\n\n## Description\nThis research aims to systematically evaluate the performance of Principal Component Analysis (PCA), Linear Discriminant Analysis (LDA), and their sequential combination (PCA+LDA) as dimensionality reduction (DR) techniques. While PCA is unsupervised and maximizes variance, and LDA is supervised and maximizes class separability, the hybrid PCA+LDA approach is often used to mitigate the \"Small Sample Size\" (SSS) problem (where the within-class scatter matrix is singular). This study will investigate how the sequence and the amount of variance retained during the PCA stage affect the final classification accuracy across different types of classifiers (Linear, Distance-based, and Ensemble).\n\n## Research Questions\n1.  **Comparative Performance:** Under what data conditions (e.g., feature-to-sample ratio) does PCA+LDA outperform standalone PCA or LDA?\n2.  **Classifier Sensitivity:** How do different classification algorithms (SVM, Random Forest, KNN) respond to the feature spaces transformed by PCA, LDA, and PCA+LDA?\n3.  **The \"Sweet Spot\" Problem:** What is the optimal percentage of explained variance to retain in the PCA stage to maximize the effectiveness of the subsequent LDA?\n4.  **Stability:** Which DR strategy provides the most stable performance across varying training set sizes?\n\n## Gap\nMost literature treats PCA and LDA as separate entities or applies PCA+LDA as a heuristic fix for singular matrices. There is a lack of systematic benchmarking that defines the \"best practice\" for the PCA-pre-processing threshold (e.g., retaining 90% vs 99% variance) before LDA, especially when considering the specific inductive biases of modern classifiers like Random Forests or RBF-kernel SVMs.\n\n## Method\n\n### 1. Dataset Selection\nUse public datasets from the UCI Machine Learning Repository or Kaggle with varying characteristics:\n*   **High-Dimensional/Small Sample:** Gene expression (e.g., Leukemia) or Image datasets (e.g., ORL Faces).\n*   **Low-Dimensional/Large Sample:** UCI Wine, Breast Cancer, or MNIST (sampled).\n\n### 2. Experimental Design\n*   **DR Configurations:**\n    *   Baseline (No DR)\n    *   PCA (Components selected by 95% variance)\n    *   LDA (Components = $C-1$ classes)\n    *   PCA + LDA (Grid search PCA variance retention from 70% to 99.9% before applying LDA).\n*   **Classifiers:**\n    *   **Linear:** Logistic Regression / Linear SVM.\n    *   **Distance-based:** K-Nearest Neighbors (KNN).\n    *   **Non-linear/Ensemble:** Random Forest (RF) or XGBoost.\n\n### 3. Evaluation Metrics\n*   Classification Accuracy and F1-Score.\n*   Computational Latency (Training/Inference time).\n*   Visualization: Use T-SNE or UMAP to visualize the latent spaces produced by PCA vs. LDA vs. PCA+LDA.\n\n---\n\n## Task Decomposition\n\n1.  **Data Acquisition & Preprocessing:** Download 4–6 diverse datasets; perform standardization (Z-score scaling) as PCA/LDA are sensitive to scale.\n2.  **Baseline Implementation:** Establish classification benchmarks on raw data using 5-fold cross-validation.\n3.  **Standalone DR Implementation:** Implement PCA and LDA pipelines; record performance across all classifiers.\n4.  **Hybrid Pipeline Construction:** Build a `scikit-learn` Pipeline that chains `PCA -> LDA -> Classifier`.\n5.  **Hyperparameter Optimization:** Conduct a grid search on the PCA `n_components` (expressed as variance ratio) to find the optimal input for LDA.\n6.  **Sensitivity Analysis:** Analyze how the \"Small Sample Size\" ratio ($Features/Samples$) correlates with the performance gain of PCA+LDA over pure LDA.\n7.  **Visualization & Interpretation:** Generate heatmaps showing Accuracy vs. PCA-variance-retained for each classifier.\n8.  **Synthesis:** Define the \"Best Practice\" protocol (e.g., \"For $N < P$, retain $98\\%$ variance in PCA before LDA for SVM classifiers\")."
+  },
+  "plan": {
+    "tasks": [
+      {
+        "task_id": "0",
+        "title": "# Research Project",
+        "description": "# Research Project: Benchmarking PCA-LDA Hybrid Dimensionality Reduction: Optimization Strategies across Diverse Classifiers and Data Structures\n\n## Description\nThis research aims to systematically evaluate the performance of Principal Component Analysis (PCA), Linear Discriminant Analysis (LDA), and their sequential combination (PCA+LDA) as dimensionality reduction (DR) techniques. While PCA is unsupervised and maximizes variance, and LDA is supervised and maximizes class separability, the hybrid PCA+LDA approach is often used to mitigate the \"Small Sample Size\" (SSS) problem (where the within-class scatter matrix is singular). This study will investigate how the sequence and the amount of variance retained during the PCA stage affect the final classification accuracy across different types of classifiers (Linear, Distance-based, and Ensemble).\n\n## Research Questions\n1.  **Comparative Performance:** Under what data conditions (e.g., feature-to-sample ratio) does PCA+LDA outperform standalone PCA or LDA?\n2.  **Classifier Sensitivity:** How do different classification algorithms (SVM, Random Forest, KNN) respond to the feature spaces transformed by PCA, LDA, and PCA+LDA?\n3.  **The \"Sweet Spot\" Problem:** What is the optimal percentage of explained variance to retain in the PCA stage to maximize the effectiveness of the subsequent LDA?\n4.  **Stability:** Which DR strategy provides the most stable performance across varying training set sizes?\n\n## Gap\nMost literature treats PCA and LDA as separate entities or applies PCA+LDA as a heuristic fix for singular matrices. There is a lack of systematic benchmarking that defines the \"best practice\" for the PCA-pre-processing threshold (e.g., retaining 90% vs 99% variance) before LDA, especially when considering the specific inductive biases of modern classifiers like Random Forests or RBF-kernel SVMs.\n\n## Method\n\n### 1. Dataset Selection\nUse public datasets from the UCI Machine Learning Repository or Kaggle with varying characteristics:\n*   **High-Dimensional/Small Sample:** Gene expression (e.g., Leukemia) or Image datasets (e.g., ORL Faces).\n*   **Low-Dimensional/Large Sample:** UCI Wine, Breast Cancer, or MNIST (sampled).\n\n### 2. Experimental Design\n*   **DR Configurations:**\n    *   Baseline (No DR)\n    *   PCA (Components selected by 95% variance)\n    *   LDA (Components = $C-1$ classes)\n    *   PCA + LDA (Grid search PCA variance retention from 70% to 99.9% before applying LDA).\n*   **Classifiers:**\n    *   **Linear:** Logistic Regression / Linear SVM.\n    *   **Distance-based:** K-Nearest Neighbors (KNN).\n    *   **Non-linear/Ensemble:** Random Forest (RF) or XGBoost.\n\n### 3. Evaluation Metrics\n*   Classification Accuracy and F1-Score.\n*   Computational Latency (Training/Inference time).\n*   Visualization: Use T-SNE or UMAP to visualize the latent spaces produced by PCA vs. LDA vs. PCA+LDA.\n\n---\n\n## Task Decomposition\n\n1.  **Data Acquisition & Preprocessing:** Download 4–6 diverse datasets; perform standardization (Z-score scaling) as PCA/LDA are sensitive to scale.\n2.  **Baseline Implementation:** Establish classification benchmarks on raw data using 5-fold cross-validation.\n3.  **Standalone DR Implementation:** Implement PCA and LDA pipelines; record performance across all classifiers.\n4.  **Hybrid Pipeline Construction:** Build a `scikit-learn` Pipeline that chains `PCA -> LDA -> Classifier`.\n5.  **Hyperparameter Optimization:** Conduct a grid search on the PCA `n_components` (expressed as variance ratio) to find the optimal input for LDA.\n6.  **Sensitivity Analysis:** Analyze how the \"Small Sample Size\" ratio ($Features/Samples$) correlates with the performance gain of PCA+LDA over pure LDA.\n7.  **Visualization & Interpretation:** Generate heatmaps showing Accuracy vs. PCA-variance-retained for each classifier.\n8.  **Synthesis:** Define the \"Best Practice\" protocol (e.g., \"For $N < P$, retain $98\\%$ variance in PCA before LDA for SVM classifiers\").",
+        "dependencies": []
+      },
+      {
+        "task_id": "1",
+        "title": "Data Preparation",
+        "description": "Acquire 4–6 diverse datasets (high-dim/small-sample and low-dim/large-sample) and perform Z-score standardization.",
+        "dependencies": []
+      },
+      {
+        "task_id": "2",
+        "title": "Standalone Benchmarking",
+        "description": "Evaluate classification performance on raw data, standalone PCA (95% variance), and standalone LDA using 5-fold cross-validation.",
+        "dependencies": [
+          "1"
+        ]
+      },
+      {
+        "task_id": "3",
+        "title": "Hybrid Optimization",
+        "description": "Implement the PCA+LDA pipeline and conduct a grid search on PCA variance retention (70% to 99.9%) to identify optimal configurations.",
+        "dependencies": [
+          "1"
+        ],
+        "input": {
+          "description": "Preprocessed dataset containing feature vectors and target labels.",
+          "artifacts": [
+            "preprocessed_dataset"
+          ],
+          "parameters": [
+            "pca_variance_range: 0.70 to 0.999",
+            "pipeline_steps: [PCA, LDA]"
+          ]
+        },
+        "output": {
+          "description": "Grid search results showing performance metrics for different PCA variance thresholds and the identified optimal configuration.",
+          "artifact": "pca_lda_grid_search_results",
+          "format": "JSON or Markdown Table containing variance levels, component counts, and accuracy/performance scores."
+        },
+        "validation": {
+          "description": "Verify the pipeline execution and the completeness of the grid search range.",
+          "criteria": [
+            "The pipeline must sequentially apply PCA then LDA.",
+            "Grid search must cover the range from at least 70% to 99.9% variance retention.",
+            "Output must include at least one performance metric (e.g., Accuracy, F1-score) for each tested configuration.",
+            "The 'optimal' configuration must be explicitly identified based on the results."
+          ],
+          "optionalChecks": [
+            "Visualization of the variance vs. performance curve.",
+            "Number of components retained at each variance level is recorded."
+          ]
+        }
+      },
+      {
+        "task_id": "4",
+        "title": "Comparative Analysis",
+        "description": "Analyze sensitivity to feature-to-sample ratios and evaluate the stability of DR strategies across varying training set sizes.",
+        "dependencies": [
+          "2",
+          "3"
+        ]
+      },
+      {
+        "task_id": "5",
+        "title": "Synthesis & Visualization",
+        "description": "Generate latent space visualizations (T-SNE/UMAP) and formulate the 'Best Practice' protocol based on experimental findings.",
+        "dependencies": [
+          "4"
+        ]
+      },
+      {
+        "task_id": "5_1",
+        "title": "可视化潜在空间",
+        "description": "应用 T-SNE 或 UMAP 对不同降维策略（PCA, LDA, PCA+LDA）产生的特征空间进行可视化，直观对比类别分离度。",
+        "dependencies": [],
+        "input": {
+          "description": "Reduced feature matrices from PCA, LDA, and PCA+LDA pipelines, along with corresponding class labels.",
+          "artifacts": [
+            "pca_features",
+            "lda_features",
+            "pca_lda_combined_features",
+            "dataset_labels"
+          ],
+          "parameters": [
+            "visualization_method: 'T-SNE' or 'UMAP'",
+            "perplexity/n_neighbors: hyperparameter for the chosen method"
+          ]
+        },
+        "output": {
+          "description": "A comparative visualization report containing plots for each strategy and a qualitative analysis of class separation.",
+          "artifact": "feature_space_visualization_report",
+          "format": "Markdown document with embedded plots (PNG/SVG)"
+        },
+        "validation": {
+          "description": "Verify the presence of all required visualizations and the depth of the comparative analysis.",
+          "criteria": [
+            "Report must contain at least three distinct visualization plots (PCA, LDA, PCA+LDA)",
+            "Each plot must use color-coding based on class labels to show separation",
+            "The report must explicitly state whether T-SNE or UMAP was used and list the hyperparameters",
+            "Document has ## References section",
+            "References section is non-empty (citing the visualization algorithms or libraries used)"
+          ],
+          "optionalChecks": [
+            "Comparison of local vs. global structure preservation between strategies",
+            "Consistency in plot styling (axes, legends, color maps) for easier comparison"
+          ]
+        }
+      },
+      {
+        "task_id": "5_2",
+        "title": "制定最佳实践",
+        "description": "综合实验性能指标与可视化发现，针对不同数据规模和分类器类型，总结并制定 PCA 预处理的最佳实践协议。",
+        "dependencies": [
+          "5_1"
+        ],
+        "input": {
+          "description": "Experimental performance metrics (accuracy, time, etc.) and visualization results (clusters, variance plots) from previous analysis tasks.",
+          "artifacts": [
+            "experimental_performance_metrics",
+            "visualization_findings"
+          ],
+          "parameters": [
+            "data_scales",
+            "classifier_types"
+          ]
+        },
+        "output": {
+          "description": "A structured best practice protocol for PCA preprocessing.",
+          "artifact": "pca_best_practice_protocol",
+          "format": "Markdown Document"
+        },
+        "validation": {
+          "description": "Verify the protocol provides actionable, evidence-based recommendations for all specified scenarios.",
+          "criteria": [
+            "Document includes specific recommendations for at least three data scales (e.g., small, medium, large)",
+            "Document includes specific recommendations for different classifier types (e.g., linear vs. non-linear)",
+            "Recommendations are explicitly linked to the experimental performance metrics and visualization findings",
+            "Document has ## References section",
+            "References section is non-empty and cites the experimental data sources"
+          ],
+          "optionalChecks": [
+            "Protocol includes a decision flowchart or summary table for quick reference"
+          ]
+        }
+      },
+      {
+        "task_id": "4_1",
+        "title": "特征样本比分析",
+        "description": "计算各数据集的特征与样本比例，并分析该比例与 PCA+LDA 性能增益之间的相关性。",
+        "dependencies": [],
+        "input": {
+          "description": "Metadata for each dataset (feature count, sample count) and the performance results of PCA+LDA compared to baselines.",
+          "artifacts": [
+            "dataset_metadata",
+            "experiment_results"
+          ],
+          "parameters": [
+            "performance_metric_type (e.g., Accuracy, F1-score)"
+          ]
+        },
+        "output": {
+          "description": "A report containing the feature-to-sample ratios, performance gain data, and a correlation analysis.",
+          "artifact": "correlation_analysis_report",
+          "format": "Markdown document including data tables and correlation statistics"
+        },
+        "validation": {
+          "description": "Verify the accuracy of calculations and the depth of the correlation analysis.",
+          "criteria": [
+            "Report must include a table listing 'Feature-to-Sample Ratio' for every dataset used in the study",
+            "Report must explicitly state the performance gain (delta) for PCA+LDA for each dataset",
+            "Report must provide a correlation coefficient (e.g., Pearson or Spearman) or a clear trend analysis between the ratio and performance gain",
+            "Document has ## References section",
+            "References section is non-empty"
+          ],
+          "optionalChecks": [
+            "Visualizations (e.g., scatter plot) showing the correlation are included",
+            "Analysis discusses potential outliers or specific dataset characteristics affecting the trend"
+          ]
+        }
+      },
+      {
+        "task_id": "4_2",
+        "title": "稳定性评估",
+        "description": "通过改变训练集规模（子采样）运行实验，评估各降维策略在不同数据量下的性能波动与鲁棒性。",
+        "dependencies": [],
+        "input": {
+          "description": "Dimensionality reduction algorithms, the full processed dataset, and the predefined evaluation metrics.",
+          "artifacts": [
+            "dimensionality_reduction_strategies",
+            "processed_dataset",
+            "evaluation_metrics"
+          ],
+          "parameters": [
+            "subsampling_ratios (e.g., 10%, 30%, 50%, 70%, 100%)"
+          ]
+        },
+        "output": {
+          "description": "A comprehensive report detailing performance metrics across different training set sizes for each strategy.",
+          "artifact": "subsampling_experiment_results",
+          "format": "Markdown document with data tables and analysis"
+        },
+        "validation": {
+          "description": "Verify that the experiment covers multiple data scales and provides a comparative analysis of robustness.",
+          "criteria": [
+            "Report must include results for at least 3 different subsampling levels",
+            "All dimensionality reduction strategies from the input must be evaluated",
+            "Contains a comparative table or chart showing performance fluctuations across data sizes",
+            "Includes a specific section analyzing the 'robustness' of each strategy",
+            "Document has ## References section",
+            "References section is non-empty"
+          ],
+          "optionalChecks": [
+            "Visualizations (e.g., line charts) showing performance vs. data size are included",
+            "Statistical significance or variance across multiple runs is reported"
+          ]
+        }
+      },
+      {
+        "task_id": "4_3",
+        "title": "识别关键阈值",
+        "description": "综合敏感性与稳定性数据，确定 PCA+LDA 优于独立算法的临界特征样本比与最小样本量阈值。",
+        "dependencies": [
+          "4_1",
+          "4_2"
+        ],
+        "input": {
+          "description": "Sensitivity analysis results and stability performance data for PCA, LDA, and PCA+LDA algorithms across various feature-to-sample ratios and sample sizes.",
+          "artifacts": [
+            "sensitivity_analysis_results",
+            "stability_analysis_results"
+          ],
+          "parameters": []
+        },
+        "output": {
+          "description": "A synthesis report defining the critical feature-to-sample ratio and minimum sample size thresholds where PCA+LDA demonstrates superior performance.",
+          "artifact": "algorithm_threshold_report",
+          "format": "Markdown document with data tables and ## References section"
+        },
+        "validation": {
+          "description": "Verify that the thresholds are clearly defined and supported by the input data.",
+          "criteria": [
+            "Document must explicitly state the critical feature-to-sample ratio threshold",
+            "Document must explicitly state the minimum sample size threshold",
+            "The conclusions must be supported by a comparison of PCA+LDA against independent PCA and LDA metrics",
+            "Document has ## References section",
+            "References section is non-empty"
+          ],
+          "optionalChecks": [
+            "Include a visualization or summary table comparing performance at the identified thresholds"
+          ]
+        }
+      },
+      {
+        "task_id": "1_1",
+        "title": "Dataset Acquisition",
+        "description": "Select and download 4–6 datasets representing both high-dimensional/small-sample and low-dimensional/large-sample characteristics.",
+        "dependencies": [],
+        "input": {
+          "description": "Research domain requirements and criteria for dataset selection.",
+          "artifacts": [],
+          "parameters": [
+            "target_count: 4-6",
+            "profile_1: high-dimensional/small-sample (p > n)",
+            "profile_2: low-dimensional/large-sample (n > p)"
+          ]
+        },
+        "output": {
+          "description": "A collection of downloaded datasets and a summary file describing their dimensions.",
+          "artifact": "dataset_collection",
+          "format": "Folder containing data files (CSV/Parquet/etc.) and a metadata.json summary"
+        },
+        "validation": {
+          "description": "Verify the quantity and statistical characteristics of the selected datasets.",
+          "criteria": [
+            "Total number of datasets is between 4 and 6",
+            "At least two datasets represent high-dimensional/small-sample characteristics (features significantly exceed samples)",
+            "At least two datasets represent low-dimensional/large-sample characteristics (samples significantly exceed features)",
+            "Metadata file must list 'n' (samples) and 'p' (features) for every dataset",
+            "All datasets listed in metadata must be present in the download folder and readable"
+          ],
+          "optionalChecks": [
+            "Datasets should come from diverse domains (e.g., genomics, finance, social sciences)",
+            "Check for missing values or data corruption in downloaded files"
+          ]
+        }
+      },
+      {
+        "task_id": "1_2",
+        "title": "Data Standardization",
+        "description": "Apply Z-score standardization to all acquired datasets to ensure features are on a comparable scale for PCA and LDA.",
+        "dependencies": [
+          "1_1"
+        ],
+        "input": {
+          "description": "Raw datasets acquired in the previous task step.",
+          "artifacts": [
+            "acquired_datasets"
+          ],
+          "parameters": [
+            "target_features (optional: list of specific columns to standardize)"
+          ]
+        },
+        "output": {
+          "description": "Standardized datasets where features have been transformed using Z-score normalization.",
+          "artifact": "standardized_datasets",
+          "format": "DataFrames or CSV files"
+        },
+        "validation": {
+          "description": "Verify that the Z-score standardization was applied correctly to the numerical features.",
+          "criteria": [
+            "Each standardized feature must have a mean approximately equal to 0 (within a small epsilon, e.g., 1e-7)",
+            "Each standardized feature must have a standard deviation approximately equal to 1",
+            "The number of rows and columns in the output must match the input datasets (excluding non-numeric columns if applicable)",
+            "No missing values (NaN) should be introduced by the standardization process"
+          ],
+          "optionalChecks": [
+            "Check if non-numeric/categorical columns were correctly excluded or handled"
+          ]
+        }
+      },
+      {
+        "task_id": "2_1",
+        "title": "Evaluate Raw Baseline",
+        "description": "Measure classification accuracy, F1-score, and latency on the standardized raw datasets using 5-fold cross-validation across all classifiers.",
+        "dependencies": [],
+        "input": {
+          "description": "Standardized raw datasets and the list of classifiers to be evaluated.",
+          "artifacts": [
+            "standardized_datasets",
+            "classifier_models_list"
+          ],
+          "parameters": [
+            "cv_folds: 5"
+          ]
+        },
+        "output": {
+          "description": "A performance evaluation report containing accuracy, F1-score, and latency for each classifier.",
+          "artifact": "classifier_performance_report",
+          "format": "Markdown table or JSON containing mean and standard deviation for metrics"
+        },
+        "validation": {
+          "description": "Verify that all required metrics are calculated using the specified cross-validation method for all classifiers.",
+          "criteria": [
+            "Report must include Accuracy, F1-score, and Latency for every classifier listed in the input",
+            "Results must be derived from 5-fold cross-validation (e.g., reporting mean ± std)",
+            "Latency must be measured and reported (e.g., inference time per sample or batch)",
+            "Document has ## References section",
+            "References section is non-empty"
+          ],
+          "optionalChecks": [
+            "Check if the datasets used match the standardized raw datasets provided in the input"
+          ]
+        }
+      },
+      {
+        "task_id": "2_2",
+        "title": "Evaluate Standalone PCA",
+        "description": "Apply PCA (retaining 95% variance) and evaluate classifier performance using 5-fold cross-validation.",
+        "dependencies": [],
+        "input": {
+          "description": "Preprocessed feature matrix and target labels from the data preparation stage.",
+          "artifacts": [
+            "preprocessed_dataset"
+          ],
+          "parameters": [
+            "variance_threshold: 0.95",
+            "cv_folds: 5"
+          ]
+        },
+        "output": {
+          "description": "Performance metrics of the classifier after PCA transformation.",
+          "artifact": "pca_evaluation_report",
+          "format": "JSON: { n_components: int, explained_variance: float, metrics: { accuracy: float, precision: float, recall: float, f1: float } }"
+        },
+        "validation": {
+          "description": "Verify PCA implementation and cross-validation integrity.",
+          "criteria": [
+            "PCA must be configured to retain exactly 95% of the variance",
+            "Evaluation must use 5-fold cross-validation on the transformed features",
+            "Output must include the number of principal components selected",
+            "Metrics must include Accuracy, Precision, Recall, and F1-score"
+          ],
+          "optionalChecks": [
+            "Include a comparison of training time vs. original feature set",
+            "Check for data leakage (PCA should be fitted within CV folds or on training split only)"
+          ]
+        }
+      },
+      {
+        "task_id": "2_3",
+        "title": "Evaluate Standalone LDA",
+        "description": "Apply LDA transformation and evaluate classifier performance using 5-fold cross-validation.",
+        "dependencies": [],
+        "input": {
+          "description": "Preprocessed feature matrix and target labels from the preceding data preparation task.",
+          "artifacts": [
+            "preprocessed_dataset"
+          ],
+          "parameters": [
+            "n_components (for LDA)",
+            "classifier_type (e.g., SVM, Random Forest)"
+          ]
+        },
+        "output": {
+          "description": "Evaluation report containing performance metrics across 5 folds.",
+          "artifact": "lda_evaluation_report",
+          "format": "JSON or Markdown Table"
+        },
+        "validation": {
+          "description": "Verify the statistical validity and methodology of the evaluation.",
+          "criteria": [
+            "Report must explicitly state that 5-fold cross-validation was used",
+            "LDA transformation must be applied within each cross-validation fold to avoid data leakage",
+            "Output must include mean and standard deviation for Accuracy, Precision, Recall, and F1-score",
+            "The number of LDA components must be less than the number of classes minus one"
+          ],
+          "optionalChecks": [
+            "Confusion matrix for the aggregated folds",
+            "Execution time for the LDA transformation"
+          ]
+        }
+      },
+      {
+        "task_id": "2_4",
+        "title": "Aggregate Standalone Results",
+        "description": "Consolidate the performance metrics from the raw, PCA, and LDA evaluations into a structured summary for comparative analysis.",
+        "dependencies": [
+          "2_1",
+          "2_2",
+          "2_3"
+        ],
+        "input": {
+          "description": "Performance metrics generated from the evaluation of raw features, PCA-reduced features, and LDA-reduced features.",
+          "artifacts": [
+            "raw_performance_metrics",
+            "pca_performance_metrics",
+            "lda_performance_metrics"
+          ],
+          "parameters": []
+        },
+        "output": {
+          "description": "A consolidated summary table comparing the performance of the three approaches across key metrics.",
+          "artifact": "consolidated_performance_summary",
+          "format": "Markdown Table"
+        },
+        "validation": {
+          "description": "Ensure the summary accurately represents and aligns data from all three evaluation sources.",
+          "criteria": [
+            "The table must include rows or columns for all three methods: Raw, PCA, and LDA",
+            "Metrics (e.g., Accuracy, Precision, Recall, F1-score) must be consistent across all methods for direct comparison",
+            "The summary must be formatted as a clear, readable Markdown table",
+            "Data values must match the values provided in the input artifacts exactly"
+          ],
+          "optionalChecks": [
+            "Include a 'Delta' or 'Improvement' column relative to the raw baseline",
+            "Highlight the best-performing method for each metric"
+          ]
+        }
+      }
+    ],
+    "qualityScore": 85,
+    "qualityComment": "The plan is well-decomposed and follows a rigorous research methodology. The main weakness is the missing dependency links for several sub-tasks (e.g., 2_x and 4_x) which logically require the outputs of earlier stages."
+  }
+}

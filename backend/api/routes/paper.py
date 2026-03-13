@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from db import get_effective_config, get_plan, list_plan_outputs
+from db import get_effective_config, get_plan, list_plan_outputs, save_paper
 from paper_agent import run_paper_agent
 from shared.realtime import build_thinking_emitter
 
@@ -50,6 +50,11 @@ async def _run_paper_inner(session_id: str, state, idea_id: str, plan_id: str, f
             on_thinking=on_thinking,
             abort_event=abort_event,
         )
+
+        try:
+            await save_paper(idea_id, plan_id, format_type=(format_type or "markdown"), content=content)
+        except Exception as e:
+            logger.warning("Failed to persist paper: %s", e)
 
         await api_state.emit(session_id, "paper-complete", {
             "ideaId": idea_id,

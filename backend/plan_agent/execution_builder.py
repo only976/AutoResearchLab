@@ -6,6 +6,7 @@ Task Agent Execution 阶段：从 Plan 生成 execution。
 from typing import Dict, List, Set
 
 from shared.graph import get_ancestor_chain, get_parent_id, compute_task_stages
+from shared.task_title import ensure_task_titles
 
 
 def _is_atomic(task: Dict) -> bool:
@@ -77,6 +78,7 @@ def build_execution_from_plan(plan: Dict) -> Dict:
         return {"tasks": []}
 
     resolved = _resolve_deps_for_atomic(all_tasks, atomic_tasks)
+    ensure_task_titles(resolved)
     staged = compute_task_stages(resolved)
     flat = []
     for stage_list in staged:

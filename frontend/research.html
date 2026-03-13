@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAARS · Research</title>
+    <script>
+        (function() {
+            document.documentElement.setAttribute('data-theme', 'black');
+        })();
+    </script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+    <button
+        id="appSidebarToggle"
+        class="app-sidebar-toggle"
+        type="button"
+        aria-label="Toggle sidebar"
+        aria-controls="appSidebar"
+        aria-expanded="false"
+    >
+        <span class="app-sidebar-toggle-icon" aria-hidden="true"></span>
+    </button>
+    <aside id="appSidebar" class="app-sidebar" aria-hidden="true">
+        <div id="appSidebarContent" class="app-sidebar-content" hidden></div>
+    </aside>
+
+    <div class="container">
+        <header class="page-header">
+            <div class="header-title">
+                <h1>MAARS</h1>
+                <p class="subtitle">Multi-Agent Automated Research System</p>
+            </div>
+        </header>
+
+        <div id="settingsModal" class="modal">
+            <div class="modal-content modal-content--settings">
+                <div id="settingsForm" class="settings-form">
+                    <div class="settings-body">
+                        <aside class="settings-sidebar">
+                            <nav class="settings-nav" role="navigation">
+                                <button type="button" class="settings-nav-item" data-item="theme">
+                                    <span class="settings-nav-item-name">Theme</span>
+                                </button>
+                                <button type="button" class="settings-nav-item" data-item="ai">
+                                    <span class="settings-nav-item-name">AI Config</span>
+                                </button>
+                                <button type="button" class="settings-nav-item" data-item="db">
+                                    <span class="settings-nav-item-name">Data</span>
+                                </button>
+                            </nav>
+                            <button type="button" class="btn-ghost settings-save-btn" id="settingsSaveBtn">Save</button>
+                        </aside>
+                        <main class="settings-main" id="settingsMain">
+                            <!-- Theme -->
+                            <div class="settings-panel" id="settingsPanelTheme" data-panel="theme">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Theme</h3>
+                                    <div class="settings-theme-grid">
+                                        <button type="button" class="settings-theme-card" data-pick="light">
+                                            <div class="settings-theme-preview" data-preview="light">
+                                                <div class="stp-sidebar">
+                                                    <div class="stp-nav-line"></div>
+                                                    <div class="stp-nav-line stp-nav-active"></div>
+                                                    <div class="stp-nav-line"></div>
+                                                </div>
+                                                <div class="stp-main">
+                                                    <div class="stp-header"></div>
+                                                    <div class="stp-body">
+                                                        <div class="stp-line"></div>
+                                                        <div class="stp-line stp-line--short"></div>
+                                                        <div class="stp-line stp-line--med"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span class="settings-theme-label">Light</span>
+                                        </button>
+                                        <button type="button" class="settings-theme-card" data-pick="dark">
+                                            <div class="settings-theme-preview" data-preview="dark">
+                                                <div class="stp-sidebar">
+                                                    <div class="stp-nav-line"></div>
+                                                    <div class="stp-nav-line stp-nav-active"></div>
+                                                    <div class="stp-nav-line"></div>
+                                                </div>
+                                                <div class="stp-main">
+                                                    <div class="stp-header"></div>
+                                                    <div class="stp-body">
+                                                        <div class="stp-line"></div>
+                                                        <div class="stp-line stp-line--short"></div>
+                                                        <div class="stp-line stp-line--med"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span class="settings-theme-label">Dark</span>
+                                        </button>
+                                        <button type="button" class="settings-theme-card" data-pick="black">
+                                            <div class="settings-theme-preview" data-preview="black">
+                                                <div class="stp-sidebar">
+                                                    <div class="stp-nav-line"></div>
+                                                    <div class="stp-nav-line stp-nav-active"></div>
+                                                    <div class="stp-nav-line"></div>
+                                                </div>
+                                                <div class="stp-main">
+                                                    <div class="stp-header"></div>
+                                                    <div class="stp-body">
+                                                        <div class="stp-line"></div>
+                                                        <div class="stp-line stp-line--short"></div>
+                                                        <div class="stp-line stp-line--med"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span class="settings-theme-label">Black</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- AI Config (Mode + Preset) -->
+                            <div class="settings-panel" id="settingsPanelAi" data-panel="ai">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Agent Mode</h3>
+                                    <p class="settings-mode-desc">Select mode per agent: Mock (simulated), LLM (single-turn), Agent (ReAct loop).</p>
+                                    <div class="settings-mode-matrix" id="settingsModeMatrix">
+                                        <div class="settings-mode-matrix-header">
+                                            <span class="settings-mode-matrix-corner"></span>
+                                            <span class="settings-mode-matrix-col" data-col="mock">Mock</span>
+                                            <span class="settings-mode-matrix-col" data-col="llm">LLM</span>
+                                            <span class="settings-mode-matrix-col" data-col="agent">Agent</span>
+                                        </div>
+                                        <div class="settings-mode-matrix-row" data-row="ideaAgent">
+                                            <span class="settings-mode-matrix-label">Idea Agent</span>
+                                            <button type="button" class="settings-mode-cell" data-row="ideaAgent" data-col="mock">Mock</button>
+                                            <button type="button" class="settings-mode-cell" data-row="ideaAgent" data-col="llm">LLM</button>
+                                            <button type="button" class="settings-mode-cell" data-row="ideaAgent" data-col="agent">Agent</button>
+                                        </div>
+                                        <div class="settings-mode-matrix-row" data-row="planAgent">
+                                            <span class="settings-mode-matrix-label">Plan Agent</span>
+                                            <button type="button" class="settings-mode-cell" data-row="planAgent" data-col="mock">Mock</button>
+                                            <button type="button" class="settings-mode-cell" data-row="planAgent" data-col="llm">LLM</button>
+                                            <button type="button" class="settings-mode-cell" data-row="planAgent" data-col="agent">Agent</button>
+                                        </div>
+                                        <div class="settings-mode-matrix-row" data-row="taskAgent">
+                                            <span class="settings-mode-matrix-label">Task Agent</span>
+                                            <button type="button" class="settings-mode-cell" data-row="taskAgent" data-col="mock">Mock</button>
+                                            <button type="button" class="settings-mode-cell" data-row="taskAgent" data-col="llm">LLM</button>
+                                            <button type="button" class="settings-mode-cell" data-row="taskAgent" data-col="agent">Agent</button>
+                                        </div>
+                                        <div class="settings-mode-matrix-row" data-row="paperAgent">
+                                            <span class="settings-mode-matrix-label">Paper Agent</span>
+                                            <button type="button" class="settings-mode-cell" data-row="paperAgent" data-col="mock">Mock</button>
+                                            <button type="button" class="settings-mode-cell" data-row="paperAgent" data-col="llm">LLM</button>
+                                            <button type="button" class="settings-mode-cell" data-row="paperAgent" data-col="agent">Agent</button>
+                                        </div>
+                                    </div>
+                                    <div class="settings-idea-rag-row">
+                                        <label class="settings-toggle-row">
+                                            <input type="checkbox" id="ideaRAGEnabled" />
+                                            <span>Enable Idea Agent PDF RAG (index paper body for semantic search)</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Self-Reflection</h3>
+                                    <p class="settings-mode-desc">Agents self-evaluate and learn skills after task completion to improve quality over time.</p>
+                                    <div class="settings-reflection-controls">
+                                        <label class="settings-toggle-row">
+                                            <input type="checkbox" id="reflectionEnabled" />
+                                            <span>Enable self-reflection</span>
+                                        </label>
+                                        <div class="settings-field settings-field-inline">
+                                            <label for="reflectionMaxIterations">Max iterations</label>
+                                            <input type="number" id="reflectionMaxIterations" min="1" max="5" value="2" style="width:60px" />
+                                        </div>
+                                        <div class="settings-field settings-field-inline">
+                                            <label for="reflectionQualityThreshold">Quality threshold</label>
+                                            <input type="number" id="reflectionQualityThreshold" min="0" max="100" value="70" style="width:60px" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">API Preset</h3>
+                                    <div class="settings-preset-row">
+                                        <div class="settings-preset-list" id="settingsPresetList"></div>
+                                        <button type="button" class="settings-preset-add" id="settingsPresetAddBtn">+ New</button>
+                                    </div>
+                                    <div class="settings-preset-edit" id="settingsPresetEdit">
+                                        <h4 class="settings-preset-edit-title" id="settingsPresetEditTitle">Select preset</h4>
+                                        <div class="settings-fields">
+                                            <div class="settings-field">
+                                                <label for="presetLabel">Name</label>
+                                                <input type="text" id="presetLabel" placeholder="My Config" />
+                                            </div>
+                                            <div class="settings-field">
+                                                <label for="presetBaseUrl">Base URL</label>
+                                                <input type="url" id="presetBaseUrl" placeholder="https://api.openai.com/v1" />
+                                            </div>
+                                            <div class="settings-field">
+                                                <label for="presetApiKey">API Key</label>
+                                                <input type="password" id="presetApiKey" placeholder="sk-..." autocomplete="off" />
+                                            </div>
+                                            <div class="settings-field">
+                                                <label for="presetModel">Model</label>
+                                                <input type="text" id="presetModel" placeholder="gpt-4o" />
+                                            </div>
+                                        </div>
+                                        <div class="settings-actions">
+                                            <button type="button" id="settingsPresetDeleteBtn" class="btn-ghost">Delete preset</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Data -->
+                            <div class="settings-panel" id="settingsPanelDb" data-panel="db">
+                                <div class="settings-card">
+                                    <h3 class="settings-card-title">Data</h3>
+                                    <div class="settings-db-actions">
+                                        <button type="button" class="btn-default" id="settingsRestoreBtn">Restore recent plan</button>
+                                        <button type="button" class="btn-danger" id="settingsClearDbBtn">Clear all data</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <main class="main-content">
+            <section id="homeView" class="home-view">
+                <div class="home-view-inner">
+                    <div class="home-view-prompt">
+                        <input type="text" id="researchPromptInput" class="idea-input home-view-input" placeholder="Ask anything to start a new research..." />
+                        <button id="createResearchBtn" type="button">Create</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="js/core/utils.js"></script>
+    <script src="js/ui/toast.js"></script>
+    <script src="js/core/config.js"></script>
+    <script src="js/core/logger.js"></script>
+    <script src="js/core/state.js"></script>
+    <script src="js/api/api.js"></script>
+    <script src="js/flows/research.js"></script>
+    <script src="js/ui/theme.js"></script>
+    <script src="js/ws/handlers/thinking-handler.js"></script>
+    <script src="js/ws/websocket.js"></script>
+    <script src="js/ui/settings.js"></script>
+    <script src="js/ui/sidebar.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

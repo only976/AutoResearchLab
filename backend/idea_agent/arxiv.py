@@ -2,7 +2,7 @@
 arXiv API 请求与解析。
 """
 
-import re
+import time
 import xml.etree.ElementTree as ET
 from typing import List, Optional
 
@@ -36,28 +36,43 @@ async def search_arxiv(
 
     search_query = f"cat:{cat}+all:{query}" if (cat and cat.strip()) else f"all:{query}"
     url = f"{ARXiv_API_BASE}?search_query={search_query}&max_results={limit}"
+    started = time.perf_counter()
+    logger.info("arXiv search start query='{}' cat='{}' limit={}", query, cat or "", limit)
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(url)
             resp.raise_for_status()
+            logger.info(
+                "arXiv search response query='{}' status={} bytes={} elapsed_ms={}",
+                query,
+                resp.status_code,
+                len(resp.content or b""),
+                int((time.perf_counter() - started) * 1000),
+            )
     except httpx.HTTPStatusError as e:
-        logger.warning("arXiv API HTTP error: %s", e)
-        return []
+        logger.warning("arXiv API HTTP error for query '{}': {}", query, e)
+        raise RuntimeError(f"arXiv HTTP error for query '{query}': {e}") from e
     except httpx.RequestError as e:
-        logger.warning("arXiv API request error: %s", e)
-        return []
+        logger.warning("arXiv API request error for query '{}': {}", query, e)
+        raise RuntimeError(f"arXiv request error for query '{query}': {e}") from e
 
     try:
         root = ET.fromstring(resp.content)
     except ET.ParseError as e:
-        logger.warning("arXiv API XML parse error: %s", e)
-        return []
+        logger.warning("arXiv API XML parse error for query '{}': {}", query, e)
+        raise RuntimeError(f"arXiv XML parse error for query '{query}': {e}") from e
 
     results = []
     for entry in root.findall(f"{ATOM_NS}entry"):
         paper = _parse_entry(entry)
         if paper:
             results.append(paper)
+    logger.info(
+        "arXiv search complete query='{}' papers={} elapsed_ms={}",
+        query,
+        len(results),
+        int((time.perf_counter() - started) * 1000),
+    )
     return results
 
 

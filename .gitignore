@@ -8,16 +8,11 @@ __pycache__/
 venv/
 env/
 
-# Plan and idea data folders (generated at runtime)
-backend/db/plan_*/
-backend/db/idea_*/
+# backend/db contains both source code and runtime data.
+# Ignore runtime/generated content, keep Python source tracked.
+backend/db/**
+!backend/db/
 
-# Vendor / upstream clones (skills are copied to backend/skills/)
-backend/vendor/
-
-# Settings & API config (contain secrets)
-backend/db/settings.json
-backend/db/api_config.json
 
 # Atomic write leftovers (crash recovery)
 *.tmp
@@ -68,3 +63,7 @@ skills-lock.json
 
 # Ruff
 .ruff_cache/
+
+#sandbox
+sandbox/
+

@@ -5,12 +5,15 @@
     'use strict';
     window.MAARS = window.MAARS || {};
 
-    const _base = (typeof window !== 'undefined' && window.location && /^https?:/.test(window.location.origin))
-        ? '' : 'http://localhost:3001';
+    const _isHttpOrigin = (typeof window !== 'undefined' && window.location && /^https?:/.test(window.location.origin));
+    const _base = _isHttpOrigin ? '' : 'http://localhost:3001';
     const API_BASE_URL = _base + '/api';
-    const WS_URL = (typeof window !== 'undefined' && window.location) ? window.location.origin : 'http://localhost:3001';
+    // When opened via file://, window.location.origin is "null" and cannot be used for Socket.IO.
+    // Prefer backend base URL when we are not on an http(s) origin.
+    const WS_URL = _base || ((typeof window !== 'undefined' && window.location) ? window.location.origin : 'http://localhost:3001');
     const IDEA_ID_KEY = 'maars-idea-id';
     const PLAN_ID_KEY = 'maars-plan-id';
+    const RESEARCH_ID_KEY = 'maars-research-id';
     const SESSION_ID_KEY = 'maars-session-id';
     const SESSION_TOKEN_KEY = 'maars-session-token';
     const THEMES = ['light', 'dark', 'black'];
@@ -88,54 +91,75 @@
 
     function getCurrentIdeaId() {
         try {
-            return localStorage.getItem(IDEA_ID_KEY) || 'test';
-        } catch (_) { return 'test'; }
+            return localStorage.getItem(IDEA_ID_KEY) || '';
+        } catch (_) { return ''; }
     }
 
     function getCurrentPlanId() {
         try {
-            return localStorage.getItem(PLAN_ID_KEY) || 'test';
-        } catch (_) { return 'test'; }
+            return localStorage.getItem(PLAN_ID_KEY) || '';
+        } catch (_) { return ''; }
     }
 
     function setCurrentIdeaId(id) {
-        try { localStorage.setItem(IDEA_ID_KEY, id); } catch (_) {}
+        try {
+            if (!id) localStorage.removeItem(IDEA_ID_KEY);
+            else localStorage.setItem(IDEA_ID_KEY, id);
+        } catch (_) {}
     }
 
     function setCurrentPlanId(id) {
-        try { localStorage.setItem(PLAN_ID_KEY, id); } catch (_) {}
+        try {
+            if (!id) localStorage.removeItem(PLAN_ID_KEY);
+            else localStorage.setItem(PLAN_ID_KEY, id);
+        } catch (_) {}
+    }
+
+    function getCurrentResearchId() {
+        try {
+            return localStorage.getItem(RESEARCH_ID_KEY) || '';
+        } catch (_) { return ''; }
+    }
+
+    function setCurrentResearchId(id) {
+        try {
+            if (!id) localStorage.removeItem(RESEARCH_ID_KEY);
+            else localStorage.setItem(RESEARCH_ID_KEY, id);
+        } catch (_) {}
     }
 
     async function resolvePlanId() {
         const storedIdea = getCurrentIdeaId();
         const storedPlan = getCurrentPlanId();
         if (storedPlan && storedPlan.startsWith('plan_')) return storedPlan;
+        if (getCurrentResearchId()) return storedPlan || '';
         try {
             const res = await fetchWithSession(`${API_BASE_URL}/plans`);
             const data = await res.json();
             const items = data.items || [];
             if (items.length > 0) {
                 const first = items[0];
-                setCurrentIdeaId(first.ideaId || 'test');
-                setCurrentPlanId(first.planId || 'test');
-                return first.planId || 'test';
+                setCurrentIdeaId(first.ideaId || '');
+                setCurrentPlanId(first.planId || '');
+                return first.planId || '';
             }
         } catch (_) {}
-        return storedPlan || 'test';
+        return storedPlan || '';
     }
 
     async function resolvePlanIds() {
         const storedIdea = getCurrentIdeaId();
         const storedPlan = getCurrentPlanId();
         if (storedPlan && storedPlan.startsWith('plan_')) return { ideaId: storedIdea, planId: storedPlan };
+        if (getCurrentResearchId()) return { ideaId: storedIdea, planId: storedPlan };
         try {
             const res = await fetchWithSession(`${API_BASE_URL}/plans`);
             const data = await res.json();
             const items = data.items || [];
             if (items.length > 0) {
                 const first = items[0];
-                const ideaId = first.ideaId || 'test';
-                const planId = first.planId || 'test';
+                const ideaId = first.ideaId || '';
+                const planId = first.planId || '';
                 setCurrentIdeaId(ideaId);
                 setCurrentPlanId(planId);
                 return { ideaId, planId };
@@ -166,11 +190,13 @@
         WS_URL,
         IDEA_ID_KEY,
         PLAN_ID_KEY,
+        RESEARCH_ID_KEY,
         SESSION_ID_KEY,
         SESSION_TOKEN_KEY,
         THEMES,
         getCurrentIdeaId,
         getCurrentPlanId,
+        getCurrentResearchId,
         getSessionId,
         getSessionToken,
         ensureSession,
@@ -178,6 +204,7 @@
         fetchWithSession,
         setCurrentIdeaId,
         setCurrentPlanId,
+        setCurrentResearchId,
         resolvePlanId,
         resolvePlanIds,
         fetchSettings,

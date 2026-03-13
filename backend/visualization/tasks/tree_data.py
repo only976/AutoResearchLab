@@ -10,6 +10,7 @@ Pipeline (each run, no old stage reused):
 from typing import List, Dict
 
 from shared.graph import compute_task_stages
+from shared.task_title import ensure_task_titles
 
 
 def extract_cache_from_tasks(tasks: List[Dict]) -> List[Dict]:
@@ -43,6 +44,7 @@ def build_tree_data(tasks: List[Dict]) -> List[Dict]:
     """
     if not tasks or len(tasks) == 0:
         return []
+    ensure_task_titles(tasks)
     cache = extract_cache_from_tasks(tasks)
     staged = compute_task_stages(cache, reduce=True)
     return enrich_tree_data(staged, tasks)
