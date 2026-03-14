@@ -77,11 +77,12 @@
     color: var(--text-color);
     background: none;
     border: 1px solid transparent;
+    border-radius: var(--btn-radius);
     text-align: left;
     width: 100%;
     min-width: 0;
     cursor: pointer;
-    transition: var(--state-transition);
+    transition: var(--btn-transition);
 }
 .settings-nav-item:hover { background: var(--settings-select-hover); color: var(--settings-select-text); }
 .settings-nav-item:active { background: var(--settings-select-active); color: var(--settings-select-text); }
@@ -146,14 +147,14 @@
     padding: 12px;
     background: none;
     border: 2px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: var(--btn-radius);
     cursor: pointer;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: var(--btn-transition);
     overflow: hidden;
 }
 .settings-theme-card:hover {
-    border-color: var(--border-color-hover);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: var(--btn-hover-border);
+    background: var(--btn-hover-bg);
 }
 .settings-theme-card.active {
     border-color: var(--accent-primary-border);
@@ -291,9 +292,9 @@
     color: var(--text-color);
     background: var(--bg-white);
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
+    border-radius: var(--btn-radius);
     cursor: pointer;
-    transition: var(--state-transition);
+    transition: var(--btn-transition);
 }
 .settings-mode-cell:hover {
     background: var(--btn-hover-bg);
@@ -337,11 +338,11 @@
     color: var(--text-color);
     background: var(--bg-white);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: var(--btn-radius);
     text-align: left;
     min-width: 0;
     cursor: pointer;
-    transition: var(--state-transition);
+    transition: var(--btn-transition);
     box-sizing: border-box;
 }
 .settings-preset-item:hover {
@@ -389,9 +390,9 @@
     color: var(--text-muted);
     background: var(--bg-white);
     border: 1px dashed var(--border-color);
-    border-radius: 8px;
+    border-radius: var(--btn-radius);
     cursor: pointer;
-    transition: var(--state-transition);
+    transition: var(--btn-transition);
 }
 .settings-preset-add:hover {
     background: var(--btn-hover-bg);

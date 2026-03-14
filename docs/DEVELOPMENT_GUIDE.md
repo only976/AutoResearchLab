@@ -11,11 +11,11 @@
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         Frontend (静态页面)                       │
-│  flows (idea/plan/task/paper) + thinking + output + websocket    │
+│  research + task flows + thinking + output + SSE/EventSource     │
 └──────────────────────────────┬──────────────────────────────────┘
-                               │ HTTP POST 触发 / WebSocket 数据回传
+                               │ HTTP POST 触发 / SSE 实时事件回传
 ┌──────────────────────────────▼──────────────────────────────────┐
-│                         Backend (FastAPI + Socket.io)            │
+│                   Backend (FastAPI + realtime bridge)            │
 │  api/routes → idea_agent / plan_agent / task_agent / paper_agent │
 └──────────────────────────────┬──────────────────────────────────┘
                                │
@@ -23,22 +23,33 @@
         ▼                      ▼                       ▼
 ┌───────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │ shared/       │    │ db/             │    │ visualization/  │
-│ llm_client    │    │ 文件存储         │    │ 执行图布局       │
-│ skill_utils   │    │ idea_id/plan_id/│    │                 │
-│ adk_bridge    │    │ settings.json   │    │                 │
-│ reflection    │    │                 │    │                 │
+│ llm_client    │    │ SQLite 持久化    │    │ 执行图布局       │
+│ skill_utils   │    │ researches /     │    │                 │
+│ adk_bridge    │    │ settings /       │    │                 │
+│ reflection    │    │ sandbox 索引辅助 │    │                 │
 └───────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ### 1.2 四 Agent 统一流程模型
 
 ```text
-用户点击 → HTTP POST 触发 → 后端后台任务 → WebSocket 数据回传 → 前端更新 UI
+用户点击 → HTTP POST 触发 → 后端后台任务 → SSE 实时事件回传 → 前端更新 UI
 ```
 
 - **HTTP**：仅用于触发，立即返回 `{success, id}`
-- **WebSocket**：所有流式数据、完成状态、错误均由后端推送
-- **前端**：不依赖 HTTP 响应，仅用 WebSocket 事件更新 UI
+- **SSE / 实时事件**：前端通过 `EventSource` 订阅所有流式数据、完成状态与错误
+- **前端**：不依赖 HTTP 响应，仅用实时事件更新 UI
+
+### 1.2.1 Research 流水线
+
+**Research** 是产品级工作单元，通过 `/api/research` 管理。流水线阶段：refine → plan → execute → paper。
+
+- `POST /api/research` 创建 Research
+- `POST /api/research/{id}/run` 从 refine 开始全流程
+- `POST /api/research/{id}/stage/{stage}/run` 执行指定阶段
+- `research-stage` SSE 事件推送阶段状态
+
+详见 [docs/workflow/research-flow.md](workflow/research-flow.md)。
 
 ### 1.3 三模式架构
 
@@ -46,9 +57,9 @@
 | --- | --- | --- |
 | **Mock** | 模拟输出，不调用真实 LLM | `*UseMock=True`，走 mock_chat_completion |
 | **LLM** | 固定步骤 + 单轮 chat_completion | collect_literature / 递归分解 / execute_task |
-| **Agent** | Google ADK 驱动，工具循环 | adk_runner.run_*_agent_adk |
+| **Agent** | 多步编排；Idea/Plan/Task 用 Google ADK，Paper 用 agent-style MVP | `adk_runner.run_*_agent_adk` / `paper_agent.runner` |
 
-Mock 与 LLM 共用 LLM 管道；Agent 模式单独走 Google ADK。
+Mock 与 LLM 共用 LLM 管道；Idea/Plan/Task 的 Agent 模式走 Google ADK，Paper Agent 的 Agent 模式走本地多步 drafting MVP。
 
 ### 1.4 Agent 目录结构
 
@@ -84,9 +95,9 @@ Mock 与 LLM 共用 LLM 管道；Agent 模式单独走 Google ADK。
 
 - 后端按 `sessionId` 维护独立运行上下文（Idea/Plan/Paper run state + Task ExecutionRunner）
 - `POST /api/session/init` 签发 `sessionId + sessionToken`
-- WebSocket 通过 `auth.sessionId + auth.sessionToken` 进入对应 room
+- 前端通过 `GET /api/events/stream?sessionId=...&sessionToken=...` 建立 SSE 订阅
 - HTTP 通过 `X-MAARS-SESSION-ID + X-MAARS-SESSION-TOKEN` 绑定同一会话
-- 事件按 room 定向发射，避免多用户串流
+- 事件按 session 定向发射到 SSE 订阅者；后端同时保留 Socket.IO room 兼容层
 - 空闲会话按 TTL 自动回收（`MAARS_SESSION_IDLE_TTL_SECONDS`）
 
 ---
@@ -119,9 +130,9 @@ Mock 与 LLM 共用 LLM 管道；Agent 模式单独走 Google ADK。
 
 ### 2.4 Paper Agent
 
-**流程**：Plan + Task 产出 → 单轮 LLM 生成 → 论文草稿
+**流程**：Plan + Task 产出 → 单轮 LLM 或 agent-style MVP（outline → sections → assembly）→ 论文草稿
 
-**说明**：当前仅 Mock/LLM 模式，Agent 模式待开发
+**说明**：支持 Mock / LLM / Agent 三种模式；其中 Agent 模式为不依赖 ADK 的 drafting MVP
 
 ---
 
@@ -317,11 +328,30 @@ Settings → AI Config → Self-Reflection：
 
 ---
 
-## 八、相关文档
+## 八、API 路由概览
+
+| 前缀 | 模块 | 说明 |
+| --- | --- | --- |
+| `/api/session` | session | 会话初始化、签发 sessionId/sessionToken |
+| `/api/research` | research | Research CRUD、run/stop/retry、分阶段执行 |
+| `/api/plans` | plans | 列出最近 (ideaId, planId)，用于 Restore recent plan |
+| `/api/idea` | idea | Idea Agent 触发（Refine） |
+| `/api/plan` | plan | Plan Agent 触发 |
+| `/api/execution` | execution | Task Agent 执行 |
+| `/api/paper` | paper | Paper Agent 触发 |
+| `/api/settings` | settings | 配置读写 |
+| `/api/db` | db | 数据管理 |
+| `/api/status` | status | 健康检查 |
+
+---
+
+## 九、相关文档
 
 | 文档 | 说明 |
 | --- | --- |
-| [docs/workflow/](workflow/README.md) | 工作流说明 |
-| [docs/design/agent-structure.md](design/agent-structure.md) | Agent 目录结构 |
+| [docs/workflow/research-flow.md](workflow/research-flow.md) | Research API 与阶段流程 |
+| [docs/workflow/agents.md](workflow/agents.md) | 四 Agent 流程与产出 |
+| [docs/workflow/events-and-modes.md](workflow/events-and-modes.md) | 实时事件与模式切换 |
+| [docs/workflow/agent-structure.md](workflow/agent-structure.md) | Agent 目录结构 |
 | [docs/design/region-responsibilities.md](design/region-responsibilities.md) | Thinking/Output 区域职责 |
 | [.cursor/rules/agent-flow-architecture.mdc](../.cursor/rules/agent-flow-architecture.mdc) | Agent 流程与架构规则 |

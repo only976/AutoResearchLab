@@ -35,7 +35,7 @@ Header 格式：`source | operation | taskId | Turn N/M | tool_name(args)`，由
 ## 数据流
 
 ```
-WebSocket (*-thinking) → appendChunk → blocks[] → renderThinking
+SSE (*-thinking) → appendChunk → blocks[] → renderThinking
 有 thinking：header + body；无 thinking：header only
 ```
 

@@ -95,36 +95,67 @@
 
 .research-stage-action-btn {
     border: 1px solid var(--border-color);
-    background: var(--bg-area-secondary);
-    color: var(--text-secondary);
-    border-radius: 8px;
-    font-size: 10px;
+    background: var(--bg-white);
+    color: var(--text-color);
+    border-radius: var(--btn-radius);
+    font-size: 11px;
+    font-weight: var(--button-font-weight);
     line-height: 1;
-    padding: 5px 7px;
+    padding: 5px 10px;
     cursor: pointer;
+    transition: var(--btn-transition);
+}
+
+.research-stage-action-btn:hover:not(:disabled) {
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+}
+
+.research-stage-action-btn:active:not(:disabled) {
+    background: var(--btn-active-bg);
 }
 
 .research-stage-action-btn[disabled] {
-    opacity: 0.45;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
 .research-stage-action-btn.is-danger {
-    color: var(--accent-danger);
-    border-color: color-mix(in srgb, var(--accent-danger) 45%, var(--border-color));
+    border: 1px solid var(--failure-border);
+    background: var(--failure-bg);
+    color: var(--failure-text);
+}
+
+.research-stage-action-btn.is-danger:hover:not(:disabled) {
+    background: var(--failure-bg-hover);
+    border-color: var(--failure-border);
+}
+
+.research-stage-action-btn.is-danger:active:not(:disabled) {
+    background: var(--failure-bg-active);
 }
 
 .research-stage-btn {
     border: 1px solid var(--border-color);
     background: var(--bg-area-tertiary);
     color: var(--text-secondary);
-    padding: 8px 12px;
-    border-radius: var(--border-radius);
-    font-size: 12px;
-    font-weight: 600;
+    padding: var(--button-padding-y) var(--button-padding-x);
+    border-radius: var(--btn-radius);
+    font-size: var(--button-font-size);
+    font-weight: var(--button-font-weight);
     line-height: 1;
     cursor: pointer;
     position: relative;
+    transition: var(--btn-transition);
+}
+
+.research-stage-btn:hover:not(:disabled):not(.is-completed):not(.is-active) {
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+}
+
+.research-stage-btn:active:not(:disabled):not(.is-completed):not(.is-active) {
+    background: var(--btn-active-bg);
 }
 
 .research-stage-btn:not(:last-child)::after {

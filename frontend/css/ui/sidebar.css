@@ -13,8 +13,8 @@
     width: 44px;
     height: 44px;
     border: 1px solid var(--border-color);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--bg-area-primary) 92%, transparent);
+    border-radius: var(--btn-radius);
+    background: var(--bg-area-secondary);
     color: var(--text-color);
     box-shadow: var(--shadow-lg);
     z-index: 1200;
@@ -22,11 +22,17 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: transform 260ms ease, background-color 180ms ease, border-color 180ms ease;
+    transition: transform 260ms ease, var(--btn-transition);
 }
 
-.app-sidebar-toggle:hover {
-    border-color: var(--border-color-hover);
+.app-sidebar-toggle:hover:not(:disabled) {
+    background: var(--btn-hover-bg);
+    border-color: var(--btn-hover-border);
+}
+
+.app-sidebar-toggle:active:not(:disabled) {
+    background: var(--btn-active-bg);
+    border-color: var(--btn-hover-border);
 }
 
 .app-sidebar-toggle-icon {
@@ -75,7 +81,7 @@
 .app-sidebar-content {
     height: 100%;
     width: 100%;
-    padding: 80px 16px 16px;
+    padding: 16px;
     opacity: 0;
 }
 
@@ -125,7 +131,7 @@
     gap: 8px;
     padding: 10px 10px;
     border: 1px solid var(--border-color);
-    border-radius: 10px;
+    border-radius: var(--btn-radius);
     background: color-mix(in srgb, var(--bg-area-secondary) 90%, transparent);
     color: var(--text-color);
     font-size: 13px;
@@ -167,37 +173,35 @@
 
 .app-sidebar-delete-btn {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: none;
-    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--btn-radius);
     background: transparent;
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 12px;
     cursor: pointer;
-    transition: background-color 120ms ease, color 120ms ease;
+    transition: var(--btn-transition);
 }
 
-.app-sidebar-delete-btn:hover {
-    background: color-mix(in srgb, var(--accent-danger) 15%, transparent);
-    color: var(--accent-danger);
+.app-sidebar-delete-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--failure-bg) 25%, transparent);
+    color: var(--failure-text);
+    border-color: var(--failure-border);
 }
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid var(--border-color);
-    background: var(--bg-input);
-    color: var(--text-muted);
-    font-size: 11px;
+
+.app-sidebar-delete-btn:active:not(:disabled) {
+    background: color-mix(in srgb, var(--failure-bg) 40%, transparent);
 }
 
 .app-sidebar-settings-item {
     width: 100%;
     padding: 11px 12px;
     border: 1px solid var(--border-color);
-    border-radius: 10px;
+    border-radius: var(--btn-radius);
     background: color-mix(in srgb, var(--bg-area-secondary) 90%, transparent);
     color: var(--text-color);
     display: inline-flex;

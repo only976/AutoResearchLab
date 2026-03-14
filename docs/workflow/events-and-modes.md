@@ -1,6 +1,8 @@
 # 事件与模式
 
-## WebSocket 事件
+## 实时事件（前端通过 SSE / EventSource 订阅）
+
+后端 realtime emitter 会同时镜像到 SSE 订阅者，并保留 Socket.IO room 兼容层；当前浏览器前端默认走 SSE。
 
 ### 基本事件（四 Agent 统一）
 
@@ -17,6 +19,7 @@
 |------|----------|
 | plan | `plan-tree-update` |
 | task | `task-states-update`, `task-output`, `execution-layout` |
+| research | `research-stage`（阶段状态）、`research-error`（Research 级错误） |
 
 ### Thinking 事件格式
 
@@ -38,9 +41,9 @@ interface ThinkingPayload {
 |------|------|--------|
 | **Mock** | 模拟输出，不调用真实 LLM | `*UseMock=True` 时走 mock_chat_completion |
 | **LLM** | 固定步骤 + 单轮 chat_completion | Idea: collect_literature；Plan: 递归分解；Task: execute_task |
-| **Agent** | Google ADK 驱动，工具循环 | adk_runner.run_*_agent_adk |
+| **Agent** | 多步编排；Idea/Plan/Task 用 Google ADK，Paper 用 agent-style MVP | `adk_runner.run_*_agent_adk` / `paper_agent.runner` |
 
-Mock 与 LLM 共用 LLM 管道；Agent 模式单独走 Google ADK，无 Mock 分支。
+Mock 与 LLM 共用 LLM 管道；Idea/Plan/Task 的 Agent 模式走 Google ADK，Paper Agent 的 Agent 模式走 agent-style MVP。
 
 ### 模式切换
 
@@ -49,7 +52,7 @@ Mock 与 LLM 共用 LLM 管道；Agent 模式单独走 Google ADK，无 Mock 分
 | Idea | ✅ | ✅ | ✅ |
 | Plan | ✅ | ✅ | ✅ |
 | Task | ✅ | ✅ | ✅ |
-| Paper | ✅ | ✅ | 待开发 |
+| Paper | ✅ | ✅ | ✅（MVP） |
 
 ---
 
@@ -60,7 +63,7 @@ Mock 与 LLM 共用 LLM 管道；Agent 模式单独走 Google ADK，无 Mock 分
 | Idea | `api/routes/idea.py` | `idea_agent/llm/executor.py` | `idea_agent/adk_runner.py` |
 | Plan | `plan_agent/index.py` | `plan_agent/llm/executor.py` | `plan_agent/adk_runner.py` |
 | Task | `task_agent/runner.py` | `task_agent/llm/executor.py` | `task_agent/adk_runner.py` |
-| Paper | `api/routes/paper.py` | `paper_agent/runner.py` | — |
+| Paper | `api/routes/paper.py` | `paper_agent/runner.py` | `paper_agent/runner.py`（agent-style MVP） |
 
 ---
 

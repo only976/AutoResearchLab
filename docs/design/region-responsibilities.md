@@ -56,6 +56,6 @@ interface ThinkingPayload {
 
 ## 四、实现要点
 
-- **Clear 策略**：Refine/Plan 清空所有区域；Execute 清空 Thinking、任务状态、Output
-- **Output 排序**：idea 置顶，task 按 task_id 排序
+- **Clear 策略**：由 `*-start` 事件触发各模块自清空。Refine/Plan 清空所有区域；Execute 清空 Thinking、任务状态、Output；Paper 仅清空 paper 槽位。Research 阶段 Run 时派发对应 start 事件，行为一致。
+- **Output 排序**：idea 置顶，task 按 task_id 排序，paper 置底
 - **向后兼容**：旧 payload 无 `source` 时，前端按 `taskId` 推断
