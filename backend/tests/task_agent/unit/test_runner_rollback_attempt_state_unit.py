@@ -179,6 +179,97 @@ def test_duplicate_retry_attempt_is_suppressed(monkeypatch):
     anyio.run(_run_duplicate_retry_attempt_is_suppressed, monkeypatch)
 
 
+async def _run_retry_exhaustion_triggers_fail_fast(monkeypatch):
+    runner = ExecutionRunner(sio=None, session_id="test")
+    runner.is_running = True
+    runner.MAX_RETRY_ATTEMPTS = 5
+    runner.task_last_retry_attempt["1_2_1"] = 4
+    runner.task_map = {
+        "1_2_1": {"task_id": "1_2_1", "status": "validation-failed", "dependencies": []},
+        "1_2_2": {"task_id": "1_2_2", "status": "undone", "dependencies": ["1_2_1"]},
+    }
+    runner.chain_cache = [runner.task_map["1_2_1"], runner.task_map["1_2_2"]]
+    runner.reverse_dependency_index = {"1_2_1": ["1_2_2"], "1_2_2": []}
+    runner.pending_tasks = {"1_2_1", "1_2_2"}
+    runner.running_tasks = {"1_2_1"}
+
+    emitted = []
+
+    def fake_emit(event, data):
+        emitted.append((event, data))
+
+    async def fake_append(_task_id, _event, _payload):
+        return None
+
+    from task_agent import runner as runner_mod
+
+    monkeypatch.setitem(runner_mod.worker_manager, "release_worker_by_task_id", lambda _task_id: None)
+    runner._emit = fake_emit
+    runner._append_step_event = fake_append  # type: ignore[method-assign]
+    runner._broadcast_worker_states = lambda: None  # type: ignore[method-assign]
+    runner._broadcast_task_states = lambda: None  # type: ignore[method-assign]
+    runner._persist_execution = lambda: None  # type: ignore[method-assign]
+
+    await runner._retry_or_fail(
+        task={"task_id": "1_2_1"},
+        phase="validation",
+        error="validation failed max attempts",
+        decision={"action": "retry"},
+    )
+
+    assert runner.is_running is False
+    assert "1_2_1" not in runner.completed_tasks
+    assert "1_2_2" in runner.pending_tasks
+    fatal_events = [
+        data
+        for event, data in emitted
+        if event == "task-error" and data.get("fatal") is True
+    ]
+    assert fatal_events, "Expected fatal task-error event when retry attempts are exhausted"
+
+
+def test_retry_exhaustion_triggers_fail_fast(monkeypatch):
+    anyio.run(_run_retry_exhaustion_triggers_fail_fast, monkeypatch)
+
+
+async def _run_dependency_gap_stops_execution(monkeypatch):
+    runner = ExecutionRunner(sio=None, session_id="test")
+    runner.is_running = True
+    runner.chain_cache = [
+        {"task_id": "1_2", "dependencies": ["1_1"], "status": "undone"},
+    ]
+    runner.task_map = {
+        "1_2": {"task_id": "1_2", "dependencies": ["1_1"], "status": "undone"},
+    }
+    runner.pending_tasks = {"1_2"}
+    runner.completed_tasks = set()
+    runner.running_tasks = set()
+
+    emitted = []
+
+    def fake_emit(event, data):
+        emitted.append((event, data))
+
+    runner._emit = fake_emit
+    runner._persist_execution = lambda: None  # type: ignore[method-assign]
+    runner._broadcast_task_states = lambda: None  # type: ignore[method-assign]
+    runner._broadcast_worker_states = lambda: None  # type: ignore[method-assign]
+
+    await runner._execute_tasks()
+
+    assert runner.is_running is False
+    fatal_events = [
+        data for event, data in emitted
+        if event == "task-error" and data.get("fatal") is True
+    ]
+    assert fatal_events, "Expected fatal task-error when dependency is in neither todo nor completed sets"
+    assert "Dependency resolution gap" in str(fatal_events[-1].get("error") or "")
+
+
+def test_dependency_gap_stops_execution(monkeypatch):
+    anyio.run(_run_dependency_gap_stops_execution, monkeypatch)
+
+
 async def _run_retry_can_spawn_next_attempt_from_inflight_task(monkeypatch):
     runner = ExecutionRunner(sio=None, session_id="test")
     runner.is_running = True

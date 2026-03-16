@@ -44,12 +44,14 @@ class RunnerTaskExecutionMixin:
 
         if slot_id is None:
             logger.warning("Failed to acquire slot for task {} after {} retries", task["task_id"], retry_count)
-            self.completed_tasks.add(task["task_id"])
             self.running_tasks.discard(task["task_id"])
             self.pending_tasks.discard(task["task_id"])
-            self._update_task_status(task["task_id"], "done")
-            dependents = self.reverse_dependency_index.get(task["task_id"], [])
-            self._schedule_ready_tasks([self.task_map[id] for id in dependents if self.task_map.get(id)])
+            self._update_task_status(task["task_id"], "failed")
+            await self._trigger_fail_fast(
+                failed_task_id=task["task_id"],
+                phase="scheduling",
+                reason=f"Failed to acquire worker slot after {retry_count} retries",
+            )
             return
 
         self.running_tasks.add(task["task_id"])
@@ -271,7 +273,10 @@ class RunnerTaskExecutionMixin:
                         f"DIRECT_REASON: {_step_a_reason}"
                     )
                 else:
-                    final_validation_spec = {"criteria": list(original_criteria)}
+                    # Step C should validate against the active contract after Step-B review.
+                    # Fallback to original criteria only when no active criteria exist.
+                    active_criteria = list(((task.get("validation") or {}).get("criteria") or []))
+                    final_validation_spec = {"criteria": active_criteria or list(original_criteria)}
                     validation_context = {
                         "globalGoal": self._idea_text or "",
                         "taskDescription": task.get("description") or "",

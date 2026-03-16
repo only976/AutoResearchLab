@@ -16,6 +16,26 @@ def _runner_module():
 
 
 class RunnerExecutionMixin(RunnerTaskExecutionMixin):
+    def _find_dependency_gap(self) -> Optional[Dict[str, str]]:
+        """Find a task waiting on a dependency that is in neither todo nor completed sets."""
+        todo_ids = set(self.pending_tasks) | set(self.running_tasks)
+        completed_ids = set(self.completed_tasks)
+        for task in self.chain_cache:
+            task_id = str(task.get("task_id") or "")
+            if not task_id or task_id in completed_ids:
+                continue
+            for dep_id in task.get("dependencies") or []:
+                dep = str(dep_id or "").strip()
+                if not dep:
+                    continue
+                if dep in completed_ids or dep in todo_ids:
+                    continue
+                return {
+                    "taskId": task_id,
+                    "dependencyId": dep,
+                }
+        return None
+
     async def _run_step_b_contract_review(
         self,
         *,
@@ -125,9 +145,13 @@ class RunnerExecutionMixin(RunnerTaskExecutionMixin):
         self.running_tasks.discard(task_id)
 
         if not will_retry:
-            self.completed_tasks.add(task_id)
             self.pending_tasks.discard(task_id)
             self._update_task_status(task_id, "failed")
+            await self._trigger_fail_fast(
+                failed_task_id=task_id,
+                phase=phase,
+                reason=error,
+            )
             return
 
         self.task_last_retry_attempt[task_id] = attempt
@@ -182,6 +206,19 @@ class RunnerExecutionMixin(RunnerTaskExecutionMixin):
 
         last_heartbeat = time.monotonic()
         while self.is_running and (len(self.completed_tasks) < len(self.chain_cache) or len(self.running_tasks) > 0):
+            dependency_gap = self._find_dependency_gap()
+            if dependency_gap:
+                await self._trigger_fail_fast(
+                    failed_task_id=dependency_gap.get("taskId") or "unknown",
+                    phase="dependency",
+                    reason=(
+                        "Dependency resolution gap: dependency "
+                        f"{dependency_gap.get('dependencyId')} for task "
+                        f"{dependency_gap.get('taskId')} is in neither todo nor completed lists"
+                    ),
+                )
+                break
+
             ready = self._get_ready_tasks()
             for task in ready:
                 self._spawn_task_execution(task)
