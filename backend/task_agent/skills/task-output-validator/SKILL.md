@@ -24,6 +24,9 @@ Validate task output against the task's validation criteria **before** calling F
 3. **Run validation**  
    `RunSkillScript(skill="task-output-validator", script="scripts/validate.py", args=["[[sandbox]]/output.json", "--criteria-json", "<JSON string of validation spec>"])`
 
+4. **If criteria mention equivalent/convertible representations, run equivalence checks**
+   Add `--equivalent-to` and optionally `--equivalence-config-json`.
+
 4. **Interpret result**  
    - If `passed: true` → call `Finish` with the output
    - If `passed: false` → read the report, fix the issues, re-run validation, then `Finish`
@@ -51,6 +54,33 @@ python scripts/validate.py <output_file_path> [--criteria-json '{"criteria":[...
 
 - `output_file_path`: Full path to the output file (use `[[sandbox]]/output.json` in RunSkillScript args)
 - `--criteria-json`: JSON string of validation spec. If omitted, only format validity is checked.
+- `--equivalent-to`: Reference artifact path used for equivalence verification when criteria include equivalent/convertible requirements.
+- `--equivalence-config-json`: Optional JSON config describing one or more custom equivalence checks.
+
+### Equivalence Check Config (Generic)
+
+Use this when equivalent transformation is not a simple built-in case.
+
+```json
+{
+   "checks": [
+      {
+         "mode": "auto",
+         "left": "[[output]]",
+         "right": "[[sandbox]]/reference_artifact.dat",
+         "tolerance": 1e-6
+      }
+   ]
+}
+```
+
+- `left` / `right`: artifact paths. `[[output]]` means current output file.
+- `mode` supports:
+   - `auto`: try structured compare, numeric matrix compare, then normalized text compare.
+   - `structured`: canonical structural compare (e.g. JSON/XML canonical object).
+   - `numeric_matrix`: numeric matrix compare with tolerance.
+   - `text_normalized`: whitespace-normalized text compare.
+   - `line_set`: compare unique trimmed lines as sets.
 
 ## Output Format
 
@@ -71,6 +101,7 @@ The script performs structural checks:
 - **Markdown**: Section headers (e.g. `## Summary`), table structure, pipe syntax
 - **References section**: `Document has ## References section` and `References section is non-empty` (for research reports)
 - **Generic**: Substring/keyword presence
+- **Equivalent/convertible formats**: If criteria mention equivalent/convertible representation, the script can validate equivalence against reference artifacts using built-in or configured checks.
 
 For semantic criteria (e.g. "content is complete"), verify manually before Finish. The script reports automatable checks; you judge the rest.
 

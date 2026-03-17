@@ -24,6 +24,7 @@ async def run_task_agent(
     validation_spec: Optional[Dict[str, Any]] = None,
     idea_context: str = "",
     execution_context: Optional[Dict[str, Any]] = None,
+    on_prompt_built: Optional[Callable[[Dict[str, Any]], None]] = None,
 ) -> Any:
     """Task Agent 入口。使用 Google ADK 驱动。"""
     return await adk_runner.run_task_agent_adk(
@@ -42,4 +43,5 @@ async def run_task_agent(
         validation_spec=validation_spec,
         idea_context=idea_context,
         execution_context=execution_context,
+        on_prompt_built=on_prompt_built,
     )

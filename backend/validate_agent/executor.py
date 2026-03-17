@@ -27,11 +27,18 @@ def _build_contract_messages(packet: Dict[str, Any]) -> list[dict]:
     user_prompt = (
         "Review the packet and return JSON with keys: "
         "shouldAdjust (bool), immutableImpacted (bool), reasoning (string), "
-        "proposedValidationCriteria (array of strings), patchSummary (string).\n\n"
+        "proposedValidationCriteria (array of strings), patchSummary (string), "
+        "equivalenceCheckRequired (bool), equivalenceCheckHint (string).\n\n"
         "Rules:\n"
         "1) You may adjust only mutable step-level validation checks.\n"
         "2) If any immutable item is impacted, set immutableImpacted=true and shouldAdjust=false.\n"
         "3) Keep final research conclusion standards intact.\n\n"
+        "Equivalent-format rule (important):\n"
+        "- If failure is caused by representational differences that are losslessly or tolerantly convertible "
+        "(for example XML<->JSON, matrix<->CSV), you MAY adjust criteria to accept equivalent representation.\n"
+        "- But you MUST require verifiable equivalence evidence in the adjusted criteria: "
+        "conversion method, compared source/target artifacts, and concrete pass/fail checks.\n"
+        "- If equivalence cannot be verified, do NOT relax criteria.\n\n"
         f"Immutable items:\n{json.dumps(immutable_items, ensure_ascii=False, indent=2)}\n\n"
         f"Packet:\n```json\n{json.dumps(packet, ensure_ascii=False, indent=2)}\n```"
     )
@@ -65,6 +72,8 @@ def _parse_contract_review(raw: str) -> Dict[str, Any]:
         "reasoning": str(parsed.get("reasoning") or "").strip(),
         "proposedValidationCriteria": criteria,
         "patchSummary": str(parsed.get("patchSummary") or "").strip(),
+        "equivalenceCheckRequired": bool(parsed.get("equivalenceCheckRequired")),
+        "equivalenceCheckHint": str(parsed.get("equivalenceCheckHint") or "").strip(),
         "source": "step-b-agent",
     }
 

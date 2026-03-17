@@ -1,11 +1,14 @@
 """Single-task execution helpers for Task ExecutionRunner."""
 
 import asyncio
+import json
 import random
 import time
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from loguru import logger
+from db import get_execution_task_step_dir
 
 
 def _runner_module():
@@ -15,6 +18,86 @@ def _runner_module():
 
 
 class RunnerTaskExecutionMixin:
+    @staticmethod
+    def _write_text_file(path: Path, content: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    async def _persist_attempt_prompt_snapshot(
+        self,
+        *,
+        task_id: str,
+        attempt: int,
+        prompt_payload: Dict[str, Any],
+    ) -> None:
+        if not self.execution_run_id or not task_id:
+            return
+        try:
+            step_dir = get_execution_task_step_dir(self.execution_run_id, task_id).resolve()
+            step_dir.mkdir(parents=True, exist_ok=True)
+            prompt_md_path = step_dir / f"prompt_attempt_{int(attempt)}.md"
+            prompt_json_path = step_dir / f"prompt_attempt_{int(attempt)}.json"
+
+            system_prompt = str(prompt_payload.get("systemPrompt") or "")
+            user_message = str(prompt_payload.get("userMessage") or "")
+            context_budget = prompt_payload.get("contextBudget") or {}
+            compression = prompt_payload.get("compression") or {}
+
+            combined_markdown = (
+                f"# Task Prompt Snapshot\n\n"
+                f"- Task ID: {task_id}\n"
+                f"- Attempt: {int(attempt)}\n"
+                f"- Run ID: {self.execution_run_id}\n\n"
+                f"## System Prompt\n\n"
+                f"```text\n{system_prompt}\n```\n\n"
+                f"## User Message\n\n"
+                f"```text\n{user_message}\n```\n\n"
+                f"## Context Budget\n\n"
+                f"```json\n{json.dumps(context_budget, ensure_ascii=False, indent=2)}\n```\n\n"
+                f"## Compression Meta\n\n"
+                f"```json\n{json.dumps(compression, ensure_ascii=False, indent=2)}\n```\n"
+            )
+
+            await asyncio.to_thread(self._write_text_file, prompt_md_path, combined_markdown)
+            await asyncio.to_thread(
+                self._write_text_file,
+                prompt_json_path,
+                json.dumps(
+                    {
+                        "taskId": task_id,
+                        "attempt": int(attempt),
+                        "runId": self.execution_run_id,
+                        "prompt": prompt_payload,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+
+            preview = (user_message or "")
+            if len(preview) > 6000:
+                preview = preview[:6000] + "\n...[truncated for UI; full prompt saved to step file]"
+            front_chunk = (
+                f"Prompt snapshot for attempt {int(attempt)} saved to {prompt_md_path.name}.\n"
+                f"Please ensure this attempt does not repeat last failure patterns.\n\n"
+                f"--- Prompt Preview (User Message) ---\n{preview}"
+            )
+            self._emit("task-thinking", {
+                "taskId": task_id,
+                "attempt": int(attempt),
+                "operation": "PromptInit",
+                "source": "task",
+                "chunk": front_chunk,
+            })
+            await self._append_step_event(task_id, "task-prompt", {
+                "attempt": int(attempt),
+                "promptMarkdown": prompt_md_path.name,
+                "promptJson": prompt_json_path.name,
+                "promptChars": len(system_prompt) + len(user_message),
+            })
+        except Exception:
+            logger.exception("Failed to persist prompt snapshot task_id={} attempt={}", task_id, attempt)
+
     async def _execute_task(self, task: Dict) -> None:
         runner_mod = _runner_module()
         if not self.is_running:
@@ -159,6 +242,13 @@ class RunnerTaskExecutionMixin:
                         "taskId": task["task_id"],
                     }
                     self._emit_runtime_status()
+                    async def _on_prompt_built(prompt_payload: Dict[str, Any]) -> None:
+                        await self._persist_attempt_prompt_snapshot(
+                            task_id=task["task_id"],
+                            attempt=run_attempt,
+                            prompt_payload=prompt_payload,
+                        )
+
                     result = await runner_mod.run_task_agent(
                         task_id=task["task_id"],
                         description=task.get("description") or "",
@@ -175,6 +265,7 @@ class RunnerTaskExecutionMixin:
                         validation_spec=task.get("validation"),
                         idea_context=self._idea_text,
                         execution_context=execution_context,
+                        on_prompt_built=_on_prompt_built,
                     )
                 else:
                     result = await runner_mod.execute_task(
@@ -253,12 +344,16 @@ class RunnerTaskExecutionMixin:
                     "phase": "validation",
                     "shouldAdjust": bool(step_b_review.get("shouldAdjust")),
                     "immutableImpacted": bool(step_b_review.get("immutableImpacted")),
+                    "equivalenceCheckRequired": bool(step_b_review.get("equivalenceCheckRequired")),
+                    "equivalenceCheckHint": step_b_review.get("equivalenceCheckHint") or "",
                     "reasoning": step_b_review.get("reasoning") or "",
                     "patchSummary": step_b_review.get("patchSummary") or "",
                 })
                 await self._append_step_event(task_id, "task-step-b", {
                     "shouldAdjust": bool(step_b_review.get("shouldAdjust")),
                     "immutableImpacted": bool(step_b_review.get("immutableImpacted")),
+                    "equivalenceCheckRequired": bool(step_b_review.get("equivalenceCheckRequired")),
+                    "equivalenceCheckHint": step_b_review.get("equivalenceCheckHint") or "",
                     "reasoning": step_b_review.get("reasoning") or "",
                     "patchSummary": step_b_review.get("patchSummary") or "",
                 })
@@ -353,6 +448,8 @@ class RunnerTaskExecutionMixin:
                 "stepB": {
                     "shouldAdjust": bool(step_b_review.get("shouldAdjust")),
                     "immutableImpacted": bool(step_b_review.get("immutableImpacted")),
+                    "equivalenceCheckRequired": bool(step_b_review.get("equivalenceCheckRequired")),
+                    "equivalenceCheckHint": str(step_b_review.get("equivalenceCheckHint") or ""),
                     "patchSummary": str(step_b_review.get("patchSummary") or ""),
                     "reasoning": str(step_b_review.get("reasoning") or ""),
                 },

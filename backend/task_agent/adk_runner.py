@@ -212,6 +212,7 @@ async def run_task_agent_adk(
     validation_spec: Optional[Dict[str, Any]] = None,
     idea_context: str = "",
     execution_context: Optional[Dict[str, Any]] = None,
+    on_prompt_built: Optional[Callable[[Dict[str, Any]], Any]] = None,
 ) -> Any:
     """
     使用 Google ADK Runner 运行 Task Agent。
@@ -275,6 +276,22 @@ async def run_task_agent_adk(
         idea_context=idea_context,
         execution_context=compressed_execution_context,
     )
+
+    if on_prompt_built is not None:
+        payload = {
+            "taskId": task_id,
+            "outputFormat": output_format,
+            "systemPrompt": system_prompt,
+            "userMessage": user_message,
+            "contextBudget": _context_budget,
+            "compression": {
+                "resolvedInputs": _inputs_compress_meta,
+                "executionContext": _context_compress_meta,
+            },
+        }
+        maybe = on_prompt_built(payload)
+        if hasattr(maybe, "__await__"):
+            await maybe
 
     model = get_model_for_adk(api_config)
 

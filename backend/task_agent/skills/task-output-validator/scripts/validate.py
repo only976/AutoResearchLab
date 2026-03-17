@@ -6,10 +6,13 @@ Outputs JSON: {"passed": bool, "report": "markdown"}
 """
 
 import argparse
+import csv
 import json
 import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any
 
 
 def _load_output(path: str) -> tuple[str | None, str]:
@@ -161,10 +164,309 @@ def _detect_format(content: str) -> str:
     return "markdown"
 
 
+def _looks_like_equivalence_criterion(text: str) -> bool:
+    t = (text or "").lower()
+    return (
+        "equivalent" in t
+        or "equivalence" in t
+        or "convertible" in t
+        or "lossless" in t
+        or "可等价" in t
+        or "可转换" in t
+    )
+
+
+def _criterion_mentions_matrix_csv(text: str) -> bool:
+    t = (text or "").lower()
+    return ("matrix" in t and "csv" in t) or ("矩阵" in t and "csv" in t)
+
+
+def _criterion_mentions_json_xml(text: str) -> bool:
+    t = (text or "").lower()
+    return ("json" in t and "xml" in t)
+
+
+def _criterion_mentions_textual(text: str) -> bool:
+    t = (text or "").lower()
+    return "text" in t or "markdown" in t or "line" in t or "文本" in t
+
+
+def _parse_tolerance(criteria: list[str], default_tol: float) -> float:
+    joined = "\n".join(criteria or [])
+    match = re.search(r"(1e-\d+|0\.\d+)", joined, re.I)
+    if not match:
+        return default_tol
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return default_tol
+
+
+def _matrix_from_csv(path: Path) -> list[list[float]]:
+    rows: list[list[float]] = []
+    with path.open("r", encoding="utf-8", errors="replace", newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if not row:
+                continue
+            rows.append([float(cell.strip()) for cell in row])
+    return rows
+
+
+def _matrix_from_json_obj(obj: object) -> list[list[float]]:
+    if isinstance(obj, list) and obj and all(isinstance(r, list) for r in obj):
+        return [[float(cell) for cell in row] for row in obj]
+    if isinstance(obj, dict):
+        for key in ("matrix", "data", "values", "array"):
+            val = obj.get(key)
+            if isinstance(val, list) and val and all(isinstance(r, list) for r in val):
+                return [[float(cell) for cell in row] for row in val]
+    raise ValueError("JSON does not contain a numeric matrix")
+
+
+def _load_numeric_matrix(path: str) -> list[list[float]]:
+    p = Path(path)
+    suffix = p.suffix.lower()
+    if suffix == ".csv":
+        return _matrix_from_csv(p)
+    if suffix in (".json", ".jsn"):
+        obj = json.loads(p.read_text(encoding="utf-8", errors="replace"))
+        return _matrix_from_json_obj(obj)
+    # best effort: try CSV then JSON
+    try:
+        return _matrix_from_csv(p)
+    except Exception:
+        obj = json.loads(p.read_text(encoding="utf-8", errors="replace"))
+        return _matrix_from_json_obj(obj)
+
+
+def _compare_matrices(a: list[list[float]], b: list[list[float]], tol: float) -> tuple[bool, str]:
+    if len(a) != len(b):
+        return False, f"row count mismatch: {len(a)} vs {len(b)}"
+    if a and b and len(a[0]) != len(b[0]):
+        return False, f"column count mismatch: {len(a[0])} vs {len(b[0])}"
+    max_abs = 0.0
+    for i, row in enumerate(a):
+        if len(row) != len(b[i]):
+            return False, f"ragged row mismatch at row {i}: {len(row)} vs {len(b[i])}"
+        for j, val in enumerate(row):
+            diff = abs(val - b[i][j])
+            if diff > max_abs:
+                max_abs = diff
+    if max_abs <= tol:
+        return True, f"max absolute diff {max_abs:.6g} <= tolerance {tol:.6g}"
+    return False, f"max absolute diff {max_abs:.6g} > tolerance {tol:.6g}"
+
+
+def _xml_to_obj(elem: ET.Element) -> object:
+    children = list(elem)
+    if not children:
+        text = (elem.text or "").strip()
+        if text == "":
+            return ""
+        if text.lower() in ("true", "false"):
+            return text.lower() == "true"
+        try:
+            if "." in text:
+                return float(text)
+            return int(text)
+        except ValueError:
+            return text
+
+    grouped: dict[str, list[object]] = {}
+    for child in children:
+        grouped.setdefault(child.tag, []).append(_xml_to_obj(child))
+    out: dict[str, object] = {}
+    for key, vals in grouped.items():
+        out[key] = vals[0] if len(vals) == 1 else vals
+    return out
+
+
+def _load_structured(path: str) -> object:
+    p = Path(path)
+    suffix = p.suffix.lower()
+    raw = p.read_text(encoding="utf-8", errors="replace")
+    if suffix in (".json", ".jsn"):
+        return json.loads(raw)
+    if suffix == ".xml":
+        root = ET.fromstring(raw)
+        return {root.tag: _xml_to_obj(root)}
+
+    stripped = raw.strip()
+    if stripped.startswith("{") or stripped.startswith("["):
+        return json.loads(stripped)
+    root = ET.fromstring(raw)
+    return {root.tag: _xml_to_obj(root)}
+
+
+def _load_text(path: str) -> str:
+    return Path(path).read_text(encoding="utf-8", errors="replace")
+
+
+def _normalize_text(content: str) -> str:
+    # Normalize whitespace and common quoting noise for format-conversion checks.
+    text = (content or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n+", "\n", text)
+    return text.strip()
+
+
+def _compare_text_normalized(left: str, right: str) -> tuple[bool, str]:
+    l = _normalize_text(left)
+    r = _normalize_text(right)
+    if l == r:
+        return True, "normalized texts match"
+    return False, "normalized texts differ"
+
+
+def _compare_line_set(left: str, right: str) -> tuple[bool, str]:
+    lset = {line.strip() for line in _normalize_text(left).split("\n") if line.strip()}
+    rset = {line.strip() for line in _normalize_text(right).split("\n") if line.strip()}
+    if lset == rset:
+        return True, f"line sets match ({len(lset)} unique lines)"
+    missing = sorted(list(rset - lset))[:5]
+    extra = sorted(list(lset - rset))[:5]
+    return False, f"line sets differ; missing={missing} extra={extra}"
+
+
+def _auto_compare(left_path: str, right_path: str, tol: float) -> tuple[bool, str]:
+    # Try structured data first.
+    try:
+        if _load_structured(left_path) == _load_structured(right_path):
+            return True, "auto compare: canonical structured objects match"
+    except Exception:
+        pass
+
+    # Then try numeric matrix equivalence.
+    try:
+        ok, detail = _compare_matrices(_load_numeric_matrix(left_path), _load_numeric_matrix(right_path), tol)
+        if ok:
+            return True, f"auto compare: {detail}"
+    except Exception:
+        pass
+
+    # Finally fallback to normalized text equivalence.
+    try:
+        return _compare_text_normalized(_load_text(left_path), _load_text(right_path))
+    except Exception as e:
+        return False, f"auto compare failed: {e}"
+
+
+def _resolve_equivalence_paths(output_path: str, left: str, right: str) -> tuple[str, str]:
+    l = output_path if (left or "").strip() in ("", "[[output]]") else left
+    r = output_path if (right or "").strip() in ("", "[[output]]") else right
+    return l, r
+
+
+def _infer_mode_from_criterion(text: str) -> str:
+    if _criterion_mentions_matrix_csv(text):
+        return "numeric_matrix"
+    if _criterion_mentions_json_xml(text):
+        return "structured"
+    if _criterion_mentions_textual(text):
+        return "text_normalized"
+    return "auto"
+
+
+def _run_single_equivalence_check(
+    *,
+    output_path: str,
+    check: dict[str, Any],
+    default_reference: str,
+    default_tol: float,
+) -> tuple[bool, str]:
+    mode = str(check.get("mode") or "auto").strip().lower()
+    tol = float(check.get("tolerance") if check.get("tolerance") is not None else default_tol)
+    left_raw = str(check.get("left") or "[[output]]")
+    right_raw = str(check.get("right") or default_reference)
+    left_path, right_path = _resolve_equivalence_paths(output_path, left_raw, right_raw)
+
+    if not right_path:
+        return False, "equivalence reference path is missing"
+
+    if mode == "numeric_matrix":
+        return _compare_matrices(_load_numeric_matrix(left_path), _load_numeric_matrix(right_path), tol)
+    if mode == "structured":
+        if _load_structured(left_path) == _load_structured(right_path):
+            return True, "canonical structured objects match"
+        return False, "canonical structured objects differ"
+    if mode == "text_normalized":
+        return _compare_text_normalized(_load_text(left_path), _load_text(right_path))
+    if mode == "line_set":
+        return _compare_line_set(_load_text(left_path), _load_text(right_path))
+    if mode == "auto":
+        return _auto_compare(left_path, right_path, tol)
+    return False, f"unsupported equivalence mode: {mode}"
+
+
+def _check_equivalence(
+    *,
+    output_path: str,
+    equivalent_to: str,
+    criteria: list[str],
+    default_tol: float,
+    config: dict[str, Any] | None = None,
+) -> tuple[bool, list[str]]:
+    report: list[str] = []
+    selected = [c for c in (criteria or []) if _looks_like_equivalence_criterion(c)]
+    if not selected:
+        return True, report
+
+    all_passed = True
+    tol = _parse_tolerance(selected, default_tol)
+
+    configured_checks = []
+    if isinstance(config, dict):
+        checks = config.get("checks")
+        if isinstance(checks, list):
+            configured_checks = [c for c in checks if isinstance(c, dict)]
+
+    for c in selected:
+        try:
+            if configured_checks:
+                criterion_ok = True
+                for idx, check in enumerate(configured_checks, start=1):
+                    ok, detail = _run_single_equivalence_check(
+                        output_path=output_path,
+                        check=check,
+                        default_reference=equivalent_to,
+                        default_tol=tol,
+                    )
+                    if ok:
+                        report.append(f"- {c}: PASS (check#{idx}: {detail})")
+                    else:
+                        report.append(f"- {c}: FAIL (check#{idx}: {detail})")
+                        criterion_ok = False
+                if not criterion_ok:
+                    all_passed = False
+                continue
+
+            mode = _infer_mode_from_criterion(c)
+            ok, detail = _run_single_equivalence_check(
+                output_path=output_path,
+                check={"mode": mode, "left": "[[output]]", "right": equivalent_to, "tolerance": tol},
+                default_reference=equivalent_to,
+                default_tol=tol,
+            )
+            if ok:
+                report.append(f"- {c}: PASS ({detail})")
+            else:
+                report.append(f"- {c}: FAIL ({detail})")
+                all_passed = False
+        except Exception as e:
+            report.append(f"- {c}: FAIL ({e})")
+            all_passed = False
+
+    return all_passed, report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate task output against criteria")
     parser.add_argument("output_path", help="Path to output file")
     parser.add_argument("--criteria-json", default="", help="JSON string of validation spec")
+    parser.add_argument("--equivalent-to", default="", help="Path to reference artifact for equivalence checks")
+    parser.add_argument("--equivalence-tol", type=float, default=1e-6, help="Default tolerance for numeric equivalence checks")
+    parser.add_argument("--equivalence-config-json", default="", help="JSON config for custom equivalence checks")
     args = parser.parse_args()
 
     content, err = _load_output(args.output_path)
@@ -175,6 +477,7 @@ def main() -> int:
 
     criteria = []
     optional_checks = []
+    equivalence_config = None
     if args.criteria_json:
         try:
             spec = json.loads(args.criteria_json)
@@ -182,6 +485,14 @@ def main() -> int:
             optional_checks = spec.get("optionalChecks") or []
         except json.JSONDecodeError as e:
             out = {"passed": False, "report": f"# Validation\n\n**Error:** Invalid criteria JSON: {e}"}
+            print(json.dumps(out, ensure_ascii=False))
+            return 1
+
+    if args.equivalence_config_json:
+        try:
+            equivalence_config = json.loads(args.equivalence_config_json)
+        except json.JSONDecodeError as e:
+            out = {"passed": False, "report": f"# Validation\n\n**Error:** Invalid equivalence config JSON: {e}"}
             print(json.dumps(out, ensure_ascii=False))
             return 1
 
@@ -206,6 +517,22 @@ def main() -> int:
         all_passed, report_lines = _check_json(content, criteria)
     else:
         all_passed, report_lines = _check_markdown(content, criteria)
+
+    equivalence_criteria = [c for c in criteria if _looks_like_equivalence_criterion(c)]
+    if equivalence_criteria:
+        if not args.equivalent_to:
+            all_passed = False
+            report_lines.append("- Equivalence verification prerequisites: FAIL (--equivalent-to is required when equivalence criteria are present)")
+        else:
+            eq_passed, eq_report = _check_equivalence(
+                output_path=args.output_path,
+                equivalent_to=args.equivalent_to,
+                criteria=criteria,
+                default_tol=args.equivalence_tol,
+                config=equivalence_config,
+            )
+            all_passed = all_passed and eq_passed
+            report_lines.extend(eq_report)
 
     for c in optional_checks:
         report_lines.append(f"- [optional] {c}: (manual check)")
