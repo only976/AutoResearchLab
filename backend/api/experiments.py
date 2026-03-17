@@ -8,6 +8,12 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.maars_integration import ensure_maars_path
+
+try:
+    from backend.integration.data_agent_adapter import run_data_agent_analysis as _run_data_agent
+except Exception:
+    _run_data_agent = None
+
 from backend.schemas.request_models import (
     ExperimentCreateRequest,
     ExperimentPlanRequest,
@@ -36,14 +42,17 @@ def _load_maars():
     ensure_maars_path()
     from api import state as maars_state
     from db import (
+        DB_DIR,
         get_effective_config,
         get_execution,
         get_plan,
+        get_sandbox_dir,
         get_task_artifact,
         list_plan_ids,
         list_plan_outputs,
         save_execution,
         save_plan,
+        save_task_artifact,
     )
     from plan_agent.execution_builder import build_execution_from_plan
     from plan_agent.index import run_plan
@@ -51,14 +60,17 @@ def _load_maars():
 
     return {
         "state": maars_state,
+        "DB_DIR": DB_DIR,
         "get_effective_config": get_effective_config,
         "get_execution": get_execution,
         "get_plan": get_plan,
+        "get_sandbox_dir": get_sandbox_dir,
         "get_task_artifact": get_task_artifact,
         "list_plan_ids": list_plan_ids,
         "list_plan_outputs": list_plan_outputs,
         "save_execution": save_execution,
         "save_plan": save_plan,
+        "save_task_artifact": save_task_artifact,
         "build_execution_from_plan": build_execution_from_plan,
         "build_layout_from_execution": build_layout_from_execution,
         "run_plan": run_plan,
@@ -281,3 +293,60 @@ async def add_feedback(exp_id: str, payload: FeedbackRequest) -> Dict[str, Any]:
     )
     feedback_path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
     return {"status": "queued"}
+
+
+@router.post("/{exp_id}/analyze")
+async def run_data_analysis(exp_id: str) -> Dict[str, Any]:
+    """Trigger Data Agent analysis on all CSV/LOG files in the experiment workspace.
+
+    Scans every task sandbox under db/maars/{exp_id}/, runs quality checks and
+    visualization, and persists the report as a 'data_analysis' MAARS artifact.
+    """
+    if _run_data_agent is None:
+        raise HTTPException(status_code=503, detail="Data Agent adapter is not available")
+
+    maars = _load_maars()
+    plan_dir = maars["DB_DIR"] / exp_id
+    if not plan_dir.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    # Run synchronous data-agent pipeline in a thread pool to avoid blocking the event loop
+    loop = asyncio.get_event_loop()
+    report, summary = await loop.run_in_executor(
+        None, lambda: _run_data_agent(str(plan_dir), use_llm=True)
+    )
+
+    if report is None:
+        return {"status": "skipped", "reason": "No CSV/LOG data files found in experiment workspace"}
+
+    artifact = {
+        "type": "data_agent_report",
+        "checks": report.get("checks", []),
+        "metadata": report.get("metadata", {}),
+        "visuals": report.get("visuals", []),
+        "actions": report.get("actions", {}),
+        "summary": summary,
+        "generated_at": report.get("generated_at"),
+    }
+    await maars["save_task_artifact"](exp_id, "data_analysis", artifact)
+
+    return {
+        "status": "completed",
+        "plan_id": exp_id,
+        "checks_count": len(report.get("checks", [])),
+        "visuals_count": len(report.get("visuals", [])),
+        "summary": summary,
+    }
+
+
+@router.get("/{exp_id}/data-report")
+async def get_data_report(exp_id: str) -> Dict[str, Any]:
+    """Retrieve the Data Agent analysis report for an experiment."""
+    maars = _load_maars()
+    report = await maars["get_task_artifact"](exp_id, "data_analysis")
+    if report is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Data analysis report not found. Run POST /api/experiments/{exp_id}/analyze first.",
+        )
+    return report
