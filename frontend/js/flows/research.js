@@ -126,7 +126,9 @@
         execute: { status: 'idle', message: 'idle' },
         paper: { status: 'idle', message: 'idle' },
     };
-    const largeHelpers = window.MAARS?.researchLargeHelpers || {};
+    const execState = window.MAARS?.researchExecuteState || {};
+    const loader = window.MAARS?.researchLoader || {};
+    const bridges = window.MAARS?.researchEventBridges || {};
     const stageUI = window.MAARS?.researchStageUI || {};
     const coreUtils = window.MAARS?.researchCoreUtils || {};
 
@@ -379,7 +381,7 @@
     }
 
     function _appendExecuteMessage(message) {
-        largeHelpers.appendExecuteMessage?.(_largeHelperContext(), message);
+        execState.appendExecuteMessage?.(_largeHelperContext(), message);
     }
 
     function _syncExecuteElapsedTicker() {
@@ -412,7 +414,7 @@
     }
 
     function _upsertExecuteThinkingMessage(taskId, operation, body, scheduleInfo, attemptHint) {
-        largeHelpers.upsertExecuteThinkingMessage?.(
+        execState.upsertExecuteThinkingMessage?.(
             _largeHelperContext(),
             taskId,
             operation,
@@ -423,19 +425,19 @@
     }
 
     function _seedExecutionState(treeData, execution, outputs, options = {}) {
-        largeHelpers.seedExecutionState?.(_largeHelperContext(), treeData, execution, outputs, options);
+        execState.seedExecutionState?.(_largeHelperContext(), treeData, execution, outputs, options);
     }
 
     function _resetExecuteTimelineForNewRun() {
-        largeHelpers.resetExecuteTimelineForNewRun?.(_largeHelperContext());
+        execState.resetExecuteTimelineForNewRun?.(_largeHelperContext());
     }
 
     function renderExecuteStream() {
-        largeHelpers.renderExecuteStream?.(_largeHelperContext());
+        execState.renderExecuteStream?.(_largeHelperContext());
     }
 
     function initExecuteStreamControls() {
-        largeHelpers.initExecuteStreamControls?.(_largeHelperContext());
+        execState.initExecuteStreamControls?.(_largeHelperContext());
     }
 
     function navigateToCreateResearch() {
@@ -471,7 +473,7 @@
     }
 
     async function loadResearch(researchId) {
-        await largeHelpers.loadResearch?.(_largeHelperContext(), researchId);
+        await loader.loadResearch?.(_largeHelperContext(), researchId);
     }
 
     function initDetailControls(researchId) {
@@ -479,7 +481,7 @@
     }
 
     function initEventBridges() {
-        largeHelpers.initEventBridges?.(_largeHelperContext());
+        bridges.initEventBridges?.(_largeHelperContext());
     }
 
     function init() {
