@@ -19,11 +19,11 @@ from shared.constants import (
 from shared.idea_utils import get_idea_text
 from db import save_execution as _db_save_execution
 from .runner_deps import RunnerDeps, build_default_deps
-from . import runner_execution_mixin as exec_fns
-from . import runner_memory_mixin as memory_fns
-from . import runner_retry_mixin as retry_fns
-from . import runner_state_mixin as state_fns
-from . import runner_task_execution_mixin as task_exec_fns
+from . import runner_orchestration as exec_fns
+from . import runner_memory as memory_fns
+from . import runner_retry as retry_fns
+from . import runner_scheduling as state_fns
+from . import runner_phases as task_exec_fns
 
 
 def _env_float(name: str, default: float) -> float:
@@ -108,7 +108,7 @@ class ExecutionRunner:
             except Exception as e:
                 logger.warning("%s emit failed: %s", event, e)
 
-    # -- Retry/attempt delegates (from runner_retry_mixin functions) --
+    # -- Retry/attempt delegates (from runner_retry) --
 
     def _failure_key(self, task_id: str, bucket: str) -> str:
         return retry_fns.failure_key(task_id, bucket)
@@ -145,7 +145,7 @@ class ExecutionRunner:
     def _run_step_a_structural_format_gate(result: Any, output_spec: Dict[str, Any]) -> tuple[bool, str]:
         return retry_fns.run_step_a_structural_format_gate(result, output_spec)
 
-    # -- Memory delegates (from runner_memory_mixin functions) --
+    # -- Memory delegates (from runner_memory) --
 
     async def _record_task_attempt_failure(
         self, *, task_id: str, phase: str, attempt: int, error: str,
@@ -175,7 +175,7 @@ class ExecutionRunner:
             execution_run_id=self.execution_run_id,
         )
 
-    # -- State/scheduling delegates (from runner_state_mixin functions) --
+    # -- State/scheduling delegates (from runner_scheduling) --
 
     def _schedule_ready_tasks(self, tasks_to_check: List[Dict]) -> None:
         state_fns.schedule_ready_tasks(self, tasks_to_check)
@@ -216,7 +216,7 @@ class ExecutionRunner:
     async def stop_async(self) -> None:
         await state_fns.stop_async(self)
 
-    # -- Execution orchestration delegates (from runner_execution_mixin) --
+    # -- Execution orchestration delegates (from runner_orchestration) --
 
     def _find_dependency_gap(self) -> Optional[Dict[str, str]]:
         return exec_fns.find_dependency_gap(self)
@@ -236,7 +236,7 @@ class ExecutionRunner:
     async def _execute_tasks(self) -> None:
         await exec_fns.execute_tasks(self)
 
-    # -- Task execution delegates (from runner_task_execution_mixin) --
+    # -- Task execution delegates (from runner_phases) --
 
     async def _persist_attempt_prompt_snapshot(self, *, task_id, attempt, prompt_payload):
         await task_exec_fns.persist_attempt_prompt_snapshot(
