@@ -17,8 +17,8 @@ from shared.constants import (
     MOCK_VALIDATION_PASS_PROBABILITY,
 )
 from shared.idea_utils import get_idea_text
+from db import save_execution as _db_save_execution
 from .runner_deps import RunnerDeps, build_default_deps
-from .runner_emit_mixin import RunnerEmitMixin
 from .runner_execution_mixin import RunnerExecutionMixin
 from .runner_memory_mixin import RunnerMemoryMixin
 from .runner_retry_mixin import RunnerRetryMixin
@@ -54,7 +54,6 @@ _MOCK_VALIDATOR_CHUNK_DELAY = _env_float("MAARS_MOCK_VALIDATOR_CHUNK_DELAY", 0.0
 
 
 class ExecutionRunner(
-    RunnerEmitMixin,
     RunnerMemoryMixin,
     RunnerRetryMixin,
     RunnerStateMixin,
@@ -97,6 +96,39 @@ class ExecutionRunner(
         self.task_next_attempt_hint: Dict[str, int] = {}
         self.task_execute_started_attempts: Dict[str, Set[int]] = {}
         self.research_id: str = ""
+
+    # -- Emit / persist helpers (inlined from RunnerEmitMixin) --
+
+    def _persist_execution(self) -> None:
+        if self.idea_id and self.plan_id and self.chain_cache:
+            try:
+                asyncio.create_task(self._persist_execution_async())
+            except RuntimeError:
+                pass
+
+    async def _persist_execution_async(self) -> None:
+        async with self._persist_lock:
+            if self.idea_id and self.plan_id and self.chain_cache:
+                try:
+                    await _db_save_execution({"tasks": list(self.chain_cache)}, self.idea_id, self.plan_id)
+                except Exception as e:
+                    logger.warning("Failed to persist execution: %s", e)
+
+    def _emit(self, event: str, data: dict) -> None:
+        if hasattr(self.sio, "emit"):
+            try:
+                asyncio.create_task(self.sio.emit(event, data, to=self.session_id))
+            except RuntimeError:
+                pass
+
+    async def _emit_await(self, event: str, data: dict) -> None:
+        if hasattr(self.sio, "emit"):
+            try:
+                await self.sio.emit(event, data, to=self.session_id)
+            except Exception as e:
+                logger.warning("%s emit failed: %s", event, e)
+
+    # -- Task lifecycle --
 
     def _spawn_task_execution(self, task: Dict) -> None:
         task_id = task["task_id"]
