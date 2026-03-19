@@ -52,34 +52,44 @@ def _parse_keywords_response(text: str) -> List[str]:
     return []
 
 
-async def extract_keywords(idea: str, api_config: dict, abort_event: Optional[Any] = None) -> List[str]:
-    """
-    从模糊 idea 中提取 arXiv 检索关键词。
-    Mock 模式：从 test/mock-ai/refine.json 加载并解析。
-    """
-    if not idea or not isinstance(idea, str):
-        return []
-    idea = idea.strip()
-    if not idea:
-        return []
+async def _keywords_via_mock(
+    on_chunk: Optional[OnThinkingCallback] = None,
+    abort_event: Optional[Any] = None,
+) -> List[str]:
+    mock = load_mock_entry(MOCK_AI_DIR, RESPONSE_TYPE_KEYWORDS, MOCK_KEY)
+    if not mock:
+        raise ValueError(f"No mock data for {RESPONSE_TYPE_KEYWORDS}/{MOCK_KEY}")
+    if on_chunk:
+        def stream_chunk(chunk: str):
+            if chunk:
+                return on_chunk(chunk, None, "Keywords", None)
+        content = await mock_chat_completion(
+            mock["content"], mock["reasoning"], stream_chunk,
+            stream=True, abort_event=abort_event,
+        )
+        return _parse_keywords_response(content or "")
+    return _parse_keywords_response(mock["content"])
 
-    use_mock = api_config.get("ideaUseMock", True)
-    if use_mock:
-        mock = load_mock_entry(MOCK_AI_DIR, RESPONSE_TYPE_KEYWORDS, MOCK_KEY)
-        if not mock:
-            raise ValueError(f"No mock data for {RESPONSE_TYPE_KEYWORDS}/{MOCK_KEY}")
-        return _parse_keywords_response(mock["content"])
 
+async def _keywords_via_llm(
+    idea: str,
+    api_config: dict,
+    on_chunk: Optional[OnThinkingCallback] = None,
+    abort_event: Optional[Any] = None,
+) -> List[str]:
     cfg = merge_phase_config(api_config, "idea")
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": idea},
     ]
+    def _stream_cb(chunk: str):
+        if on_chunk:
+            return on_chunk(chunk, None, "Keywords", None)
     try:
         response = await chat_completion(
-            messages,
-            cfg,
-            stream=False,
+            messages, cfg,
+            on_chunk=_stream_cb if on_chunk else None,
+            stream=bool(on_chunk),
             temperature=TEMP_EXTRACT,
             abort_event=abort_event,
         )
@@ -89,66 +99,33 @@ async def extract_keywords(idea: str, api_config: dict, abort_event: Optional[An
         return []
 
 
+async def extract_keywords(idea: str, api_config: dict, abort_event: Optional[Any] = None) -> List[str]:
+    """从模糊 idea 中提取 arXiv 检索关键词。"""
+    if not idea or not isinstance(idea, str):
+        return []
+    idea = idea.strip()
+    if not idea:
+        return []
+    if api_config.get("ideaUseMock", True):
+        return await _keywords_via_mock(abort_event=abort_event)
+    return await _keywords_via_llm(idea, api_config, abort_event=abort_event)
+
+
 async def extract_keywords_stream(
     idea: str,
     api_config: dict,
     on_chunk: Optional[OnThinkingCallback] = None,
     abort_event: Optional[Any] = None,
 ) -> List[str]:
-    """
-    流式从模糊 idea 中提取 arXiv 检索关键词。
-    Mock 模式：从 test/mock-ai/refine.json 加载，通过 mock_chat_completion 流式输出 reasoning。
-    """
+    """流式从模糊 idea 中提取 arXiv 检索关键词。"""
     if not idea or not isinstance(idea, str):
         return []
     idea = idea.strip()
     if not idea:
         return []
-
-    use_mock = api_config.get("ideaUseMock", True)
-    if use_mock:
-        mock = load_mock_entry(MOCK_AI_DIR, RESPONSE_TYPE_KEYWORDS, MOCK_KEY)
-        if not mock:
-            raise ValueError(f"No mock data for {RESPONSE_TYPE_KEYWORDS}/{MOCK_KEY}")
-        stream = on_chunk is not None
-
-        def stream_chunk(chunk: str):
-            if on_chunk and chunk:
-                return on_chunk(chunk, None, "Keywords", None)
-
-        effective_on_thinking = stream_chunk if stream else None
-        content = await mock_chat_completion(
-            mock["content"],
-            mock["reasoning"],
-            effective_on_thinking,
-            stream=stream,
-            abort_event=abort_event,
-        )
-        return _parse_keywords_response(content or "")
-
-    cfg = merge_phase_config(api_config, "idea")
-    messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
-        {"role": "user", "content": idea},
-    ]
-
-    def _stream_cb(chunk: str):
-        if on_chunk:
-            return on_chunk(chunk, None, "Keywords", None)
-
-    try:
-        full_content = await chat_completion(
-            messages,
-            cfg,
-            on_chunk=_stream_cb,
-            stream=True,
-            temperature=TEMP_EXTRACT,
-            abort_event=abort_event,
-        )
-        text = full_content if isinstance(full_content, str) else str(full_content)
-        return _parse_keywords_response(text)
-    except Exception:
-        return []
+    if api_config.get("ideaUseMock", True):
+        return await _keywords_via_mock(on_chunk=on_chunk, abort_event=abort_event)
+    return await _keywords_via_llm(idea, api_config, on_chunk=on_chunk, abort_event=abort_event)
 
 
 # --- Refined Idea 生成 ---
@@ -175,28 +152,32 @@ def _build_papers_context(papers: List[dict], max_chars: int = 4000) -> str:
     return "\n".join(parts) if parts else "(No papers)"
 
 
-async def refine_idea_from_papers(
+async def _refine_via_mock(
+    on_chunk: Optional[OnThinkingCallback] = None,
+    abort_event: Optional[Any] = None,
+) -> str:
+    mock = load_mock_entry(MOCK_AI_DIR, RESPONSE_TYPE_REFINE, MOCK_KEY)
+    if not mock:
+        return ""
+    if on_chunk:
+        def stream_chunk(c: str):
+            if c:
+                return on_chunk(c, None, "Refine", None)
+        content = await mock_chat_completion(
+            mock["content"], mock.get("reasoning", ""), stream_chunk,
+            stream=True, abort_event=abort_event,
+        )
+        return (content or "").strip()
+    return (mock["content"] or "").strip()
+
+
+async def _refine_via_llm(
     idea: str,
     papers: List[dict],
     api_config: dict,
+    on_chunk: Optional[OnThinkingCallback] = None,
     abort_event: Optional[Any] = None,
 ) -> str:
-    """
-    基于用户 idea 与检索到的 papers，生成可执行的 refined idea（直接 Markdown 输出）。
-    非流式版本，用于无 on_thinking 时。
-    """
-    if not idea or not isinstance(idea, str):
-        idea = ""
-    idea = idea.strip()
-    papers = papers or []
-
-    use_mock = api_config.get("ideaUseMock", True)
-    if use_mock:
-        mock = load_mock_entry(MOCK_AI_DIR, RESPONSE_TYPE_REFINE, MOCK_KEY)
-        if not mock:
-            return ""
-        return (mock["content"] or "").strip()
-
     cfg = merge_phase_config(api_config, "idea")
     papers_ctx = _build_papers_context(papers)
     user_content = f"**User's idea:** {idea}\n\n**Retrieved papers:**\n{papers_ctx}\n\n**Output:**"
@@ -204,19 +185,36 @@ async def refine_idea_from_papers(
         {"role": "system", "content": _REFINE_IDEA_SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
     ]
+    def _stream_cb(chunk: str):
+        if on_chunk:
+            return on_chunk(chunk, None, "Refine", None)
     try:
         response = await chat_completion(
-            messages,
-            cfg,
-            stream=False,
+            messages, cfg,
+            on_chunk=_stream_cb if on_chunk else None,
+            stream=bool(on_chunk),
             temperature=TEMP_CREATIVE,
             abort_event=abort_event,
         )
         text = response if isinstance(response, str) else str(response)
         return (text or "").strip()
     except Exception as e:
-        logger.warning("Refine idea (non-stream) failed: {}", e)
+        logger.warning("Refine idea failed: {}", e)
         return ""
+
+
+async def refine_idea_from_papers(
+    idea: str,
+    papers: List[dict],
+    api_config: dict,
+    abort_event: Optional[Any] = None,
+) -> str:
+    """基于用户 idea 与检索到的 papers，生成可执行的 refined idea。"""
+    idea = (idea or "").strip()
+    papers = papers or []
+    if api_config.get("ideaUseMock", True):
+        return await _refine_via_mock(abort_event=abort_event)
+    return await _refine_via_llm(idea, papers, api_config, abort_event=abort_event)
 
 
 async def refine_idea_from_papers_stream(
@@ -226,59 +224,9 @@ async def refine_idea_from_papers_stream(
     on_chunk: Optional[OnThinkingCallback] = None,
     abort_event: Optional[Any] = None,
 ) -> str:
-    """
-    流式基于用户 idea 与检索到的 papers，生成可执行的 refined idea（直接 Markdown 输出）。
-    Thinking 区域 operation 为 "Refine"。
-    """
-    if not idea or not isinstance(idea, str):
-        idea = ""
-    idea = idea.strip()
+    """流式基于用户 idea 与检索到的 papers，生成可执行的 refined idea。"""
+    idea = (idea or "").strip()
     papers = papers or []
-
-    use_mock = api_config.get("ideaUseMock", True)
-    if use_mock:
-        mock = load_mock_entry(MOCK_AI_DIR, RESPONSE_TYPE_REFINE, MOCK_KEY)
-        if not mock:
-            return ""
-        stream = on_chunk is not None
-
-        def stream_chunk(c: str):
-            if on_chunk and c:
-                return on_chunk(c, None, "Refine", None)
-
-        effective_on_thinking = stream_chunk if stream else None
-        content = await mock_chat_completion(
-            mock["content"],
-            mock.get("reasoning", ""),
-            effective_on_thinking,
-            stream=stream,
-            abort_event=abort_event,
-        )
-        return (content or "").strip()
-
-    cfg = merge_phase_config(api_config, "idea")
-    papers_ctx = _build_papers_context(papers)
-    user_content = f"**User's idea:** {idea}\n\n**Retrieved papers:**\n{papers_ctx}\n\n**Output:**"
-    messages = [
-        {"role": "system", "content": _REFINE_IDEA_SYSTEM_PROMPT},
-        {"role": "user", "content": user_content},
-    ]
-
-    def _stream_cb(chunk: str):
-        if on_chunk:
-            return on_chunk(chunk, None, "Refine", None)
-
-    try:
-        full_content = await chat_completion(
-            messages,
-            cfg,
-            on_chunk=_stream_cb,
-            stream=True,
-            temperature=TEMP_CREATIVE,
-            abort_event=abort_event,
-        )
-        text = full_content if isinstance(full_content, str) else str(full_content)
-        return (text or "").strip()
-    except Exception as e:
-        logger.warning("Refine idea (stream) failed: {}", e)
-        return ""
+    if api_config.get("ideaUseMock", True):
+        return await _refine_via_mock(on_chunk=on_chunk, abort_event=abort_event)
+    return await _refine_via_llm(idea, papers, api_config, on_chunk=on_chunk, abort_event=abort_event)

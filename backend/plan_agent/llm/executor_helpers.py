@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from shared.constants import PLAN_MAX_CONCURRENT_CALLS
 from shared.llm_client import chat_completion as real_chat_completion, merge_phase_config
@@ -131,6 +131,52 @@ def _build_messages_for_context(context: Dict[str, Any]) -> tuple[list[dict], st
     else:
         phase = "format"
     return messages, phase
+
+
+def make_model_call(
+    *,
+    context: Dict[str, Any],
+    on_thinking: Callable[..., None],
+    abort_event: Optional[Any],
+    use_mock: bool,
+    api_config: Optional[Dict],
+) -> Callable[[list[dict], float], Awaitable[str]]:
+    """Create a model_call function compatible with generate_with_repair.
+
+    Mock mode: ignores the messages arg, loads mock data via _call_chat_completion.
+    Real mode: calls _call_real_chat_completion with the provided messages.
+    """
+    response_type = context["type"]
+    task_id = context["taskId"]
+    op_label = _OP_LABELS.get(response_type, response_type.capitalize())
+
+    if use_mock:
+        async def _mock_call(messages: list[dict], temperature: float) -> str:
+            return await _call_chat_completion(
+                on_thinking, context, abort_event,
+                stream=True, use_mock=True, api_config=api_config,
+                temperature=temperature,
+            )
+        return _mock_call
+
+    phase = {
+        "atomicity": "atomicity",
+        "decompose": "decompose",
+        "quality": "quality",
+    }.get(response_type, "format")
+
+    async def _real_call(messages: list[dict], temperature: float) -> str:
+        return await _call_real_chat_completion(
+            messages=messages,
+            phase=phase,
+            on_thinking=on_thinking,
+            task_id=task_id,
+            op_label=op_label,
+            abort_event=abort_event,
+            api_config=api_config,
+            temperature=temperature,
+        )
+    return _real_call
 
 
 async def _call_real_chat_completion(
