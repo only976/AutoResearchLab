@@ -156,12 +156,12 @@
         const badge = document.getElementById('planAgentQualityBadge');
         if (!badge) return;
         if (score == null || score === undefined) {
-            badge.style.display = 'none';
+            badge.hidden = true;
             return;
         }
         badge.textContent = `Quality: ${score}`;
         badge.title = comment || '';
-        badge.style.display = '';
+        badge.hidden = false;
         badge.classList.remove('quality-high', 'quality-mid', 'quality-low');
         if (score >= 80) badge.classList.add('quality-high');
         else if (score >= 60) badge.classList.add('quality-mid');

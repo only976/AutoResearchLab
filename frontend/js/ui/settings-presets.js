@@ -48,7 +48,7 @@
         document.getElementById('presetApiKey').value = preset.apiKey || '';
         document.getElementById('presetModel').value = preset.model || '';
         const deleteBtn = document.getElementById('settingsPresetDeleteBtn');
-        if (deleteBtn) deleteBtn.style.display = Object.keys(state?.presets || {}).length > 1 ? '' : 'none';
+        if (deleteBtn) deleteBtn.hidden = Object.keys(state?.presets || {}).length <= 1;
     }
 
     function readFormIntoState(activePresetKey, state) {

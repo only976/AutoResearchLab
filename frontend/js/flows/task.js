@@ -175,7 +175,7 @@
     }
 
     function onExecutionComplete() {
-        if (stopExecutionBtn) stopExecutionBtn.style.display = 'none';
+        if (stopExecutionBtn) stopExecutionBtn.hidden = true;
         if (executionBtn) {
             executionBtn.disabled = false;
             executionBtn.textContent = 'Execution Complete!';

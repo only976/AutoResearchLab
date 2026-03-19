@@ -25,7 +25,7 @@
         const data = e.detail || {};
         if (data.ideaId) cfg.setCurrentIdeaId(data.ideaId);
         isRefining = false;
-        if (stopRefineBtn) stopRefineBtn.style.display = 'none';
+        if (stopRefineBtn) stopRefineBtn.hidden = true;
         updateRefineState();
     }
 
@@ -36,7 +36,7 @@
             toast.error('Refine failed: ' + errorMsg);
         }
         isRefining = false;
-        if (stopRefineBtn) stopRefineBtn.style.display = 'none';
+        if (stopRefineBtn) stopRefineBtn.hidden = true;
         updateRefineState();
     }
 
@@ -52,7 +52,7 @@
         try {
             isRefining = true;
             refineIdeaBtn.disabled = true;
-            if (stopRefineBtn) stopRefineBtn.style.display = '';
+            if (stopRefineBtn) stopRefineBtn.hidden = false;
             document.dispatchEvent(new CustomEvent('maars:idea-start'));
             document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'output' } }));
             await api.refineIdea(idea, 10);

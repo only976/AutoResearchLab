@@ -21,7 +21,7 @@
             toast.error('Paper generation failed: ' + errorMsg);
         }
         isGenerating = false;
-        if (stopPaperBtn) stopPaperBtn.style.display = 'none';
+        if (stopPaperBtn) stopPaperBtn.hidden = true;
         if (generatePaperBtn) generatePaperBtn.disabled = false;
     }
 
@@ -41,7 +41,7 @@
             }
             isGenerating = true;
             generatePaperBtn.disabled = true;
-            if (stopPaperBtn) stopPaperBtn.style.display = '';
+            if (stopPaperBtn) stopPaperBtn.hidden = false;
             document.dispatchEvent(new CustomEvent('maars:paper-start'));
             document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'output' } }));
             const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/paper/run`, {
@@ -58,7 +58,7 @@
 
     function onPaperComplete() {
         isGenerating = false;
-        if (stopPaperBtn) stopPaperBtn.style.display = 'none';
+        if (stopPaperBtn) stopPaperBtn.hidden = true;
         if (generatePaperBtn) generatePaperBtn.disabled = false;
     }
 

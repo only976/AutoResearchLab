@@ -19,7 +19,7 @@
                 executionBtn.disabled = true;
                 executionBtn.textContent = 'Executing...';
             }
-            if (stopExecutionBtn) stopExecutionBtn.style.display = '';
+            if (stopExecutionBtn) stopExecutionBtn.hidden = false;
         }
 
         function resetExecutionButtons() {
@@ -27,7 +27,7 @@
                 executionBtn.disabled = false;
                 executionBtn.textContent = 'Execution';
             }
-            if (stopExecutionBtn) stopExecutionBtn.style.display = 'none';
+            if (stopExecutionBtn) stopExecutionBtn.hidden = true;
         }
 
         async function runExecution() {
@@ -62,13 +62,13 @@
                     const error = await response.json();
                     throw new Error(error.error || 'Failed to start execution');
                 }
-                if (stopExecutionBtn) stopExecutionBtn.style.display = '';
+                if (stopExecutionBtn) stopExecutionBtn.hidden = false;
             } catch (error) {
                 console.error('Error in execution:', error);
                 toast.error('Error: ' + error.message);
                 btn.textContent = originalText;
                 btn.disabled = false;
-                if (stopExecutionBtn) stopExecutionBtn.style.display = 'none';
+                if (stopExecutionBtn) stopExecutionBtn.hidden = true;
             }
         }
 

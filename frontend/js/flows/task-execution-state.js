@@ -101,7 +101,7 @@
                     executionBtn.disabled = true;
                     executionBtn.textContent = 'Executing...';
                 }
-                if (stopExecutionBtn) stopExecutionBtn.style.display = '';
+                if (stopExecutionBtn) stopExecutionBtn.hidden = false;
             }
         }
 

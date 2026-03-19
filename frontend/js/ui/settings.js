@@ -156,7 +156,7 @@
                 _populatePresetForm();
                 _updateEditPanelVisibility();
             }
-            modal.style.display = 'flex';
+            modal.classList.add('is-open');
             document.body.style.overflow = 'hidden';
         }
         _openSettingsModal = openSettingsModal;
@@ -254,11 +254,11 @@
         });
 
         function closeModal() {
-            modal.style.display = 'none';
+            modal.classList.remove('is-open');
             document.body.style.overflow = '';
         }
         window.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.style.display === 'flex') closeModal(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal(); });
 
         document.getElementById('settingsSaveBtn')?.addEventListener('click', async () => {
             _readFormIntoState();

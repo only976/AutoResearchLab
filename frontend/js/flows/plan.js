@@ -29,7 +29,7 @@
         try {
             isPlanRunning = true;
             generatePlanBtn.disabled = true;
-            if (stopPlanBtn) stopPlanBtn.style.display = '';
+            if (stopPlanBtn) stopPlanBtn.hidden = false;
             document.dispatchEvent(new CustomEvent('maars:plan-start'));
             document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'decomposition' } }));
             const ideaId = cfg.getCurrentIdeaId?.() || null;
@@ -57,7 +57,7 @@
 
     function resetPlanUI() {
         if (generatePlanBtn) generatePlanBtn.textContent = 'Plan';
-        if (stopPlanBtn) stopPlanBtn.style.display = 'none';
+        if (stopPlanBtn) stopPlanBtn.hidden = true;
         isPlanRunning = false;
         updateButtonStates();
     }

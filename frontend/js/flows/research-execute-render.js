@@ -170,7 +170,7 @@
                 const titleWrapEl = document.createElement('div');
                 titleWrapEl.style.flex = '1 1 auto';
                 titleWrapEl.style.minWidth = '0';
-                titleWrapEl.style.display = 'flex';
+                titleWrapEl.hidden = false;
                 titleWrapEl.style.flexDirection = 'column';
                 titleWrapEl.style.gap = '4px';
 
@@ -306,13 +306,13 @@
 
                     attemptEl.appendChild(attemptHeaderEl);
                     attemptEl.appendChild(attemptBodyEl);
-                    attemptBodyEl.style.display = attemptExpanded ? 'block' : 'none';
+                    attemptBodyEl.hidden = !attemptExpanded;
                     attemptToggleEl.style.transform = attemptExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
 
                     const toggleAttempt = () => {
                         attemptExpanded = !attemptExpanded;
                         ctx.executeState.attemptExpandedById.set(attemptKey, attemptExpanded);
-                        attemptBodyEl.style.display = attemptExpanded ? 'block' : 'none';
+                        attemptBodyEl.hidden = !attemptExpanded;
                         attemptToggleEl.style.transform = attemptExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
                     };
 
@@ -333,17 +333,17 @@
                     isExpanded = !isExpanded;
                     ctx.executeState.taskExpandedById.set(taskId, isExpanded);
                     toggleEl.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
-                    detailsEl.style.display = isExpanded ? 'block' : 'none';
+                    detailsEl.hidden = !isExpanded;
                     ctx.updateExecuteToggleAllButton();
                 });
 
-                detailsEl.style.display = isExpanded ? 'block' : 'none';
+                detailsEl.hidden = !isExpanded;
                 toggleEl.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
                 headerEl.addEventListener('click', () => {
                     isExpanded = !isExpanded;
                     ctx.executeState.taskExpandedById.set(taskId, isExpanded);
                     toggleEl.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
-                    detailsEl.style.display = isExpanded ? 'block' : 'none';
+                    detailsEl.hidden = !isExpanded;
                     ctx.updateExecuteToggleAllButton();
                 });
 
