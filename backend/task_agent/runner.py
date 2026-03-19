@@ -5,7 +5,6 @@ Task Agent 含两阶段：Execution（执行原子任务）→ Validation（验�
 """
 
 import asyncio
-import os
 import time
 from typing import Any, Dict, List, Optional, Set
 
@@ -26,18 +25,6 @@ from . import runner_scheduling as state_fns
 from . import runner_phases as task_exec_fns
 
 
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        return default
-
-_MOCK_VALIDATOR_CHUNK_DELAY = _env_float("MAARS_MOCK_VALIDATOR_CHUNK_DELAY", 0.03)
-
-
 class ExecutionRunner:
     def __init__(self, sio: Any, session_id: Optional[str] = None, deps: Optional[RunnerDeps] = None):
         self.sio = sio
@@ -52,7 +39,6 @@ class ExecutionRunner:
         self.chain_cache: List[Dict] = []
         self.task_map: Dict[str, Dict] = {}
         self.reverse_dependency_index: Dict[str, List[str]] = {}
-        self.task_failure_count: Dict[str, int] = {}
         self.task_phase_failure_count: Dict[str, int] = {}
         self.task_last_retry_attempt: Dict[str, int] = {}
         self.EXECUTION_PASS_PROBABILITY = MOCK_EXECUTION_PASS_PROBABILITY
@@ -117,7 +103,7 @@ class ExecutionRunner:
         return retry_fns.get_failure_count(self.task_phase_failure_count, task_id, bucket)
 
     def _clear_task_failure_counts(self, task_id: str) -> None:
-        retry_fns.clear_task_failure_counts(self.task_phase_failure_count, self.task_failure_count, task_id)
+        retry_fns.clear_task_failure_counts(self.task_phase_failure_count, task_id)
 
     @staticmethod
     def _extract_direct_fail_reason(report_text: str) -> str:
@@ -374,7 +360,6 @@ class ExecutionRunner:
             self.task_tasks.clear()
             self.task_map.clear()
             self.reverse_dependency_index.clear()
-            self.task_failure_count.clear()
             self.task_phase_failure_count.clear()
             self.task_last_retry_attempt.clear()
             self.task_run_attempt.clear()

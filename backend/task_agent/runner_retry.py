@@ -19,14 +19,12 @@ def get_failure_count(phase_counts: Dict[str, int], task_id: str, bucket: str) -
 
 def clear_task_failure_counts(
     phase_counts: Dict[str, int],
-    failure_counts: Dict[str, int],
     task_id: str,
 ) -> None:
     prefix = f"{task_id}:"
     for key in list(phase_counts.keys()):
         if key.startswith(prefix):
             phase_counts.pop(key, None)
-    failure_counts.pop(task_id, None)
 
 
 def extract_direct_fail_reason(report_text: str) -> str:

@@ -10,8 +10,6 @@ from typing import Any, Dict, Optional, Tuple
 from loguru import logger
 from db import get_execution_task_step_dir
 
-from . import runner_orchestration as exec_fns
-
 
 def write_text_file(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
