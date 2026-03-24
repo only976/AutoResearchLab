@@ -6,7 +6,7 @@
 
 from fastapi import FastAPI
 
-from . import db, events, execution, idea, log, paper, plan, plans, research, session, settings, status
+from . import db, events, execution, idea, ideas, log, paper, plan, plans, research, session, settings, status
 from ..state import init_api_state
 
 
@@ -27,5 +27,6 @@ def register_routes(
     app.include_router(log.router, prefix="/api/log", tags=["log"])
     app.include_router(research.router, prefix="/api/research", tags=["research"])
     app.include_router(idea.router, prefix="/api/idea", tags=["idea-agent"])
+    app.include_router(ideas.router, prefix="/api/ideas", tags=["idea-generate"])
     app.include_router(paper.router, prefix="/api/paper", tags=["paper-agent"])
     app.include_router(status.router, prefix="/api/status", tags=["status"])

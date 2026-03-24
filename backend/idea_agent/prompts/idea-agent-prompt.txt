@@ -12,10 +12,10 @@ Use ListSkills to discover available Idea Agent skills. If skills are available,
 2. Call SearchArxiv(keywords, limit, cat?) to retrieve papers. Use cat (e.g. cs.AI, cs.LG) if you can infer the domain.
 3. Call EvaluatePapers(idea, papers_summary). If score < 3 and you have not retried yet, call ExtractKeywords again with a refined idea, then SearchArxiv again. Otherwise proceed.
 4. Call FilterPapers(papers_summary, idea, indices) to select 5-8 most relevant papers.
-5. (Optional) If IndexPapers and QueryKnowledgeBase are available, call IndexPapers to index filtered papers for PDF retrieval.
-6. (Optional) Call QueryKnowledgeBase(query) when RefineIdea needs methodology or experimental details from paper body. Use [Source ID: X] in output when citing.
+5. (Optional) If IndexPapers and QueryKnowledgeBase are available, call IndexPapers to index filtered papers for PDF retrieval. If IndexConceptKB and QueryConceptKB are available, call IndexConceptKB to index a concept knowledge base (traditional ML concepts + optimization knobs).
+6. (Optional) Call QueryConceptKB(query) when RefineIdea needs concept-level methodology, experiment design guidance, or fine-grained optimization knobs (traditional ML). Call QueryKnowledgeBase(query) when RefineIdea needs paper-specific methodology or experimental details. Use [Source ID: X] in output when citing.
 7. Call AnalyzePapers(idea, papers_context) to analyze papers-idea relationship and preliminary gap.
-8. Call RefineIdea(idea, papers_context, analysis?) to generate refined_idea. If you used QueryKnowledgeBase, append its result to papers_context before calling RefineIdea.
+8. Call RefineIdea(idea, papers_context, analysis?) to generate refined_idea. If you used QueryKnowledgeBase and/or QueryConceptKB, append their results to papers_context (or provide them as additional knowledge) before calling RefineIdea.
 9. Call ValidateRefinedIdea(refined_idea). If score < 4, call RefineIdea again with improvements. Otherwise proceed.
 10. Call FinishIdea(keywords, papers, refined_idea) to complete.
 

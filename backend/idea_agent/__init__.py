@@ -14,6 +14,7 @@ from .llm import (
 )
 from .llm.executor import OnThinkingCallback  # 统一 on_thinking 签名
 from .literature import search_literature
+from .rag_engine import get_rag_engine
 
 __all__ = [
     "collect_literature",
@@ -73,6 +74,13 @@ async def collect_literature(
             f"No papers retrieved from {source} for query '{query}'. Refine stage is blocked; please adjust the idea/keywords or retry later."
         )
     logger.info("Idea collect papers retrieved count={} first_title='{}'", len(papers), (papers[0].get("title") or "")[:120])
+    if api_config.get("ideaUseRAG") and api_config.get("ideaAutoIndexPapers", True):
+        try:
+            engine = get_rag_engine()
+            if engine:
+                await engine.index_papers(papers)
+        except Exception as e:
+            logger.warning("Idea collect auto-index papers failed: {}", e)
     # 3. Refine：基于 idea + papers 生成可执行 refined idea
     used_streaming_refine = on_thinking is not None
     if used_streaming_refine:

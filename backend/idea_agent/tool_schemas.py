@@ -207,6 +207,28 @@ RAG_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "IndexConceptKB",
+            "description": "Index concept knowledge base PDFs into a dedicated vector store. Uses MAARS_CONCEPTS_PDFS_DIR env var (or default backend/db/concepts_pdfs). Call once before QueryConceptKB.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "QueryConceptKB",
+            "description": "Semantic search over indexed concept knowledge base (traditional ML concepts, optimization techniques, experiment design). Use when RefineIdea needs concept-level methodology or fine-grained optimization knobs. Returns [Source ID: i] (Concept: Title)\ntext format.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query for concept-level methodology, experiments, or optimization knobs."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 

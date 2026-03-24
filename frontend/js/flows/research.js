@@ -64,6 +64,8 @@
 
     const refineRefsEl = document.getElementById('researchRefineReferences');
     const refineLogicEl = document.getElementById('researchRefineLogic');
+    const generateIdeaBtn = document.getElementById('stageRunGenerateIdea');
+    const generateIdeaOutputEl = document.getElementById('researchGenerateIdeaOutput');
     const paperBodyEl = document.getElementById('researchPaperBody');
 
     const executeStreamEl = document.getElementById('researchExecuteStream');
@@ -82,9 +84,13 @@
     let stageData = {
         papers: [],
         refined: '',
+        generateIdeaInput: null,
+        generateIdeaOutput: null,
         refineThinking: '',
         paper: '',
     };
+    let isGeneratingIdea = false;
+    let generateIdeaError = '';
     let executionGraphPayload = {
         treeData: [],
         layout: null,
@@ -290,6 +296,21 @@
                 refineRefsEl.innerHTML = _mdToHtml(md);
             }
         }
+        if (generateIdeaOutputEl) {
+            let content = '—';
+            if (stageData.generateIdeaOutput && typeof stageData.generateIdeaOutput === 'object') {
+                content = `\`\`\`json\n${JSON.stringify(stageData.generateIdeaOutput, null, 2)}\n\`\`\``;
+            } else if (stageData.generateIdeaInput && typeof stageData.generateIdeaInput === 'object') {
+                content = `\`\`\`json\n${JSON.stringify(stageData.generateIdeaInput, null, 2)}\n\`\`\``;
+            } else if (generateIdeaError) {
+                content = `Generate failed: ${generateIdeaError}`;
+            }
+            generateIdeaOutputEl.innerHTML = _mdToHtml(content);
+        }
+        if (generateIdeaBtn) {
+            generateIdeaBtn.disabled = isGeneratingIdea || !currentResearchId;
+            generateIdeaBtn.textContent = isGeneratingIdea ? 'Generating...' : 'Generate Idea';
+        }
     }
 
     function _renderPaperPanel() {
@@ -480,6 +501,51 @@
         stageUI.initDetailControls?.(_largeHelperContext(), researchId);
     }
 
+    function _buildFallbackGenerateInput() {
+        const topicFromIdea = String(stageData.originalIdea || '').trim();
+        const topicFromRefined = String(stageData.refined || '').split('\n').find((line) => String(line || '').trim()) || '';
+        const topic = (topicFromIdea || topicFromRefined || 'Research topic').trim();
+        return {
+            broad_topic: topic.slice(0, 300),
+            research_style: 'novelty_seeking',
+            depth_level: 'master',
+            language: 'zh',
+            compute: 'cuda',
+            vram_gb: 24,
+            max_runtime_minutes: 60,
+            frameworks: ['pytorch', 'numpy', 'scikit-learn'],
+        };
+    }
+
+    async function runGenerateIdea() {
+        if (isGeneratingIdea) return;
+        const toast = window.MAARS?.toast;
+        try {
+            const ideaId = cfg.getCurrentIdeaId?.();
+            const payload = (stageData.generateIdeaInput && typeof stageData.generateIdeaInput === 'object')
+                ? stageData.generateIdeaInput
+                : _buildFallbackGenerateInput();
+            generateIdeaError = '';
+            isGeneratingIdea = true;
+            _renderRefinePanel();
+            if (!(stageData.generateIdeaInput && typeof stageData.generateIdeaInput === 'object')) {
+                stageData.generateIdeaInput = payload;
+                toast?.warning?.('No structured refine JSON found; using fallback generate input');
+                _renderRefinePanel();
+            }
+            const out = await api.generateIdea(ideaId, payload || undefined);
+            stageData.generateIdeaOutput = (out?.output && typeof out.output === 'object') ? out.output : out;
+            _renderRefinePanel();
+            toast?.success?.('Generate Idea completed');
+        } catch (e) {
+            generateIdeaError = e?.message || 'Generate Idea failed';
+            window.MAARS?.toast?.error?.(e?.message || 'Generate Idea failed');
+        } finally {
+            isGeneratingIdea = false;
+            _renderRefinePanel();
+        }
+    }
+
     function initEventBridges() {
         bridges.initEventBridges?.(_largeHelperContext());
     }
@@ -487,10 +553,12 @@
     function init() {
         if (typeof stageUI.init === 'function') {
             stageUI.init(_largeHelperContext());
-            return;
+        } else {
+            initExecuteStreamControls();
+            initEventBridges();
         }
-        initExecuteStreamControls();
-        initEventBridges();
+        generateIdeaBtn?.addEventListener('click', runGenerateIdea);
+        _renderRefinePanel();
     }
 
     window.MAARS = window.MAARS || {};

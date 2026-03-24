@@ -155,6 +155,20 @@
         return data;
     }
 
+    async function generateIdea(ideaId, generateIdeaInput) {
+        const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/ideas/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ideaId: ideaId || undefined,
+                generateIdeaInput: generateIdeaInput || undefined,
+            }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || data.detail || 'Generate idea failed');
+        return data;
+    }
+
     async function resumeFromTask(taskId) {
         const { ideaId, planId } = await cfg.resolvePlanIds();
         const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/execution/run`, {
@@ -176,6 +190,7 @@
         retryTask,
         resumeFromTask,
         refineIdea,
+        generateIdea,
         stopAgent,
         createResearch: researchApi.createResearch,
         listResearches: researchApi.listResearches,

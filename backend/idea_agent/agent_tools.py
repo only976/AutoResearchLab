@@ -239,6 +239,39 @@ async def execute_idea_agent_tool(
         )
         return False, result
 
+    if name == "IndexConceptKB":
+        if not api_config.get("ideaUseRAG"):
+            logger.info("Idea RAG: IndexConceptKB called but disabled (ideaUseRAG=False)")
+            return False, "Error: RAG not enabled (ideaUseRAG=False)"
+        engine = get_rag_engine() if get_rag_engine else None
+        if not engine:
+            logger.info("Idea RAG: IndexConceptKB called but dependencies unavailable")
+            return False, "Error: RAG dependencies not available"
+        result = await engine.index_concepts()
+        logger.info("Idea RAG: IndexConceptKB done result=%s", (result or "")[:200])
+        return False, result
+
+    if name == "QueryConceptKB":
+        if not api_config.get("ideaUseRAG"):
+            logger.info("Idea RAG: QueryConceptKB called but disabled (ideaUseRAG=False)")
+            return False, "Error: RAG not enabled (ideaUseRAG=False)"
+        engine = get_rag_engine() if get_rag_engine else None
+        if not engine:
+            logger.info("Idea RAG: QueryConceptKB called but dependencies unavailable")
+            return False, "Error: RAG dependencies not available"
+        q = (args.get("query") or "").strip()
+        if not q:
+            return False, "Error: query required"
+        logger.info("Idea RAG: QueryConceptKB start query=%r", q[:200])
+        result = await engine.query_concepts(q, limit=30)
+        idea_state["concept_kb_context"] = result
+        logger.info(
+            "Idea RAG: QueryConceptKB done chars=%d preview=%r",
+            len(result or ""),
+            (result or "")[:120],
+        )
+        return False, result
+
     if name == "AnalyzePapers":
         papers_ctx = args.get("papers_context") or _build_papers_context(
             idea_state.get("filtered_papers") or idea_state.get("papers") or []
@@ -265,8 +298,21 @@ Output 2-4 sentences: relationship, insights, preliminary research gap."""
 
     if name == "RefineIdea":
         papers = idea_state.get("filtered_papers") or idea_state.get("papers") or []
+        analysis = args.get("analysis") or idea_state.get("analysis") or ""
+        extra_parts: list[str] = []
+        if (idea_state.get("rag_context") or "").strip():
+            extra_parts.append(f"Paper KB retrieval:\n{idea_state.get('rag_context')}")
+        if (idea_state.get("concept_kb_context") or "").strip():
+            extra_parts.append(f"Concept KB retrieval:\n{idea_state.get('concept_kb_context')}")
+        kb_context = "\n\n".join(extra_parts).strip() if extra_parts else None
+
         refined = await refine_idea_from_papers(
-            args.get("idea") or idea, papers, api_config, abort_event=abort_event
+            args.get("idea") or idea,
+            papers,
+            api_config,
+            abort_event=abort_event,
+            analysis=analysis or None,
+            kb_context=kb_context,
         )
         idea_state["refined_idea"] = refined
         return False, refined

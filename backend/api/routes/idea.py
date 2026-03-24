@@ -1,7 +1,9 @@
 """Idea Agent API - 文献收集（Refine）。三个 Agent 之一，与 Plan/Task 统一：HTTP 仅触发，数据由 WebSocket 回传。"""
 
 import asyncio
+import json
 import time
+import re
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
@@ -11,11 +13,39 @@ from db import get_effective_config, get_idea, save_idea
 from idea_agent import collect_literature, run_idea_agent
 from shared.reflection import reflection_loop
 from shared.realtime import build_thinking_emitter
+from shared.utils import extract_codeblock
 
 from .. import state as api_state
 from ..schemas import IdeaCollectRequest
 
 router = APIRouter()
+
+_JSON_OBJECT_RE = re.compile(r"\{[\s\S]*\}")
+
+
+def _parse_generate_input_from_refined(text: str) -> dict | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    candidates = []
+    codeblock = extract_codeblock(raw)
+    if codeblock:
+        candidates.append(codeblock.strip())
+    candidates.append(raw)
+    m = _JSON_OBJECT_RE.search(raw)
+    if m:
+        candidates.append(m.group(0).strip())
+
+    for item in candidates:
+        if not item:
+            continue
+        try:
+            parsed = json.loads(item)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            continue
+    return None
 
 
 @router.get("")
@@ -94,12 +124,16 @@ async def _run_collect_inner(session_id: str, state, idea_id: str, idea: str, li
             (reflection_data or {}).get("iterations", 0),
         )
 
+        generate_input = _parse_generate_input_from_refined(result.get("refined_idea") or "")
+
         idea_data = {
             "idea": idea,
             "keywords": result.get("keywords", []),
             "papers": result.get("papers", []),
             "refined_idea": result.get("refined_idea"),
         }
+        if generate_input is not None:
+            idea_data["generateIdeaInput"] = generate_input
         await save_idea(idea_data, idea_id)
         complete_payload = {
             "ideaId": idea_id,
@@ -107,6 +141,8 @@ async def _run_collect_inner(session_id: str, state, idea_id: str, idea: str, li
             "papers": result.get("papers", []),
             "refined_idea": result.get("refined_idea"),
         }
+        if generate_input is not None:
+            complete_payload["generateIdeaInput"] = generate_input
         if reflection_data:
             complete_payload["reflection"] = {
                 "iterations": reflection_data.get("iterations", 0),

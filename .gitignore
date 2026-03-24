@@ -67,3 +67,6 @@ skills-lock.json
 #sandbox
 sandbox/
 
+# Cloudflare Wrangler (local cache; may contain account metadata)
+.wrangler/
+

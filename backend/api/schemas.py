@@ -3,7 +3,7 @@
 叙事口径：Idea、Plan、Task 为三个 Agent；Task Agent 含 Execution（执行）与 Validation（验证）两阶段。
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -71,3 +71,21 @@ class ResearchRunRequest(BaseModel):
     """Start/Restart the research pipeline for a researchId."""
     model_config = ConfigDict(populate_by_name=True)
     format: Optional[str] = Field(default="markdown", description="Paper output format")
+
+
+class GenerateIdeaInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    broad_topic: str = Field(..., alias="broad_topic")
+    research_style: Optional[str] = None
+    depth_level: Optional[str] = None
+    language: Optional[str] = None
+    compute: Optional[str] = None
+    vram_gb: Optional[int] = None
+    max_runtime_minutes: Optional[int] = None
+    frameworks: Optional[list[str]] = None
+
+
+class GenerateIdeaRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    idea_id: Optional[str] = Field(default=None, alias="ideaId")
+    generate_idea_input: Optional[dict[str, Any]] = Field(default=None, alias="generateIdeaInput")

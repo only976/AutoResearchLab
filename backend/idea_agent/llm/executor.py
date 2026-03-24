@@ -130,9 +130,30 @@ async def extract_keywords_stream(
 
 # --- Refined Idea 生成 ---
 
-_REFINE_IDEA_SYSTEM_PROMPT = """You are a research assistant. Given the user's fuzzy research idea and retrieved papers, produce a refined, executable research idea.
+_REFINE_IDEA_SYSTEM_PROMPT = """你是科研助手。请基于用户模糊想法、检索论文和可选知识库上下文，输出“可执行”的精炼研究方案。
 
-Output the refined idea directly as Markdown. No JSON. Structure it freely (e.g. ## Description, ## Research Questions, ## Gap, ## Method). Be concrete and actionable; ensure it is decomposable into 3–10 tasks. If no papers provided, infer from the user's idea alone."""
+默认研究域：传统机器学习（计算量可控、可在 Python 环境完成实验）。
+
+创新点必须包含：
+- 具体可改动的算法设计与细粒度优化项（损失/正则/特征/采样/超参数/训练策略等）
+- 在有限算力下可落地的实验路径
+- 清晰的消融/敏感性分析计划
+- 相对已有工作的明确差异（不是综述复述）
+
+输出要求（必须同时满足）：
+1) 先输出中文 Markdown（结构可用：## 研究描述 / ## 研究问题 / ## 研究空白 / ## 方法 / ## 创新点 / ## 消融计划 / ## 可行性）。
+2) 在最后追加一个 ```json 代码块，字段必须为：
+{
+  "broad_topic": "string",
+  "research_style": "novelty_seeking",
+  "depth_level": "master",
+  "language": "zh",
+  "compute": "cuda",
+  "vram_gb": 24,
+  "max_runtime_minutes": 60,
+  "frameworks": ["pytorch", "numpy", "scikit-learn"]
+}
+3) JSON 必须可被直接解析，且是输出中的最后一个代码块。"""
 
 
 def _build_papers_context(papers: List[dict], max_chars: int = 4000) -> str:
@@ -150,6 +171,42 @@ def _build_papers_context(papers: List[dict], max_chars: int = 4000) -> str:
         parts.append(s)
         total += len(s)
     return "\n".join(parts) if parts else "(No papers)"
+
+
+def _fallback_generate_input(idea: str) -> dict:
+    topic = (idea or "").strip() or "传统机器学习方向的可执行研究课题"
+    return {
+        "broad_topic": topic[:300],
+        "research_style": "novelty_seeking",
+        "depth_level": "master",
+        "language": "zh",
+        "compute": "cuda",
+        "vram_gb": 24,
+        "max_runtime_minutes": 60,
+        "frameworks": ["pytorch", "numpy", "scikit-learn"],
+    }
+
+
+def _ensure_generate_input_codeblock(text: str, idea: str) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        raw = "## 研究描述\n基于当前输入生成失败，已自动回退到保底方案。\n"
+    parsed = None
+    codeblock = extract_codeblock(raw)
+    for candidate in [codeblock, raw]:
+        if not candidate:
+            continue
+        try:
+            obj = json.loads(candidate)
+            if isinstance(obj, dict):
+                parsed = obj
+                break
+        except Exception:
+            continue
+    if parsed is None:
+        parsed = _fallback_generate_input(idea)
+        raw = raw.rstrip() + "\n\n```json\n" + json.dumps(parsed, ensure_ascii=False, indent=2) + "\n```"
+    return raw.strip()
 
 
 async def _refine_via_mock(
@@ -177,10 +234,21 @@ async def _refine_via_llm(
     api_config: dict,
     on_chunk: Optional[OnThinkingCallback] = None,
     abort_event: Optional[Any] = None,
+    analysis: Optional[str] = None,
+    kb_context: Optional[str] = None,
 ) -> str:
     cfg = merge_phase_config(api_config, "idea")
     papers_ctx = _build_papers_context(papers)
-    user_content = f"**User's idea:** {idea}\n\n**Retrieved papers:**\n{papers_ctx}\n\n**Output:**"
+    user_content = f"**User's idea:** {idea}\n\n**Retrieved papers:**\n{papers_ctx}\n"
+    if analysis:
+        user_content += f"\n**Prior analysis:**\n{analysis}\n"
+    if kb_context:
+        # Keep prompt bounded; KB retrieval can be long.
+        kb_text = str(kb_context)
+        if len(kb_text) > 6000:
+            kb_text = kb_text[:6000] + "\n...[truncated]"
+        user_content += f"\n**Knowledge base context (concept/KB retrieval):**\n{kb_text}\n"
+    user_content += "\n**Output:**"
     messages = [
         {"role": "system", "content": _REFINE_IDEA_SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
@@ -197,10 +265,17 @@ async def _refine_via_llm(
             abort_event=abort_event,
         )
         text = response if isinstance(response, str) else str(response)
-        return (text or "").strip()
+        return _ensure_generate_input_codeblock((text or "").strip(), idea)
     except Exception as e:
         logger.warning("Refine idea failed: {}", e)
-        return ""
+        fallback = (
+            "## 研究描述\n"
+            "LLM 在本次 Refine 阶段未返回有效内容，系统已自动生成可继续下游流程的保底方案。\n\n"
+            "## 方法\n"
+            "- 先构建可复现实验基线\n"
+            "- 再做 1-2 个轻量创新点对比与消融\n"
+        )
+        return _ensure_generate_input_codeblock(fallback, idea)
 
 
 async def refine_idea_from_papers(
@@ -208,13 +283,22 @@ async def refine_idea_from_papers(
     papers: List[dict],
     api_config: dict,
     abort_event: Optional[Any] = None,
+    analysis: Optional[str] = None,
+    kb_context: Optional[str] = None,
 ) -> str:
     """基于用户 idea 与检索到的 papers，生成可执行的 refined idea。"""
     idea = (idea or "").strip()
     papers = papers or []
     if api_config.get("ideaUseMock", True):
         return await _refine_via_mock(abort_event=abort_event)
-    return await _refine_via_llm(idea, papers, api_config, abort_event=abort_event)
+    return await _refine_via_llm(
+        idea,
+        papers,
+        api_config,
+        abort_event=abort_event,
+        analysis=analysis,
+        kb_context=kb_context,
+    )
 
 
 async def refine_idea_from_papers_stream(
@@ -223,10 +307,20 @@ async def refine_idea_from_papers_stream(
     api_config: dict,
     on_chunk: Optional[OnThinkingCallback] = None,
     abort_event: Optional[Any] = None,
+    analysis: Optional[str] = None,
+    kb_context: Optional[str] = None,
 ) -> str:
     """流式基于用户 idea 与检索到的 papers，生成可执行的 refined idea。"""
     idea = (idea or "").strip()
     papers = papers or []
     if api_config.get("ideaUseMock", True):
         return await _refine_via_mock(on_chunk=on_chunk, abort_event=abort_event)
-    return await _refine_via_llm(idea, papers, api_config, on_chunk=on_chunk, abort_event=abort_event)
+    return await _refine_via_llm(
+        idea,
+        papers,
+        api_config,
+        on_chunk=on_chunk,
+        abort_event=abort_event,
+        analysis=analysis,
+        kb_context=kb_context,
+    )

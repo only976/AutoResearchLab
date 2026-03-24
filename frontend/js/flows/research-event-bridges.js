@@ -56,6 +56,12 @@
             if (d.idea) ctx.stageData.originalIdea = String(d.idea || '').trim() || ctx.stageData.originalIdea;
             if (Array.isArray(d.papers)) ctx.stageData.papers = d.papers;
             if (typeof d.refined_idea === 'string') ctx.stageData.refined = d.refined_idea;
+            if (d.generateIdeaInput && typeof d.generateIdeaInput === 'object') {
+                ctx.stageData.generateIdeaInput = d.generateIdeaInput;
+            }
+            if (d.generateIdeaOutput && typeof d.generateIdeaOutput === 'object') {
+                ctx.stageData.generateIdeaOutput = d.generateIdeaOutput;
+            }
             ctx.stageData.refineThinking = '';
             ctx.renderRefinePanel();
         });

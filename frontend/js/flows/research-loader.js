@@ -27,6 +27,8 @@
         ctx.stageData.originalIdea = (idea?.idea || research.prompt || '').trim();
         ctx.stageData.papers = Array.isArray(idea?.papers) ? idea.papers : [];
         ctx.stageData.refined = (idea?.refined_idea || '').trim();
+        ctx.stageData.generateIdeaInput = (idea?.generateIdeaInput && typeof idea.generateIdeaInput === 'object') ? idea.generateIdeaInput : null;
+        ctx.stageData.generateIdeaOutput = (idea?.generateIdeaOutput && typeof idea.generateIdeaOutput === 'object') ? idea.generateIdeaOutput : null;
         ctx.stageData.refineThinking = '';
         ctx.stageData.paper = (paper?.content || '').trim();
         ctx.renderRefinePanel();
@@ -151,6 +153,8 @@
                     keywords: idea.keywords || [],
                     papers: idea.papers || [],
                     refined_idea: idea.refined_idea || '',
+                    generateIdeaInput: idea.generateIdeaInput || null,
+                    generateIdeaOutput: idea.generateIdeaOutput || null,
                 },
             }));
         }
