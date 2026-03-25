@@ -12,6 +12,7 @@ env/
 # Ignore runtime/generated content, keep Python source tracked.
 backend/db/**
 !backend/db/
+!backend/db/*.py
 
 
 # Atomic write leftovers (crash recovery)

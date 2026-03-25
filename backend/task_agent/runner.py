@@ -9,6 +9,7 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
+from validate_agent import review_contract_adjustment
 
 from shared.constants import (
     MAX_EXECUTION_CONCURRENCY,
@@ -208,6 +209,9 @@ class ExecutionRunner:
         return exec_fns.find_dependency_gap(self)
 
     async def _run_step_b_contract_review(self, *, task, result, reason, output_format, on_thinking=None):
+        # Keep compatibility with tests/legacy monkeypatching that target
+        # task_agent.runner.review_contract_adjustment.
+        self._deps.review_contract_adjustment = review_contract_adjustment
         return await exec_fns.run_step_b_contract_review(
             self, task=task, result=result, reason=reason,
             output_format=output_format, on_thinking=on_thinking,

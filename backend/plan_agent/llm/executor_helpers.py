@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from shared.constants import PLAN_MAX_CONCURRENT_CALLS
-from shared.llm_client import chat_completion as real_chat_completion, merge_phase_config
+from shared.llm_client import chat_completion as default_real_chat_completion, merge_phase_config
 from shared.mock_utils import get_mock_cached, load_mock_entry
 from test.mock_stream import mock_chat_completion
 
@@ -140,6 +140,7 @@ def make_model_call(
     abort_event: Optional[Any],
     use_mock: bool,
     api_config: Optional[Dict],
+    real_call: Optional[Callable[..., Awaitable[str]]] = None,
 ) -> Callable[[list[dict], float], Awaitable[str]]:
     """Create a model_call function compatible with generate_with_repair.
 
@@ -166,6 +167,17 @@ def make_model_call(
     }.get(response_type, "format")
 
     async def _real_call(messages: list[dict], temperature: float) -> str:
+        if real_call is not None:
+            return await real_call(
+                messages=messages,
+                phase=phase,
+                on_thinking=on_thinking,
+                task_id=task_id,
+                op_label=op_label,
+                abort_event=abort_event,
+                api_config=api_config,
+                temperature=temperature,
+            )
         return await _call_real_chat_completion(
             messages=messages,
             phase=phase,
@@ -197,7 +209,7 @@ async def _call_real_chat_completion(
             return on_thinking(chunk, task_id=task_id, operation=op_label)
 
     async with _get_call_semaphore():
-        content = await real_chat_completion(
+        content = await default_real_chat_completion(
             messages,
             cfg,
             on_chunk=stream_chunk if on_thinking else None,
@@ -242,7 +254,7 @@ async def _call_chat_completion(
     messages, phase = _build_messages_for_context(context)
     async with _get_call_semaphore():
         cfg = merge_phase_config(api_config, phase)
-        content = await real_chat_completion(
+        content = await default_real_chat_completion(
             messages,
             cfg,
             on_chunk=stream_chunk if (stream and on_thinking) else None,

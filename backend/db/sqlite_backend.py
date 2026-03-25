@@ -1,9 +1,6 @@
-"""SQLite-backed storage implementation for MAARS.
+"""SQLite infrastructure: schema initialization and connection management.
 
-This module intentionally stores JSON blobs (idea/plan/execution/artifacts) as TEXT.
-It is designed to replace the previous file-based DB implementation.
-
-Settings are SQLite-backed via `settings` table.
+All domain-level CRUD lives in sqlite_backend_*.py submodules.
 """
 
 from __future__ import annotations
@@ -17,7 +14,6 @@ import weakref
 
 import aiosqlite
 import orjson
-from loguru import logger
 
 DB_DIR = Path(__file__).parent
 
@@ -26,7 +22,6 @@ def _get_db_path() -> Path:
     return Path(os.getenv("MAARS_DB_PATH", str(DB_DIR / "maars.sqlite3")))
 
 
-# Backward-compat: some code may import DB_PATH directly.
 DB_PATH = _get_db_path()
 
 
@@ -201,8 +196,7 @@ async def init_sqlite() -> None:
 
 
 async def _connect() -> aiosqlite.Connection:
-    # Deprecated: kept for compatibility with any out-of-tree imports.
-    # Use `_db()` instead.
+    """Deprecated: use _db() context manager instead."""
     await init_sqlite()
     db = await aiosqlite.connect(_get_db_path())
     db.row_factory = aiosqlite.Row
@@ -215,45 +209,3 @@ async def _db() -> AsyncIterator[aiosqlite.Connection]:
     async with aiosqlite.connect(_get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         yield db
-
-
-from .sqlite_backend_entities import (
-    get_execution,
-    get_idea,
-    get_plan,
-    get_settings,
-    list_idea_ids,
-    list_plan_ids,
-    list_recent_plans,
-    save_execution,
-    save_idea,
-    save_plan,
-    save_settings,
-)
-from .sqlite_backend_artifacts import (
-    delete_task_artifact,
-    get_ai_responses,
-    get_task_artifact,
-    list_plan_outputs,
-    save_ai_responses_blob,
-    save_task_artifact,
-    save_validation_report,
-)
-
-
-from .sqlite_backend_research import (
-    clear_all_data,
-    clear_research_stage_data_for_retry,
-    create_research,
-    delete_research_cascade,
-    get_paper,
-    get_research,
-    list_researches,
-    save_paper,
-    update_research_stage,
-)
-from .sqlite_backend_memory import (
-    delete_task_attempt_memories,
-    list_task_attempt_memories,
-    save_task_attempt_memory,
-)

@@ -13,6 +13,7 @@ from db import save_ai_response
 from shared.graph import build_dependency_graph, get_ancestor_path, get_parent_id
 from shared.utils import extract_codeblock
 from .executor_helpers import (
+    _build_user_message,
     _build_messages_for_context,
     _call_real_chat_completion,
     make_model_call,
@@ -137,6 +138,7 @@ async def check_atomicity(
     model_call = make_model_call(
         context=ctx, on_thinking=on_thinking, abort_event=abort_event,
         use_mock=use_mock, api_config=api_config,
+        real_call=real_chat_completion,
     )
 
     def _validate(parsed: Any) -> tuple[bool, str]:
@@ -189,6 +191,7 @@ async def decompose_task(
     model_call = make_model_call(
         context=ctx, on_thinking=on_thinking, abort_event=abort_event,
         use_mock=use_mock, api_config=api_config,
+        real_call=real_chat_completion,
     )
 
     def _validate(parsed: Any) -> tuple[bool, str]:
@@ -233,6 +236,7 @@ async def format_task(
     model_call = make_model_call(
         context=ctx, on_thinking=on_thinking, abort_event=abort_event,
         use_mock=use_mock, api_config=api_config,
+        real_call=real_chat_completion,
     )
 
     def _validate(parsed: Any) -> tuple[bool, str]:
@@ -294,6 +298,7 @@ async def assess_quality(
         model_call = make_model_call(
             context=ctx, on_thinking=on_thinking, abort_event=abort_event,
             use_mock=use_mock, api_config=api_config,
+            real_call=real_chat_completion,
         )
 
         def _validate(parsed: Any) -> tuple[bool, str]:
