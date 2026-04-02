@@ -68,3 +68,6 @@ skills-lock.json
 #sandbox
 sandbox/
 
+frontend/.next/
+data/
+output/
