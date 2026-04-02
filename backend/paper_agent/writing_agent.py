@@ -5,6 +5,7 @@ import asyncio
 
 from google import genai
 from google.genai import types
+from loguru import logger
 
 from shared.llm_client import chat_completion
 from .schemas import PaperOutline, OutlineSection, PaperReview, EnrichedDraft
@@ -44,7 +45,7 @@ class WritingAgent:
 
     async def generate_paper_outline(self, context: Dict[str, str]) -> PaperOutline:
         """Agent responsible for outlining the paper."""
-        print("Executing Planning Agent...")
+        logger.info("Executing Planning Agent...")
         
         md_titles = {}
         if "__md_titles__" in context:
@@ -112,7 +113,7 @@ class WritingAgent:
 
     async def draft_section(self, section: OutlineSection, context: Dict[str, str], references_info: str = "", full_outline: PaperOutline = None, previously_drafted_text: str = "") -> str:
         """Agent responsible for writing a specific section of the paper in LaTeX."""
-        print(f"Executing Drafting Agent for section: {section.title}...")
+        logger.info(f"Executing Drafting Agent for section: {section.title}...")
         
         section_context = ""
         for filename in section.required_context:
@@ -191,7 +192,7 @@ class WritingAgent:
 
     async def review_draft(self, full_draft: str, outline: PaperOutline, approved_sections: List[str] = None) -> PaperReview:
         """Agent responsible for reviewing the compiled draft for consistency and flow."""
-        print("Executing Review Agent...")
+        logger.info("Executing Review Agent...")
         
         outline_text = f"Expected Outline:\nTitle: {outline.title}\n"
         for sec in outline.sections:
@@ -234,7 +235,7 @@ class WritingAgent:
 
     async def generate_abstract(self, full_draft: str, title: str) -> str:
         """Agent responsible for writing the abstract after the full paper is drafted."""
-        print("Executing Abstract Agent...")
+        logger.info("Executing Abstract Agent...")
         
         prompt = f"""
         You are an expert academic writer and editor. A complete research paper titled "{title}" has just been drafted. 
@@ -254,7 +255,7 @@ class WritingAgent:
 
     async def revise_section(self, section_title: str, current_section_draft: str, section_feedback: str, section_context: str) -> str:
         """Agent responsible for revising a specific section of the draft based on review feedback and context."""
-        print(f"Executing Revision Agent for section: {section_title}...")
+        logger.info(f"Executing Revision Agent for section: {section_title}...")
         
         prompt = f"""
         You are an expert academic editor and LaTeX formatter. You have been asked to revise a specific section ("{section_title}") of an academic paper.
@@ -284,7 +285,7 @@ class WritingAgent:
 
     async def fix_latex_errors(self, latex_source: str, error_log: str) -> str:
         """Agent responsible for fixing LaTeX compilation errors."""
-        print("Executing LaTeX Fixer Agent...")
+        logger.info("Executing LaTeX Fixer Agent...")
         
         prompt = f"""
         You are an expert LaTeX developer and debugger. The following complete LaTeX source code failed to compile using the `tectonic` compiler.
@@ -312,7 +313,7 @@ class WritingAgent:
         This method MUST use Google Search directly via the gemini client, bypassing the shared llm_client 
         because the shared client doesn't explicitly support `GoogleSearch` as a tool declaration type.
         """
-        print("Executing Reference Enrichment Agent (with Google Search Grounding)...")
+        logger.info("Executing Reference Enrichment Agent (with Google Search Grounding)...")
         
         prompt = f"""
         You are an expert academic editor and bibliographer. The user has drafted a research paper, but the current bibliography is too sparse. 
