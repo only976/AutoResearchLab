@@ -3,8 +3,12 @@
 import asyncio
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
+import os
+import json
+import re
+from urllib.parse import quote
 
 from db import get_effective_config, save_paper, get_execution
 from paper_agent import run_paper_agent
@@ -114,20 +118,37 @@ async def stop_paper(request: Request):
     )
     return {"success": True}
 
-from fastapi.responses import FileResponse
-import os
-
 @router.get("/pdf/{experiment_id}")
 async def serve_paper_pdf(experiment_id: str):
     """Serve the compiled PDF paper if it exists."""
     pdf_path = os.path.join(BASE_DIR, "output", experiment_id, "main.pdf")
     
     if os.path.exists(pdf_path):
+        filename = f"Paper_{experiment_id[:8]}"
+        
+        # Try to read the title from outline.json
+        outline_path = os.path.join(BASE_DIR, "output", experiment_id, "outline.json")
+        if os.path.exists(outline_path):
+            try:
+                with open(outline_path, "r", encoding="utf-8") as f:
+                    outline_data = json.load(f)
+                    title = outline_data.get("title", "").strip()
+                    if title:
+                        # Replace problematic characters, keep alphanumeric, Chinese chars, spaces, and hyphens
+                        safe_title = re.sub(r'[^\w\s\-\u4e00-\u9fa5]', '_', title)
+                        # Replace multiple spaces with a single space, multiple underscores with a single underscore
+                        safe_title = re.sub(r'\s+', ' ', safe_title)
+                        safe_title = re.sub(r'_+', '_', safe_title).strip(' _')
+                        if safe_title:
+                            filename = safe_title
+            except Exception as e:
+                logger.warning(f"Failed to read outline for PDF filename: {e}")
+
+        encoded_filename = quote(f"{filename}.pdf")
         return FileResponse(
             pdf_path, 
             media_type="application/pdf", 
-            filename=f"Paper_{experiment_id[:8]}.pdf",
-            headers={"Content-Disposition": "inline"} # Open in browser
+            headers={"Content-Disposition": f"inline; filename*=utf-8''{encoded_filename}"} # Open in browser with correct filename
         )
         
     return JSONResponse(status_code=404, content={"error": "PDF not found."})

@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import shutil
+import re
 from loguru import logger
 from pathlib import Path
 
@@ -119,7 +120,6 @@ This is a mock introduction.
                 previously_drafted_text=previously_drafted_text
             )
             
-            import re
             if not re.search(r'\\section\*?\{', draft_content[:500], re.IGNORECASE):
                 draft_content = f"\\section{{{section.title}}}\n" + draft_content
                 
