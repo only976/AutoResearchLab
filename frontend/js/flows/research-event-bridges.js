@@ -20,7 +20,28 @@
             }
             ctx.refreshExecutionRuntimeStatus();
         });
-        document.addEventListener('maars:paper-start', () => ctx.setStageStarted('paper', true));
+        document.addEventListener('maars:paper-start', () => {
+            ctx.setStageStarted('paper', true);
+            ctx.stageData.paperLogs = [];
+            ctx.renderPaperPanel();
+        });
+
+        document.addEventListener('maars:paper-thinking', (e) => {
+            const d = e?.detail || {};
+            const chunk = String(d.chunk || '').trim();
+            if (!chunk) return;
+
+            if (!ctx.stageData.paperLogs) ctx.stageData.paperLogs = [];
+
+            const lines = chunk.split('\n').map(line => line.trim()).filter(Boolean);
+            lines.forEach(line => {
+                const isProgressLog = /^(Initializing|Reading|Extracting|Loading|Planning|Copying|Drafting|Draft|Enriching|Added|---|Reviewing|Executing|Section|Warning:|Generating|Assembling|Attempting|Compilation|LaTeX|Invoking|Pipeline)/i.test(line);
+                if (isProgressLog && !line.includes('Error log snippet:')) {
+                    ctx.stageData.paperLogs.push(line);
+                }
+            });
+            ctx.renderPaperPanel();
+        });
 
         document.addEventListener('maars:research-stage', (e) => {
             const d = e?.detail || {};

@@ -294,9 +294,27 @@
 
     function _renderPaperPanel() {
         if (!paperBodyEl) return;
+
+        const paperStatus = stageStatusDetails?.paper?.status || 'idle';
+        if (paperStatus === 'running') {
+            const escapeHtml = (s) => String(s || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+            const logs = stageData.paperLogs || [];
+            if (logs.length > 0) {
+                const logsHtml = logs.map(line => `<div>${escapeHtml(line)}</div>`).join('');
+                paperBodyEl.innerHTML = `<div class="paper-logs" style="line-height: 1.6; white-space: pre-wrap; overflow-y: auto; max-height: 800px; padding: 10px;">${logsHtml}</div>`;
+                const container = paperBodyEl.querySelector('.paper-logs');
+                if (container) container.scrollTop = container.scrollHeight;
+            } else {
+                paperBodyEl.innerHTML = '<div>Starting Paper Agent...</div>';
+            }
+            return;
+        }
+
         const format = (stageData.paperFormat || 'markdown').trim();
         if (format === 'latex' && stageData.pdfUrl) {
             paperBodyEl.innerHTML = `<iframe src="${stageData.pdfUrl}" width="100%" height="800px" style="border: 1px solid #ccc; border-radius: 4px;"></iframe>`;
+        } else if (format === 'latex' && !stageData.pdfUrl && stageData.paper) {
+            paperBodyEl.innerHTML = '—';
         } else {
             const content = (stageData.paper || '').trim();
             paperBodyEl.innerHTML = content ? _mdToHtml(content) : '—';
