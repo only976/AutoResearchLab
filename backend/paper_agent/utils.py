@@ -152,10 +152,9 @@ def load_context_files(exp_dir: str, output_dir: str = None) -> Dict[str, str]:
             with open(steps_file, "r", encoding="utf-8") as f:
                 context["steps.txt"] = f.read()
             
-    # Load available PNG files from the sandbox directory
-    sandbox_dir = os.path.join(src_dir, "sandbox")
-    if os.path.isdir(sandbox_dir):
-        png_files = glob.glob(os.path.join(sandbox_dir, "*.png"))
+    # Load available PNG files from the src directory
+    if os.path.isdir(src_dir):
+        png_files = glob.glob(os.path.join(src_dir, "*.png"))
         for png_path in png_files:
             filename = os.path.basename(png_path)
             context[filename] = png_path

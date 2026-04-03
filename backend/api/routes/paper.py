@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from db import get_effective_config
+from db import get_effective_config, save_paper, get_execution
 from paper_agent import run_paper_agent
 from shared.realtime import build_thinking_emitter
 
@@ -16,7 +16,7 @@ from paper_agent.config import BASE_DIR
 
 router = APIRouter()
 
-async def _run_paper_inner(session_id: str, state, experiment_id: str, abort_event=None):
+async def _run_paper_inner(session_id: str, state, idea_id: str, plan_id: str, format_type: str, abort_event=None):
     """后台执行论文生成，通过 WebSocket 回传数据。"""
     config = await get_effective_config()
     on_thinking = build_thinking_emitter(
@@ -31,6 +31,11 @@ async def _run_paper_inner(session_id: str, state, experiment_id: str, abort_eve
     try:
         await api_state.emit(session_id, "paper-start", {})
 
+        execution = await get_execution(idea_id, plan_id)
+        if not execution or not execution.get("runId"):
+            raise ValueError("Execution runId not found. Run Task Agent first.")
+        experiment_id = execution["runId"]
+
         result_payload = await run_paper_agent(
             experiment_id=experiment_id,
             api_config=config,
@@ -41,10 +46,16 @@ async def _run_paper_inner(session_id: str, state, experiment_id: str, abort_eve
         pdf_url = result_payload.get("pdf_url", "")
         content = result_payload.get("content", "")
 
+        try:
+            await save_paper(idea_id, plan_id, format_type=(format_type or "latex"), content=content)
+        except Exception as e:
+            logger.warning("Failed to persist paper: %s", e)
+
         await api_state.emit(session_id, "paper-complete", {
-            "experimentId": experiment_id,
+            "ideaId": idea_id,
+            "planId": plan_id,
             "content": content,
-            "format": "latex",
+            "format": format_type or "latex",
             "pdfUrl": pdf_url
         })
     except asyncio.CancelledError:
@@ -76,16 +87,19 @@ async def run_paper_route(body: PaperRunRequest, request: Request):
     if state.run_task and not state.run_task.done():
         return JSONResponse(status_code=409, content={"error": "Paper Agent already in progress"})
 
-    experiment_id = (body.experiment_id or "").strip()
-    if not experiment_id:
-        return JSONResponse(status_code=400, content={"error": "experimentId is required"})
+    idea_id = (body.idea_id or "").strip()
+    plan_id = (body.plan_id or "").strip()
+    if not idea_id or not plan_id:
+        return JSONResponse(status_code=400, content={"error": "ideaId and planId are required"})
+
+    format_type = (body.format or "latex").lower()
 
     state.abort_event = asyncio.Event()
     state.run_task = asyncio.create_task(
-        _run_paper_inner(session_id, state, experiment_id, abort_event=state.abort_event)
+        _run_paper_inner(session_id, state, idea_id, plan_id, format_type, abort_event=state.abort_event)
     )
 
-    return {"success": True, "experimentId": experiment_id, "sessionId": session_id}
+    return {"success": True, "ideaId": idea_id, "planId": plan_id, "sessionId": session_id}
 
 
 @router.post("/stop")

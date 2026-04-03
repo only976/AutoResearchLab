@@ -56,7 +56,9 @@ class IdeaCollectRequest(BaseModel):
 class PaperRunRequest(BaseModel):
     """Paper Agent 论文生成请求。"""
     model_config = ConfigDict(populate_by_name=True)
-    experiment_id: str = Field(..., alias="experimentId", description="Experiment ID to fetch sandbox files from")
+    idea_id: str = Field(default="test", alias="ideaId")
+    plan_id: str = Field(default="test", alias="planId")
+    format: Optional[str] = Field(default="latex")
 
 
 class ResearchCreateRequest(BaseModel):
@@ -68,4 +70,4 @@ class ResearchCreateRequest(BaseModel):
 class ResearchRunRequest(BaseModel):
     """Start/Restart the research pipeline for a researchId."""
     model_config = ConfigDict(populate_by_name=True)
-    format: Optional[str] = Field(default="markdown", description="Paper output format")
+    format: Optional[str] = Field(default="latex", description="Paper output format")

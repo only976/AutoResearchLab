@@ -77,7 +77,7 @@ class ExecutionRunner:
         async with self._persist_lock:
             if self.idea_id and self.plan_id and self.chain_cache:
                 try:
-                    await _db_save_execution({"tasks": list(self.chain_cache)}, self.idea_id, self.plan_id)
+                    await _db_save_execution({"tasks": list(self.chain_cache), "runId": self.execution_run_id}, self.idea_id, self.plan_id)
                 except Exception as e:
                     logger.warning("Failed to persist execution: %s", e)
 
@@ -399,7 +399,7 @@ class ExecutionRunner:
                 for task in self.chain_cache:
                     task["status"] = "undone"
             if self.idea_id and self.plan_id and self.chain_cache:
-                await self._deps.save_execution({"tasks": self.chain_cache}, self.idea_id, self.plan_id)
+                await self._deps.save_execution({"tasks": self.chain_cache, "runId": self.execution_run_id}, self.idea_id, self.plan_id)
 
             self._emit("task-start", {})
             self._emit("execution-layout", {"layout": execution_layout})

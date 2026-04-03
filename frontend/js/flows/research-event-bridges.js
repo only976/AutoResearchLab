@@ -78,6 +78,8 @@
         document.addEventListener('maars:paper-complete', (e) => {
             const d = e?.detail || {};
             if (typeof d.content === 'string') ctx.stageData.paper = d.content;
+            if (typeof d.format === 'string') ctx.stageData.paperFormat = d.format;
+            if (typeof d.pdfUrl === 'string') ctx.stageData.pdfUrl = d.pdfUrl;
             ctx.renderPaperPanel();
         });
 

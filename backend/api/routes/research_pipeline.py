@@ -151,13 +151,12 @@ async def _run_stage_paper(session_id: str, session, research_id: str, idea_id: 
     await update_research_stage(research_id, stage="paper", stage_status="running", error=None)
     session.paper_run_state.abort_event = asyncio.Event()
     
-    # In the new architecture, the experiment ID maps to the plan_id
-    experiment_id = plan_id
-    
     await _run_paper_inner(
         session_id,
         session.paper_run_state,
-        experiment_id,
+        idea_id,
+        plan_id,
+        paper_format,
         abort_event=session.paper_run_state.abort_event,
     )
     paper_ok, paper_err = await _validate_paper_completion(idea_id, plan_id)

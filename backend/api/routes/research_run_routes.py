@@ -69,9 +69,9 @@ async def _recover_stale_running_state(research_id, stage, active_session_id, se
 
 
 def _normalize_paper_format(value: Optional[str]) -> str:
-    paper_format = (value or "markdown").lower().strip()
+    paper_format = (value or "latex").lower().strip()
     if paper_format not in ("markdown", "latex"):
-        return "markdown"
+        return "latex"
     return paper_format
 
 

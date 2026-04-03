@@ -29,6 +29,8 @@
         ctx.stageData.refined = (idea?.refined_idea || '').trim();
         ctx.stageData.refineThinking = '';
         ctx.stageData.paper = (paper?.content || '').trim();
+        ctx.stageData.paperFormat = (paper?.format || 'markdown').trim();
+        ctx.stageData.pdfUrl = (ctx.stageData.paperFormat === 'latex' && execution?.runId) ? `/api/paper/pdf/${execution.runId}` : '';
         ctx.renderRefinePanel();
         ctx.renderPaperPanel();
 
@@ -161,6 +163,7 @@
                     planId,
                     content: paper.content,
                     format: paper.format || 'markdown',
+                    pdfUrl: ctx.stageData.pdfUrl
                 },
             }));
         }

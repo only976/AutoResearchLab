@@ -294,8 +294,13 @@
 
     function _renderPaperPanel() {
         if (!paperBodyEl) return;
-        const content = (stageData.paper || '').trim();
-        paperBodyEl.innerHTML = content ? _mdToHtml(content) : '—';
+        const format = (stageData.paperFormat || 'markdown').trim();
+        if (format === 'latex' && stageData.pdfUrl) {
+            paperBodyEl.innerHTML = `<iframe src="${stageData.pdfUrl}" width="100%" height="800px" style="border: 1px solid #ccc; border-radius: 4px;"></iframe>`;
+        } else {
+            const content = (stageData.paper || '').trim();
+            paperBodyEl.innerHTML = content ? _mdToHtml(content) : '—';
+        }
     }
 
     function setTreeView(view) {

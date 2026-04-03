@@ -40,9 +40,6 @@
                 return;
             }
             
-            // AutoResearchLab maps experimentId from planId
-            const experimentId = planId;
-            
             isGenerating = true;
             generatePaperBtn.disabled = true;
             if (stopPaperBtn) stopPaperBtn.hidden = false;
@@ -51,7 +48,7 @@
             const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/paper/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ experimentId: experimentId }),
+                body: JSON.stringify({ ideaId, planId, format: 'latex' }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to start paper generation');
@@ -64,38 +61,6 @@
         isGenerating = false;
         if (stopPaperBtn) stopPaperBtn.hidden = true;
         if (generatePaperBtn) generatePaperBtn.disabled = false;
-        
-        const data = e.detail || {};
-        if (data.pdfUrl && data.pdfUrl.trim() !== "") {
-            const pdfUrl = data.pdfUrl;
-            let container = document.getElementById("paper-pdf-container");
-            const outputArea = document.getElementById("paper-content-area") || document.querySelector(".output-area") || document.body;
-            
-            if (!container) {
-                container = document.createElement("div");
-                container.id = "paper-pdf-container";
-                container.style.width = "100%";
-                container.style.height = "800px";
-                container.style.marginTop = "1rem";
-                
-                // Try to find a good place to insert it
-                const editorElement = document.getElementById("paper-editor");
-                if (editorElement && editorElement.parentNode) {
-                    editorElement.parentNode.insertBefore(container, editorElement.nextSibling);
-                } else {
-                    outputArea.appendChild(container);
-                }
-            }
-            
-            if (container) {
-                container.innerHTML = `<iframe src="${pdfUrl}" width="100%" height="100%" style="border: 1px solid #ccc; border-radius: 4px;"></iframe>`;
-                // Optionally hide the raw markdown editor if we have a PDF
-                const editorElement = document.getElementById("paper-editor");
-                if (editorElement) {
-                    editorElement.style.display = "none";
-                }
-            }
-        }
     }
 
     function init() {

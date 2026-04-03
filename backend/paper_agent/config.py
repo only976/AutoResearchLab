@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
 
-# Get the directory of the current file
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Get the directory of the current file (project root)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Load environment variables
 load_dotenv()
