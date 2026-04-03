@@ -150,6 +150,7 @@ async def _run_stage_paper(session_id: str, session, research_id: str, idea_id: 
     await _emit_stage(session_id, research_id, "paper", "running")
     await update_research_stage(research_id, stage="paper", stage_status="running", error=None)
     session.paper_run_state.abort_event = asyncio.Event()
+    
     await _run_paper_inner(
         session_id,
         session.paper_run_state,

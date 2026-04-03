@@ -39,15 +39,15 @@
                 toast.warning('Please Refine and Plan first.');
                 return;
             }
+            
             isGenerating = true;
             generatePaperBtn.disabled = true;
             if (stopPaperBtn) stopPaperBtn.hidden = false;
             document.dispatchEvent(new CustomEvent('maars:paper-start'));
-            document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'output' } }));
             const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/paper/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ideaId, planId, format: 'markdown' }),
+                body: JSON.stringify({ ideaId, planId, format: 'latex' }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to start paper generation');
@@ -56,7 +56,7 @@
         }
     }
 
-    function onPaperComplete() {
+    function onPaperComplete(e) {
         isGenerating = false;
         if (stopPaperBtn) stopPaperBtn.hidden = true;
         if (generatePaperBtn) generatePaperBtn.disabled = false;
