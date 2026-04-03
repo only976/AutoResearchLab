@@ -44,7 +44,6 @@
             generatePaperBtn.disabled = true;
             if (stopPaperBtn) stopPaperBtn.hidden = false;
             document.dispatchEvent(new CustomEvent('maars:paper-start'));
-            document.dispatchEvent(new CustomEvent('maars:switch-view', { detail: { view: 'output' } }));
             const response = await cfg.fetchWithSession(`${cfg.API_BASE_URL}/paper/run`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

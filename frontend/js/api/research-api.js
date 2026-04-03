@@ -44,7 +44,7 @@
     }
 
     async function runResearch(researchId) {
-        return _post(`/research/${encodeURIComponent(researchId)}/run`, { format: 'markdown' }, 'Failed to run research');
+        return _post(`/research/${encodeURIComponent(researchId)}/run`, { format: 'latex' }, 'Failed to run research');
     }
 
     async function stopResearch(researchId) {
@@ -56,13 +56,13 @@
     }
 
     async function retryResearch(researchId) {
-        return _post(`/research/${encodeURIComponent(researchId)}/retry`, { format: 'markdown' }, 'Failed to retry research');
+        return _post(`/research/${encodeURIComponent(researchId)}/retry`, { format: 'latex' }, 'Failed to retry research');
     }
 
     async function runResearchStage(researchId, stage) {
         return _post(
             `/research/${encodeURIComponent(researchId)}/stage/${encodeURIComponent(stage)}/run`,
-            { format: 'markdown' },
+            { format: 'latex' },
             'Failed to run research stage',
         );
     }
@@ -70,7 +70,7 @@
     async function resumeResearchStage(researchId, stage) {
         return _post(
             `/research/${encodeURIComponent(researchId)}/stage/${encodeURIComponent(stage)}/resume`,
-            { format: 'markdown' },
+            { format: 'latex' },
             'Failed to resume research stage',
         );
     }
@@ -78,7 +78,7 @@
     async function retryResearchStage(researchId, stage) {
         return _post(
             `/research/${encodeURIComponent(researchId)}/stage/${encodeURIComponent(stage)}/retry`,
-            { format: 'markdown' },
+            { format: 'latex' },
             'Failed to retry research stage',
         );
     }
